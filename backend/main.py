@@ -1,7 +1,20 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
 
+# Create FastAPI app
 app = FastAPI(title="RideCare", description="A personal vehicle companion app for riders", version="1.0.0")
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/health")
-async def health():
-    return {"message": "OK"}
+async def health_check():
+    """Health check endpoint"""
+    return {"message": "OK", "environment": settings.APP_ENV}
