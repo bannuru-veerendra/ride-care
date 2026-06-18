@@ -29,6 +29,7 @@ RideCare/
 │   │   ├── schemas/
 │   │   └── utils/
 │   ├── migrations/
+│   ├── alembic.ini
 │   ├── tests/
 │   ├── main.py
 │   ├── requirements.txt
@@ -81,6 +82,7 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 | Area | Status |
 |------|--------|
 | Backend scaffolding | In progress |
+| Database & config | In progress |
 | API routes & models | Not started |
 | Frontend | Not started |
 
