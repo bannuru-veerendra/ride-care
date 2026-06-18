@@ -2,28 +2,92 @@
 
 RideCare is a personal vehicle companion app designed to make ownership simple, organized, and stress-free.
 
+It supports bike, car, and other personal vehicle owners.
+
 ## Vision
 
-RideCare helps riders track maintenance, fuel spending, and important vehicle documents in one place.
+RideCare helps vehicle owners track maintenance, fuel spending, and important documents in one place.
 
 ## Tech Stack
 
-- Backend: FastAPI
-- Database: PostgreSQL
-- Frontend: React
-- Caching: Redis
+| Layer | Technology |
+|-------|------------|
+| Backend | FastAPI |
+| Database | PostgreSQL (Supabase) |
+| File Storage | Supabase Storage |
+| Cache | Redis (Upstash) |
+| Frontend | React (planned) |
 
 ## Project Structure
 
 ```
 RideCare/
-├── frontend/
 ├── backend/
+│   ├── app/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── schemas/
+│   │   └── utils/
+│   ├── migrations/
+│   ├── tests/
+│   ├── main.py
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/          (planned)
 ├── .gitignore
-├── readme.MD
+├── README.md
 └── ROADMAP.md
 ```
 
+## Getting Started (Backend)
+
+### Prerequisites
+
+- Python 3.10+
+- A Supabase project (PostgreSQL + Storage)
+- An Upstash Redis instance (optional for now)
+
+### Setup
+
+```bash
+cd backend
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+cp .env.example .env   # then fill in your values
+
+# Deactivate (Windows, macOS, and Linux)
+deactivate
+```
+
+### Run
+
+```bash
+uvicorn main:app --reload
+```
+
+Health check: [http://localhost:8000/health](http://localhost:8000/health)
+
+API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+
 ## Status
 
-This project is in the early development phase. Core planning and feature definition are currently in progress.
+| Area | Status |
+|------|--------|
+| Backend scaffolding | In progress |
+| API routes & models | Not started |
+| Frontend | Not started |
+
+See [ROADMAP.md](ROADMAP.md) for planned features.
+
+## Environment Variables
+
+Copy `backend/.env.example` to `backend/.env` and fill in your credentials.
+
+Never commit `.env` — it is listed in `.gitignore`.
