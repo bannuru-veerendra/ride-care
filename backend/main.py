@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.models import User, Vehicle
 
 # Create FastAPI app
 app = FastAPI(title="RideCare", description="A personal vehicle companion app for riders", version="1.0.0")
