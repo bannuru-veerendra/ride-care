@@ -14,4 +14,4 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    vehicles = relationship("Vehicle", back_populates="user", cascade="all, delete-orphan")
+    vehicles = relationship("Vehicle", back_populates="owner", cascade="all, delete-orphan")
