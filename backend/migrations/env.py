@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from app.config import settings
-from app.extensions import Base
+from app.database import Base
 
 from app.models import user, vehicle
 
