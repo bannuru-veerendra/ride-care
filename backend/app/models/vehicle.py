@@ -11,9 +11,8 @@ class Vehicle(Base, TimestampMixin):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    name = Column(String, nullable=False)
     brand = Column(String, nullable=False)
-    model = Column(String, nullable=False)
+    vehicle_name = Column(String, nullable=False)
     year = Column(Integer, nullable=False)
     registration_number = Column(String, unique=True, index=True, nullable=False)
     current_odometer = Column(Integer, nullable=False)

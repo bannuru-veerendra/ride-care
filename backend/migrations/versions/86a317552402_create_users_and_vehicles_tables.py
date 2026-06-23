@@ -1,8 +1,8 @@
 """create users and vehicles tables
 
-Revision ID: 469e9b396fa6
+Revision ID: 86a317552402
 Revises: 
-Create Date: 2026-06-18 15:45:11.390858
+Create Date: 2026-06-23 11:59:43.064278
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '469e9b396fa6'
+revision: str = '86a317552402'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -35,9 +35,8 @@ def upgrade() -> None:
     op.create_table('vehicles',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('owner_id', sa.UUID(), nullable=False),
-    sa.Column('name', sa.String(), nullable=False),
     sa.Column('brand', sa.String(), nullable=False),
-    sa.Column('model', sa.String(), nullable=False),
+    sa.Column('vehicle_name', sa.String(), nullable=False),
     sa.Column('year', sa.Integer(), nullable=False),
     sa.Column('registration_number', sa.String(), nullable=False),
     sa.Column('current_odometer', sa.Integer(), nullable=False),

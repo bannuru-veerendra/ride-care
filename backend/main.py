@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routes import auth
+from app.routes import auth, vehicles
 
 # Create FastAPI app
 app = FastAPI(title="RideCare", description="A personal vehicle companion app for riders", version="1.0.0")
@@ -21,3 +21,4 @@ async def health_check():
     return {"message": "OK", "environment": settings.APP_ENV}
 
 app.include_router(auth.router)
+app.include_router(vehicles.router)
