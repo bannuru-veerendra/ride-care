@@ -51,7 +51,7 @@ class FuelLogResponse(BaseModel):
     total_cost: float
     price_per_liter: float
     liters: float
-    mileage: int
+    mileage: int | None = None
     notes: str | None = None
 
     class Config:
