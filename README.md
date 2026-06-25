@@ -81,9 +81,9 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 | Area | Status |
 |------|--------|
-| Backend scaffolding | In progress |
-| Database & config | In progress |
-| API routes & models | Not started |
+| Backend scaffolding | Done |
+| Database & config | Done |
+| API routes & models | In progress (auth, vehicles, fuel logs) |
 | Frontend | Not started |
 
 See [ROADMAP.md](ROADMAP.md) for planned features.
