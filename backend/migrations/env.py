@@ -8,7 +8,7 @@ from alembic import context
 from app.config import settings
 from app.database import Base
 
-from app.models import user, vehicle
+from app.models import user, vehicle, fuel_log
 
 
 # this is the Alembic Config object, which provides
