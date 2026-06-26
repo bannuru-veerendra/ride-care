@@ -40,6 +40,7 @@ class VehicleUpdate(BaseModel):
 class VehicleResponse(BaseModel):
     """Response body for GET /vehicles/{vehicle_id}"""
     id: uuid.UUID
+    owner_id: uuid.UUID
     brand: str
     vehicle_name: str
     year: int

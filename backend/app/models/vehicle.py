@@ -13,12 +13,12 @@ class Vehicle(Base, TimestampMixin):
     __tablename__ = "vehicles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     brand = Column(String, nullable=False)
     vehicle_name = Column(String, nullable=False)
     year = Column(Integer, nullable=False)
     registration_number = Column(String, unique=True, index=True, nullable=False)
-    current_odometer = Column(Integer, nullable=False)
+    current_odometer = Column(Integer, nullable=False, default=0)
 
     owner = relationship("User", back_populates="vehicles")
     fuel_logs = relationship("FuelLog", back_populates="vehicle", cascade="all, delete-orphan")

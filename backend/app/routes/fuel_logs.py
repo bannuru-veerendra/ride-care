@@ -113,7 +113,7 @@ def calculate_mileage(
     odometer: int,
     liters: float,
     previous_odometer: int | None,
-) -> int:
+) -> int | None:
     """Calculate km driven per liter from the previous fill-up."""
     if (
         previous_odometer is not None
@@ -122,7 +122,7 @@ def calculate_mileage(
     ):
         km_driven = odometer - previous_odometer
         return round(km_driven / liters)
-    return 0
+    return None
 
 
 def sync_vehicle_odometer(vehicle: Vehicle, odometer: int) -> None:
