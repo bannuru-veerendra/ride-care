@@ -22,5 +22,5 @@ class Vehicle(Base, TimestampMixin):
 
     owner = relationship("User", back_populates="vehicles")
     fuel_logs = relationship("FuelLog", back_populates="vehicle", cascade="all, delete-orphan")
-    # service_logs = relationship("ServiceLog", back_populates="vehicle", cascade="all, delete-orphan")
+    service_logs = relationship("ServiceLog", back_populates="vehicle", cascade="all, delete-orphan")
     # documents = relationship("Document", back_populates="vehicle", cascade="all, delete-orphan")

@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.fuel_log import FuelLog
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.models.service_log import ServiceLog
 from main import app
 
 
@@ -32,12 +33,14 @@ async def test_session_maker(test_engine):
 async def cleanup_db(test_session_maker):
     async with test_session_maker() as session:
         await session.execute(delete(FuelLog))
+        await session.execute(delete(ServiceLog))
         await session.execute(delete(Vehicle))
         await session.execute(delete(User))
         await session.commit()
     yield
     async with test_session_maker() as session:
         await session.execute(delete(FuelLog))
+        await session.execute(delete(ServiceLog))
         await session.execute(delete(Vehicle))
         await session.execute(delete(User))
         await session.commit()

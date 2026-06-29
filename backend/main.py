@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routes import auth, fuel_logs, vehicles
+from app.models import User, Vehicle, FuelLog, ServiceLog
+from app.routes import auth, fuel_logs, vehicles, service_logs
 
 # Create FastAPI app
 app = FastAPI(
@@ -30,3 +31,4 @@ async def health_check():
 app.include_router(auth.router)
 app.include_router(vehicles.router)
 app.include_router(fuel_logs.router)
+app.include_router(service_logs.router)
