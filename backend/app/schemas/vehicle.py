@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class VehicleCreate(BaseModel):
@@ -47,5 +47,4 @@ class VehicleResponse(BaseModel):
     registration_number: str
     current_odometer: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

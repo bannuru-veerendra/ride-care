@@ -1,7 +1,7 @@
 import uuid
 from datetime import date as dt_date
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class FuelLogCreate(BaseModel):
@@ -54,5 +54,4 @@ class FuelLogResponse(BaseModel):
     mileage: int | None = None
     notes: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
