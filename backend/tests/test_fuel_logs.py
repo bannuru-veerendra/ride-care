@@ -1,6 +1,10 @@
-from datetime import date as dt_date
+from datetime import date as dt_date, timedelta
 
 from httpx import AsyncClient
+
+VEHICLE_ODO = 10000
+FIRST_LOG_ODO = 10500
+SECOND_LOG_ODO = 11500
 
 
 async def test_create_fuel_log_first_entry(
@@ -10,7 +14,7 @@ async def test_create_fuel_log_first_entry(
     vehicle_id = created_vehicle["id"]
     payload = {
         "date": str(dt_date.today()),
-        "odometer": 10000,
+        "odometer": FIRST_LOG_ODO,
         "total_cost": 800,
         "price_per_liter": 110,
     }
@@ -22,8 +26,10 @@ async def test_create_fuel_log_first_entry(
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["mileage"] is None
-    assert round(data["liters"], 2) == round(payload["total_cost"] / payload["price_per_liter"], 2)
+    liters = payload["total_cost"] / payload["price_per_liter"]
+    expected_mileage = round((FIRST_LOG_ODO - VEHICLE_ODO) / liters)
+    assert data["mileage"] == expected_mileage
+    assert round(data["liters"], 2) == round(liters, 2)
     assert data["total_cost"] == payload["total_cost"]
 
 
@@ -35,7 +41,7 @@ async def test_create_fuel_log_second_entry_calculates_mileage(
 
     first_payload = {
         "date": str(dt_date.today()),
-        "odometer": 1000,
+        "odometer": FIRST_LOG_ODO,
         "total_cost": 800,
         "price_per_liter": 110,
     }
@@ -48,7 +54,7 @@ async def test_create_fuel_log_second_entry_calculates_mileage(
 
     second_payload = {
         "date": str(dt_date.today()),
-        "odometer": 2000,
+        "odometer": SECOND_LOG_ODO,
         "total_cost": 800,
         "price_per_liter": 110,
     }
@@ -61,7 +67,7 @@ async def test_create_fuel_log_second_entry_calculates_mileage(
     assert response.status_code == 201
     data = response.json()
     liters = second_payload["total_cost"] / second_payload["price_per_liter"]
-    expected_mileage = round((2000 - 1000) / liters)
+    expected_mileage = round((SECOND_LOG_ODO - FIRST_LOG_ODO) / liters)
     assert data["mileage"] == expected_mileage
 
 
@@ -72,7 +78,7 @@ async def test_create_fuel_log_invalid_cost(
     vehicle_id = created_vehicle["id"]
     payload = {
         "date": str(dt_date.today()),
-        "odometer": 1000,
+        "odometer": FIRST_LOG_ODO,
         "total_cost": 0,
         "price_per_liter": 110,
     }
@@ -92,7 +98,7 @@ async def test_create_fuel_log_invalid_price_per_liter(
     vehicle_id = created_vehicle["id"]
     payload = {
         "date": str(dt_date.today()),
-        "odometer": 1000,
+        "odometer": FIRST_LOG_ODO,
         "total_cost": 800,
         "price_per_liter": 0,
     }
@@ -125,13 +131,64 @@ async def test_create_fuel_log_invalid_odometer(
     assert response.status_code == 422
 
 
+async def test_create_fuel_log_odometer_not_greater_than_vehicle(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test the create fuel log endpoint rejects odometer at or below vehicle baseline"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": VEHICLE_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "baseline odometer" in response.json()["detail"].lower()
+
+
+async def test_create_fuel_log_odometer_not_greater_than_previous(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test the create fuel log endpoint rejects odometer at or below previous fill-up"""
+    vehicle_id = created_vehicle["id"]
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=1)),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "previous fill-up" in response.json()["detail"].lower()
+
+
 async def test_create_fuel_log_missing_vehicle_id(client: AsyncClient, auth_headers: dict):
     """Test the create fuel log endpoint without a vehicle_id query param"""
     response = await client.post(
         "/fuel_logs/",
         json={
             "date": str(dt_date.today()),
-            "odometer": 1000,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 800,
             "price_per_liter": 110,
         },
@@ -164,11 +221,12 @@ async def test_create_fuel_log_mileage_from_vehicle_baseline(
     assert data["mileage"] == expected_mileage
 
 
-async def test_create_fuel_log_syncs_vehicle_odometer(
+async def test_create_fuel_log_does_not_update_vehicle_baseline(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
-    """Test creating a fuel log updates the vehicle odometer when higher"""
+    """Test creating a fuel log does not change the vehicle baseline odometer"""
     vehicle_id = created_vehicle["id"]
+    baseline = created_vehicle["current_odometer"]
     response = await client.post(
         "/fuel_logs/",
         params={"vehicle_id": vehicle_id},
@@ -184,7 +242,7 @@ async def test_create_fuel_log_syncs_vehicle_odometer(
 
     vehicle_response = await client.get(f"/vehicles/{vehicle_id}", headers=auth_headers)
     assert vehicle_response.status_code == 200
-    assert vehicle_response.json()["current_odometer"] == 12000
+    assert vehicle_response.json()["current_odometer"] == baseline
 
 
 async def test_get_fuel_logs(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
@@ -192,7 +250,7 @@ async def test_get_fuel_logs(client: AsyncClient, auth_headers: dict, created_ve
     vehicle_id = created_vehicle["id"]
     payload = {
         "date": str(dt_date.today()),
-        "odometer": 1000,
+        "odometer": FIRST_LOG_ODO,
         "total_cost": 800,
         "price_per_liter": 110,
     }
@@ -223,7 +281,7 @@ async def test_get_fuel_log_by_id(client: AsyncClient, auth_headers: dict, creat
         params={"vehicle_id": vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 1000,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 800,
             "price_per_liter": 110,
         },
@@ -263,7 +321,7 @@ async def test_update_fuel_log_recalculates_mileage(
         params={"vehicle_id": vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 1000,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 800,
             "price_per_liter": 110,
         },
@@ -274,7 +332,7 @@ async def test_update_fuel_log_recalculates_mileage(
         params={"vehicle_id": vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 2000,
+            "odometer": SECOND_LOG_ODO,
             "total_cost": 800,
             "price_per_liter": 110,
         },
@@ -285,14 +343,65 @@ async def test_update_fuel_log_recalculates_mileage(
     response = await client.patch(
         f"/fuel_logs/{fuel_log_id}",
         params={"vehicle_id": vehicle_id},
-        json={"odometer": 2500},
+        json={"odometer": 12000},
         headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
     liters = 800 / 110
-    expected_mileage = round((2500 - 1000) / liters)
+    expected_mileage = round((12000 - FIRST_LOG_ODO) / liters)
     assert data["mileage"] == expected_mileage
+
+
+async def test_update_fuel_log_recalculates_subsequent_mileage(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test updating an earlier fill-up recalculates mileage on later entries."""
+    vehicle_id = created_vehicle["id"]
+    liters = 800 / 110
+
+    first_response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=1)),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    first_log_id = first_response.json()["id"]
+
+    second_response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": SECOND_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    second_log_id = second_response.json()["id"]
+
+    updated_first_odometer = FIRST_LOG_ODO + 300
+    response = await client.patch(
+        f"/fuel_logs/{first_log_id}",
+        params={"vehicle_id": vehicle_id},
+        json={"odometer": updated_first_odometer},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+
+    second_log_response = await client.get(
+        f"/fuel_logs/{second_log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    expected_mileage = round((SECOND_LOG_ODO - updated_first_odometer) / liters)
+    assert second_log_response.json()["mileage"] == expected_mileage
 
 
 async def test_update_fuel_log_recalculates_total_cost(
@@ -306,7 +415,7 @@ async def test_update_fuel_log_recalculates_total_cost(
         params={"vehicle_id": vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 5500,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 500,
             "price_per_liter": 100,
         },
@@ -334,7 +443,7 @@ async def test_delete_fuel_log(client: AsyncClient, auth_headers: dict, created_
         params={"vehicle_id": vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 5500,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 500,
             "price_per_liter": 105,
         },
@@ -365,7 +474,7 @@ async def test_fuel_log_wrong_vehicle(client: AsyncClient, auth_headers: dict):
         params={"vehicle_id": fake_vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 5500,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 500,
             "price_per_liter": 105,
         },
@@ -397,7 +506,7 @@ async def test_cannot_get_other_users_fuel_log_by_id(
         params={"vehicle_id": vehicle_id},
         json={
             "date": str(dt_date.today()),
-            "odometer": 1000,
+            "odometer": FIRST_LOG_ODO,
             "total_cost": 800,
             "price_per_liter": 110,
         },
