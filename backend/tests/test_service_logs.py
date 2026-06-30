@@ -1,0 +1,259 @@
+from datetime import date, timedelta
+from httpx import AsyncClient
+
+
+async def test_create_service_log_success(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test creating a service log successfully"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "service_center": "Bharat Automobiles",
+            "total_cost": 1500,
+            "services_done": ["Engine oil", "Chain lube"],
+            "next_service_date": str(date.today() + timedelta(days=90)),
+            "next_service_odometer": 15000,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["services_done"] == ["Engine oil", "Chain lube"]
+    assert data["next_service_odometer"] == 15000
+    assert "id" in data
+
+
+async def test_create_service_log_empty_services(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test creating a service log with empty services returns 422"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": [],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_create_service_log_invalid_next_odometer(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test creating a service log with invalid next odometer returns 422"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+            "next_service_odometer": 11000,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_create_service_log_negative_total_cost(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test creating a service log with negative total_cost returns 422"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": -100,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_get_service_logs(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test getting service logs successfully"""
+    vehicle_id = created_vehicle["id"]
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    response = await client.get(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+async def test_get_next_service(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test getting the next service log successfully"""
+    vehicle_id = created_vehicle["id"]
+    next_date = str(date.today() + timedelta(days=90))
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+            "next_service_date": next_date,
+            "next_service_odometer": 15000,
+        },
+        headers=auth_headers,
+    )
+    response = await client.get(
+        "/service_logs/next",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["next_service_date"] == next_date
+
+
+async def test_get_next_service_none(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test getting the next service log when there is no next service returns None"""
+    vehicle_id = created_vehicle["id"]
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    response = await client.get(
+        "/service_logs/next",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+async def test_update_service_log(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test updating a service log successfully"""
+    vehicle_id = created_vehicle["id"]
+    create_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    log_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/service_logs/{log_id}",
+        params={"vehicle_id": vehicle_id},
+        json={"services_done": ["Engine oil", "Brake pads"], "total_cost": 2500},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["services_done"] == ["Engine oil", "Brake pads"]
+    assert data["total_cost"] == 2500
+
+
+async def test_delete_service_log(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test deleting a service log successfully"""
+    vehicle_id = created_vehicle["id"]
+    create_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    log_id = create_resp.json()["id"]
+
+    response = await client.delete(
+        f"/service_logs/{log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 204
+
+    response = await client.get(
+        f"/service_logs/{log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 404
+
+
+async def test_cannot_access_other_users_service_logs(
+    client: AsyncClient, created_vehicle: dict, other_user_headers: dict
+):
+    """Test that a user cannot access another user's service logs"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.get(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        headers=other_user_headers,
+    )
+    assert response.status_code == 404
+
+
+async def test_service_log_wrong_vehicle(
+    client: AsyncClient, auth_headers: dict
+):
+    """Test creating a service log for a non-existent vehicle returns 404"""
+    fake_vehicle_id = "00000000-0000-0000-0000-000000000000"
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": fake_vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 404
