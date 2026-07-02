@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.models import User, Vehicle, FuelLog, ServiceLog
-from app.routes import auth, fuel_logs, vehicles, service_logs
+from app.models import User, Vehicle, FuelLog, ServiceLog, Document
+from app.routes import auth, fuel_logs, vehicles, service_logs, documents
 
 # Create FastAPI app
 app = FastAPI(
@@ -32,3 +32,4 @@ app.include_router(auth.router)
 app.include_router(vehicles.router)
 app.include_router(fuel_logs.router)
 app.include_router(service_logs.router)
+app.include_router(documents.router)
