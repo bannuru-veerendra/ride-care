@@ -1,0 +1,3 @@
+/**
+ * Fuel logs feature types.
+ */

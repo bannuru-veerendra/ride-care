@@ -16,7 +16,9 @@ RideCare helps vehicle owners track maintenance, fuel spending, and important do
 | Database | PostgreSQL (Supabase) |
 | File Storage | Supabase Storage |
 | Cache | Redis (Upstash) |
-| Frontend | React (planned) |
+| Frontend | React 19, TypeScript, Vite |
+| UI | Tailwind CSS v4, shadcn/ui |
+| Client state | TanStack Query, Zustand, Axios |
 
 ## Project Structure
 
@@ -29,12 +31,32 @@ RideCare/
 │   │   ├── schemas/
 │   │   └── utils/
 │   ├── migrations/
-│   ├── alembic.ini
 │   ├── tests/
 │   ├── main.py
 │   ├── requirements.txt
 │   └── .env.example
-├── frontend/          (planned)
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── api/
+│   │   ├── components/
+│   │   │   ├── ui/          # shadcn components
+│   │   │   └── common/
+│   │   ├── features/
+│   │   │   ├── auth/
+│   │   │   ├── vehicles/
+│   │   │   ├── fuel-logs/
+│   │   │   ├── service-logs/
+│   │   │   └── documents/
+│   │   ├── hooks/
+│   │   ├── lib/             # axios, query-client, utils
+│   │   ├── pages/
+│   │   ├── store/
+│   │   ├── types/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   └── .env.example
 ├── .gitignore
 ├── README.md
 └── ROADMAP.md
@@ -80,12 +102,43 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 pytest tests/ -v
 ```
 
-All **57** backend tests should pass (auth, vehicles, fuel logs, service logs). Document API tests are not added yet.
+All backend API tests should pass (auth, vehicles, fuel logs, service logs, documents).
 
 ### Swagger authentication
 
 - **Register / login (JSON):** use `POST /auth/register` and `POST /auth/login` with `email` + `password`.
 - **Authorize button in Swagger:** uses `POST /auth/token` (form body). Set **username** to your email and **password** to your password.
+
+## Getting Started (Frontend)
+
+### Prerequisites
+
+- Node.js 20+
+- Backend running at `http://localhost:8000` (or update `VITE_API_URL`)
+
+### Setup
+
+```bash
+cd frontend
+npm install
+cp .env.example .env   # VITE_API_URL=http://localhost:8000
+```
+
+### Run
+
+```bash
+npm run dev
+```
+
+App: [http://localhost:5173](http://localhost:5173)
+
+### Other scripts
+
+```bash
+npm run build    # production build
+npm run lint     # oxlint
+npm run preview  # preview production build
+```
 
 ## API Overview
 
@@ -112,13 +165,17 @@ Document create/update use `multipart/form-data` in Swagger (same pattern as fil
 | Fuel logs (mileage, validation) | Done |
 | Service logs (history, next service) | Done |
 | Document vault (upload, metadata, signed URLs) | Done |
-| Document API tests | Planned |
-| Frontend | Not started |
+| Document API tests | Done |
+| Frontend scaffolding | Done |
+| Frontend auth & pages | In progress |
 
 See [ROADMAP.md](ROADMAP.md) for planned features.
 
 ## Environment Variables
 
-Copy `backend/.env.example` to `backend/.env` and fill in your credentials.
+| File | Purpose |
+|------|---------|
+| `backend/.env` | Database, Supabase, Redis, JWT secrets |
+| `frontend/.env` | `VITE_API_URL` — backend base URL for Axios |
 
-Never commit `.env` — it is listed in `.gitignore`.
+Copy each `.env.example` to `.env` and fill in your values. Never commit `.env` files — they are listed in `.gitignore`.

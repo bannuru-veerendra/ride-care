@@ -1,0 +1,3 @@
+/**
+ * Documents feature types.
+ */

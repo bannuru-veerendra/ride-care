@@ -27,14 +27,35 @@
 - DB and storage kept consistent on create, update, and delete
 
 ### Quality
-- 57 automated API tests (auth, vehicles, fuel logs, service logs)
+- Automated API tests for auth, vehicles, fuel logs, service logs, and documents
+
+---
+
+## Completed (Frontend — scaffolding)
+
+- Vite + React 19 + TypeScript project setup
+- Tailwind CSS v4 and shadcn/ui configuration
+- Feature-based folder structure (`auth`, `vehicles`, `fuel-logs`, `service-logs`, `documents`)
+- Axios client with JWT interceptors (`src/lib/axios.ts`)
+- React Query client (`src/lib/query-client.ts`)
+- Zustand auth store with persistence (`src/store/auth.store.ts`)
+- App shell with `BrowserRouter` and `QueryClientProvider`
 
 ---
 
 ## In Progress
 
-### Document API tests
-- Automated tests for document upload, update, and delete (mocked Supabase storage)
+### Frontend — auth & core UI
+- Login and register pages
+- Protected routes
+- shadcn/ui components (`Button`, `Input`, `Toaster`, etc.)
+- `src/lib/utils.ts` (`cn` helper)
+
+### Frontend — feature screens
+- Vehicle list and detail
+- Fuel log entry and history
+- Service log entry and next-service view
+- Document upload and vault
 
 ---
 
@@ -46,9 +67,6 @@
 
 ### Maintenance guidance
 - Practical maintenance recommendations (for example, oil change intervals and chain lubrication timing)
-
-### Frontend
-- React app for riders to manage vehicles, fuel, services, and documents
 
 ### Notifications
 - Reminders for upcoming service and insurance expiry (Redis / push — TBD)
