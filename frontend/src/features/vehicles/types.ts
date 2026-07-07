@@ -1,0 +1,3 @@
+/**
+ * Vehicles feature types.
+ */
