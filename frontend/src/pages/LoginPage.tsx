@@ -10,83 +10,130 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/common/PasswordInput";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import RideCareLogo from "@/components/common/RideCareLogo";
 
 import { useLogin } from "@/features/auth/hooks/useLogin";
 import { loginSchema, type LoginSchema } from "@/features/auth/schemas";
 
 /**
- * Login page.
- * Handles form submission, validation, and error display.
+ * Login page — immersive rider entry.
  */
 export default function LoginPage() {
-  const [searchParams] = useSearchParams();
-  const { mutate: login, isPending, error } = useLogin();
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginSchema>({
-    resolver: zodResolver(loginSchema),
-  });
+    const [searchParams] = useSearchParams();
+    const { mutate: login, isPending, error } = useLogin();
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+    } = useForm<LoginSchema>({
+        resolver: zodResolver(loginSchema),
+    });
 
-  useEffect(() => {
-    if (searchParams.get("registered") === "true") {
-      toast.success("Registration successful! Please login.");
-    }
-  }, [searchParams]);
+    useEffect(() => {
+        if (searchParams.get("registered") === "true") {
+            toast.success("Registration successful! Please login.");
+        }
+    }, [searchParams]);
 
-  const onSubmit = (data: LoginSchema) => {
-    login(data);
-  };
+    const onSubmit = (data: LoginSchema) => {
+        login(data);
+    };
 
-  const apiError = isAxiosError(error)
-    ? error.response?.data?.detail ?? "Login failed. Please try again."
-    : null;
+    const apiError = isAxiosError(error)
+        ? error.response?.data?.detail ?? "Login failed. Please try again."
+        : null;
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">RideCare</h1>
-          <p className="text-muted-foreground mt-1">Your vehicle companion</p>
-        </div>
+    return (
+        <div className="relative flex min-h-dvh">
+            {/* Full-bleed road visual */}
+            <div className="absolute inset-0 -z-10">
+                <img
+                    src="/rider-hero.jpg"
+                    alt=""
+                    className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px]" />
+                <div
+                    aria-hidden
+                    className="absolute bottom-12 left-1/2 h-px w-48 -translate-x-1/2 bg-gradient-to-r from-transparent via-brand/50 to-transparent"
+                />
+            </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">Welcome back!</CardTitle>
-            <CardDescription>Sign in to your account to continue</CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {apiError && (
-                <div className="bg-destructive/10 text-destructive text-sm rounded-md px-3 py-2">
-                  {apiError}
+            <div className="flex w-full flex-col items-center justify-center px-4 py-12">
+                <div className="animate-speed-in mb-8">
+                    <RideCareLogo to="/login" compact={false} inverted />
                 </div>
-              )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="your@email.com" autoComplete="email" {...register("email")} />
-                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-              </div>
+                <div className="animate-fade-up surface-panel w-full max-w-md px-6 py-8 sm:px-8">
+                    <h1 className="font-heading text-3xl font-bold uppercase tracking-wide">
+                        Kickstand up
+                    </h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Sign in and get back on the road
+                    </p>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <PasswordInput id="password" placeholder="Password" autoComplete="current-password" {...register("password")} />
-                {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
-              </div>
+                    <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
+                        {apiError && (
+                            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                {apiError}
+                            </div>
+                        )}
 
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Login"}
-              </Button>
-            </form>
-          </CardContent>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="your@email.com"
+                                autoComplete="email"
+                                className="border-white/15 bg-white/5"
+                                {...register("email")}
+                            />
+                            {errors.email && (
+                                <p className="text-sm text-destructive">{errors.email.message}</p>
+                            )}
+                        </div>
 
-          <CardFooter>
-            <p className="text-sm text-muted-foreground">
-              Don't have an account? <Link to="/register" className="text-primary hover:text-primary/80">Register</Link>
-            </p>
-          </CardFooter>
-        </Card>
-      </div>
-    </div>
-  );
+                        <div className="space-y-1.5">
+                            <Label htmlFor="password">Password</Label>
+                            <PasswordInput
+                                id="password"
+                                placeholder="Password"
+                                autoComplete="current-password"
+                                className="border-white/15 bg-white/5"
+                                {...register("password")}
+                            />
+                            {errors.password && (
+                                <p className="text-sm text-destructive">
+                                    {errors.password.message}
+                                </p>
+                            )}
+                        </div>
+
+                        <Button
+                            type="submit"
+                            className="w-full bg-brand text-brand-foreground hover:bg-brand/90"
+                            disabled={isPending}
+                        >
+                            {isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                "Login"
+                            )}
+                        </Button>
+                    </form>
+
+                    <p className="mt-6 text-sm text-muted-foreground">
+                        New rider?{" "}
+                        <Link
+                            to="/register"
+                            className="font-semibold text-brand hover:text-brand/80"
+                        >
+                            Create account
+                        </Link>
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
 }

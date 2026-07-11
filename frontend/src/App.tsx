@@ -7,6 +7,7 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import VehiclesPage from "@/pages/VehiclesPage";
+import VehicleDetailPage from "@/pages/VehicleDetailPage";
 
 /**
  * Root application component.
@@ -30,6 +31,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/vehicles" element={<VehiclesPage />} />
+            <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
           </Route>
         </Route>
 
