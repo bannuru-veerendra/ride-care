@@ -49,7 +49,7 @@
 - `src/lib/utils.ts` (`cn` helper)
 
 ### Vehicles
-- Vehicle list and create form
+- Vehicle list, create, edit, and delete
 - Vehicle detail page with tabbed fuel / service / documents sections
 
 ### Fuel logs
@@ -69,12 +69,14 @@
 - Document cards with expiry warnings and signed-URL viewing
 - Create, edit (metadata / replace file), and delete via Sheet + React Query hooks
 
+### Dashboard
+- Home hub with vehicle picker, fuel spend / mileage stats, and quick actions
+- Next-service reminder from `GET /service_logs/next` (overdue and soon-within-14-days)
+- Deep links into vehicle fuel / service tabs
+
 ---
 
 ## Planned
-
-### Next-service reminder UI
-- Surface upcoming service from `GET /service_logs/next` on vehicle detail / dashboard
 
 ### Insurance management
 - Policy details beyond file storage (provider, policy number, coverage)
