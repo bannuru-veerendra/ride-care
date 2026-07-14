@@ -36,11 +36,21 @@ import {
 } from "@/features/service-logs/hooks/useServiceLogs";
 import type { ServiceLog } from "@/features/service-logs/types";
 import type { ServiceLogSchema } from "@/features/service-logs/schemas";
+import DocumentCard from "@/features/documents/components/DocumentCard";
+import DocumentForm from "@/features/documents/components/DocumentForm";
+import {
+    useDocuments,
+    useUploadDocument,
+    useUpdateDocument,
+    useDeleteDocument,
+} from "@/features/documents/hooks/useDocuments";
+import type { Document } from "@/features/documents/types";
+import type { DocumentSchema } from "@/features/documents/schemas";
 
 /**
  * Vehicle detail page.
  * Shows vehicle info and tabbed sections for fuel logs,
- * service logs, and documents (tabs added as features are built).
+ * service logs, and documents.
  */
 export default function VehicleDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -52,9 +62,13 @@ export default function VehicleDetailPage() {
     const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
     const [editingServiceLog, setEditingServiceLog] = useState<ServiceLog | null>(null);
 
+    const [documentSheetOpen, setDocumentSheetOpen] = useState(false);
+    const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+
     const { data: vehicle, isLoading: vehicleLoading } = useVehicle(id!);
     const { data: fuelLogs, isLoading: logsLoading } = useFuelLogs(id!);
     const { data: serviceLogs, isLoading: serviceLogsLoading } = useServiceLogs(id!);
+    const { data: documents, isLoading: documentsLoading } = useDocuments(id!);
 
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
@@ -63,6 +77,10 @@ export default function VehicleDetailPage() {
     const createServiceLog = useCreateServiceLog(id!);
     const updateServiceLog = useUpdateServiceLog(id!, editingServiceLog?.id ?? "");
     const deleteServiceLog = useDeleteServiceLog(id!);
+
+    const uploadDocument = useUploadDocument(id!);
+    const updateDocument = useUpdateDocument(id!, editingDocument?.id ?? "");
+    const deleteDocument = useDeleteDocument(id!);
 
     const handleFuelSubmit = (values: FuelLogSchema) => {
         if (editingLog) {
@@ -148,6 +166,69 @@ export default function VehicleDetailPage() {
     const handleServiceSheetOpenChange = (open: boolean) => {
         setServiceSheetOpen(open);
         if (!open) setEditingServiceLog(null);
+    };
+
+    const handleDocumentSubmit = (values: DocumentSchema & { file?: File }) => {
+        if (editingDocument) {
+            updateDocument.mutate(
+                {
+                    document_type:
+                        values.document_type !== editingDocument.document_type
+                            ? values.document_type
+                            : undefined,
+                    expiry_date: values.expiry_date || undefined,
+                    notes: values.notes || undefined,
+                    file: values.file,
+                },
+                {
+                    onSuccess: () => {
+                        toast.success("Document updated");
+                        setDocumentSheetOpen(false);
+                        setEditingDocument(null);
+                    },
+                    onError: () => toast.error("Failed to update document"),
+                }
+            );
+        } else {
+            if (!values.file) {
+                toast.error("Please select a file to upload");
+                return;
+            }
+
+            uploadDocument.mutate(
+                {
+                    document_type: values.document_type,
+                    file: values.file,
+                    expiry_date: values.expiry_date || undefined,
+                    notes: values.notes || undefined,
+                },
+                {
+                    onSuccess: () => {
+                        toast.success("Document uploaded");
+                        setDocumentSheetOpen(false);
+                    },
+                    onError: () => toast.error("Failed to upload document"),
+                }
+            );
+        }
+    };
+
+    const handleDocumentEdit = (document: Document) => {
+        setEditingDocument(document);
+        setDocumentSheetOpen(true);
+    };
+
+    const handleDocumentDelete = (documentId: string) => {
+        if (!confirm("Delete this document?")) return;
+        deleteDocument.mutate(documentId, {
+            onSuccess: () => toast.success("Document deleted"),
+            onError: () => toast.error("Failed to delete document"),
+        });
+    };
+
+    const handleDocumentSheetOpenChange = (open: boolean) => {
+        setDocumentSheetOpen(open);
+        if (!open) setEditingDocument(null);
     };
 
     if (vehicleLoading) {
@@ -407,11 +488,89 @@ export default function VehicleDetailPage() {
                     )}
                 </TabsContent>
 
-                {/* Documents tab — coming next */}
-                <TabsContent value="documents" className="mt-4">
-                    <div className="py-12 text-center text-muted-foreground">
-                        <p className="font-medium">Documents coming soon</p>
+                {/* Documents tab */}
+                <TabsContent value="documents" className="mt-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                            {documents?.length ?? 0} documents
+                        </p>
+
+                        <Sheet
+                            open={documentSheetOpen}
+                            onOpenChange={handleDocumentSheetOpenChange}
+                        >
+                            <SheetTrigger
+                                render={
+                                    <Button
+                                        size="sm"
+                                        className="bg-brand text-brand-foreground hover:bg-brand/90"
+                                    />
+                                }
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Upload doc
+                            </SheetTrigger>
+                            <SheetContent
+                                side="right"
+                                className="w-full overflow-y-auto border-white/10 sm:max-w-md"
+                            >
+                                <SheetHeader className="mb-6">
+                                    <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
+                                        {editingDocument
+                                            ? "Edit document"
+                                            : "Upload document"}
+                                    </SheetTitle>
+                                    <p className="text-sm text-muted-foreground">
+                                        Keep insurance, licence, and RC in one vault
+                                    </p>
+                                </SheetHeader>
+                                <DocumentForm
+                                    key={editingDocument?.id ?? "create"}
+                                    defaultValues={editingDocument ?? undefined}
+                                    onSubmit={handleDocumentSubmit}
+                                    isPending={
+                                        uploadDocument.isPending ||
+                                        updateDocument.isPending
+                                    }
+                                    error={
+                                        uploadDocument.error || updateDocument.error
+                                    }
+                                />
+                            </SheetContent>
+                        </Sheet>
                     </div>
+
+                    {documentsLoading && (
+                        <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                                <Skeleton key={i} className="h-24 rounded-xl" />
+                            ))}
+                        </div>
+                    )}
+
+                    {!documentsLoading && documents?.length === 0 && (
+                        <div className="surface-panel px-6 py-14 text-center">
+                            <p className="font-heading text-2xl font-bold uppercase tracking-wide">
+                                No documents yet
+                            </p>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Tap "Upload doc" to add insurance, licence, or RC
+                            </p>
+                        </div>
+                    )}
+
+                    {!documentsLoading && documents && documents.length > 0 && (
+                        <div className="space-y-3">
+                            {documents.map((document) => (
+                                <DocumentCard
+                                    key={document.id}
+                                    document={document}
+                                    onDelete={handleDocumentDelete}
+                                    onEdit={handleDocumentEdit}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </TabsContent>
             </Tabs>
         </div>

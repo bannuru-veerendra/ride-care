@@ -171,7 +171,7 @@ Document create/update use `multipart/form-data` in Swagger (same pattern as fil
 | Frontend vehicles (list, create, detail) | Done |
 | Frontend fuel logs (entry, history on vehicle detail) | Done |
 | Frontend service logs (entry, history on vehicle detail) | Done |
-| Frontend documents vault | In progress |
+| Frontend documents vault (upload, edit, signed URLs) | Done |
 | Next-service reminder UI | Planned |
 
 See [ROADMAP.md](ROADMAP.md) for planned features.

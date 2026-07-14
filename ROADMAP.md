@@ -64,13 +64,10 @@
 - Create, edit, and delete via Sheet + React Query hooks
 - API client and `useNextService` hook ready (`GET /service_logs/next`)
 
----
-
-## In Progress
-
-### Frontend — document vault
-- Document upload and vault UI on the vehicle detail Documents tab
-- Wire `documents` feature (API client, forms, list) to existing backend
+### Documents
+- Upload and manage documents from the vehicle detail Docs tab
+- Document cards with expiry warnings and signed-URL viewing
+- Create, edit (metadata / replace file), and delete via Sheet + React Query hooks
 
 ---
 
