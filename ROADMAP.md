@@ -31,35 +31,53 @@
 
 ---
 
-## Completed (Frontend — scaffolding)
+## Completed (Frontend)
 
+### Scaffolding
 - Vite + React 19 + TypeScript project setup
 - Tailwind CSS v4 and shadcn/ui configuration
 - Feature-based folder structure (`auth`, `vehicles`, `fuel-logs`, `service-logs`, `documents`)
 - Axios client with JWT interceptors (`src/lib/axios.ts`)
 - React Query client (`src/lib/query-client.ts`)
 - Zustand auth store with persistence (`src/store/auth.store.ts`)
-- App shell with `BrowserRouter` and `QueryClientProvider`
+- App shell with `BrowserRouter`, `QueryClientProvider`, layout, and navbar
+
+### Auth & core UI
+- Login and register pages
+- Protected routes
+- shadcn/ui components (`Button`, `Input`, `Sheet`, `Tabs`, `Toaster`, etc.)
+- `src/lib/utils.ts` (`cn` helper)
+
+### Vehicles
+- Vehicle list and create form
+- Vehicle detail page with tabbed fuel / service / documents sections
+
+### Fuel logs
+- Log fill-ups from the vehicle detail Fuel tab
+- Fuel history cards with mileage as the primary metric
+- Create, edit, and delete via Sheet + React Query hooks
+
+### Service logs
+- Log service visits from the vehicle detail Service tab
+- Service history cards (cost, services done, next service hints)
+- Common service badges plus custom service entry
+- Create, edit, and delete via Sheet + React Query hooks
+- API client and `useNextService` hook ready (`GET /service_logs/next`)
 
 ---
 
 ## In Progress
 
-### Frontend — auth & core UI
-- Login and register pages
-- Protected routes
-- shadcn/ui components (`Button`, `Input`, `Toaster`, etc.)
-- `src/lib/utils.ts` (`cn` helper)
-
-### Frontend — feature screens
-- Vehicle list and detail
-- Fuel log entry and history
-- Service log entry and next-service view
-- Document upload and vault
+### Frontend — document vault
+- Document upload and vault UI on the vehicle detail Documents tab
+- Wire `documents` feature (API client, forms, list) to existing backend
 
 ---
 
 ## Planned
+
+### Next-service reminder UI
+- Surface upcoming service from `GET /service_logs/next` on vehicle detail / dashboard
 
 ### Insurance management
 - Policy details beyond file storage (provider, policy number, coverage)

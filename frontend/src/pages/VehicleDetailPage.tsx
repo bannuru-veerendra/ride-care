@@ -26,6 +26,16 @@ import {
 } from "@/features/fuel-logs/hooks/useFuelLogs";
 import type { FuelLog } from "@/features/fuel-logs/types";
 import type { FuelLogSchema } from "@/features/fuel-logs/schemas";
+import ServiceLogCard from "@/features/service-logs/components/ServiceLogCard";
+import ServiceLogForm from "@/features/service-logs/components/ServiceLogForm";
+import {
+    useServiceLogs,
+    useCreateServiceLog,
+    useUpdateServiceLog,
+    useDeleteServiceLog,
+} from "@/features/service-logs/hooks/useServiceLogs";
+import type { ServiceLog } from "@/features/service-logs/types";
+import type { ServiceLogSchema } from "@/features/service-logs/schemas";
 
 /**
  * Vehicle detail page.
@@ -36,22 +46,30 @@ export default function VehicleDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    const [sheetOpen, setSheetOpen] = useState(false);
+    const [fuelSheetOpen, setFuelSheetOpen] = useState(false);
     const [editingLog, setEditingLog] = useState<FuelLog | null>(null);
+
+    const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
+    const [editingServiceLog, setEditingServiceLog] = useState<ServiceLog | null>(null);
 
     const { data: vehicle, isLoading: vehicleLoading } = useVehicle(id!);
     const { data: fuelLogs, isLoading: logsLoading } = useFuelLogs(id!);
+    const { data: serviceLogs, isLoading: serviceLogsLoading } = useServiceLogs(id!);
 
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
     const deleteFuelLog = useDeleteFuelLog(id!);
 
-    const handleSubmit = (values: FuelLogSchema) => {
+    const createServiceLog = useCreateServiceLog(id!);
+    const updateServiceLog = useUpdateServiceLog(id!, editingServiceLog?.id ?? "");
+    const deleteServiceLog = useDeleteServiceLog(id!);
+
+    const handleFuelSubmit = (values: FuelLogSchema) => {
         if (editingLog) {
             updateFuelLog.mutate(values, {
                 onSuccess: () => {
                     toast.success("Fuel log updated");
-                    setSheetOpen(false);
+                    setFuelSheetOpen(false);
                     setEditingLog(null);
                 },
                 onError: () => toast.error("Failed to update fuel log"),
@@ -60,19 +78,19 @@ export default function VehicleDetailPage() {
             createFuelLog.mutate(values, {
                 onSuccess: () => {
                     toast.success("Fuel log added");
-                    setSheetOpen(false);
+                    setFuelSheetOpen(false);
                 },
                 onError: () => toast.error("Failed to add fuel log"),
             });
         }
     };
 
-    const handleEdit = (log: FuelLog) => {
+    const handleFuelEdit = (log: FuelLog) => {
         setEditingLog(log);
-        setSheetOpen(true);
+        setFuelSheetOpen(true);
     };
 
-    const handleDelete = (logId: string) => {
+    const handleFuelDelete = (logId: string) => {
         if (!confirm("Delete this fuel log?")) return;
         deleteFuelLog.mutate(logId, {
             onSuccess: () => toast.success("Fuel log deleted"),
@@ -80,9 +98,56 @@ export default function VehicleDetailPage() {
         });
     };
 
-    const handleSheetOpenChange = (open: boolean) => {
-        setSheetOpen(open);
+    const handleFuelSheetOpenChange = (open: boolean) => {
+        setFuelSheetOpen(open);
         if (!open) setEditingLog(null);
+    };
+
+    const handleServiceSubmit = (values: ServiceLogSchema) => {
+        const payload = {
+            ...values,
+            service_center: values.service_center || undefined,
+            next_service_date: values.next_service_date || undefined,
+            next_service_odometer: values.next_service_odometer || undefined,
+            notes: values.notes || undefined,
+        };
+
+        if (editingServiceLog) {
+            updateServiceLog.mutate(payload, {
+                onSuccess: () => {
+                    toast.success("Service log updated");
+                    setServiceSheetOpen(false);
+                    setEditingServiceLog(null);
+                },
+                onError: () => toast.error("Failed to update service log"),
+            });
+        } else {
+            createServiceLog.mutate(payload, {
+                onSuccess: () => {
+                    toast.success("Service log added");
+                    setServiceSheetOpen(false);
+                },
+                onError: () => toast.error("Failed to add service log"),
+            });
+        }
+    };
+
+    const handleServiceEdit = (log: ServiceLog) => {
+        setEditingServiceLog(log);
+        setServiceSheetOpen(true);
+    };
+
+    const handleServiceDelete = (logId: string) => {
+        if (!confirm("Delete this service log?")) return;
+        deleteServiceLog.mutate(logId, {
+            onSuccess: () => toast.success("Service log deleted"),
+            onError: () => toast.error("Failed to delete service log"),
+        });
+    };
+
+    const handleServiceSheetOpenChange = (open: boolean) => {
+        setServiceSheetOpen(open);
+        if (!open) setEditingServiceLog(null);
     };
 
     if (vehicleLoading) {
@@ -97,7 +162,7 @@ export default function VehicleDetailPage() {
 
     if (!vehicle) {
         return (
-            <div className="text-center py-16">
+            <div className="py-16 text-center">
                 <p className="text-muted-foreground">Vehicle not found.</p>
                 <Button
                     variant="link"
@@ -188,7 +253,7 @@ export default function VehicleDetailPage() {
                             {fuelLogs?.length ?? 0} entries
                         </p>
 
-                        <Sheet open={sheetOpen} onOpenChange={handleSheetOpenChange}>
+                        <Sheet open={fuelSheetOpen} onOpenChange={handleFuelSheetOpenChange}>
                             <SheetTrigger
                                 render={
                                     <Button
@@ -214,7 +279,7 @@ export default function VehicleDetailPage() {
                                 </SheetHeader>
                                 <FuelLogForm
                                     defaultValues={editingLog ?? undefined}
-                                    onSubmit={handleSubmit}
+                                    onSubmit={handleFuelSubmit}
                                     isPending={
                                         createFuelLog.isPending || updateFuelLog.isPending
                                     }
@@ -224,7 +289,6 @@ export default function VehicleDetailPage() {
                         </Sheet>
                     </div>
 
-                    {/* Loading */}
                     {logsLoading && (
                         <div className="space-y-3">
                             {[1, 2, 3].map((i) => (
@@ -233,7 +297,6 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {/* Empty state */}
                     {!logsLoading && fuelLogs?.length === 0 && (
                         <div className="surface-panel px-6 py-14 text-center">
                             <p className="font-heading text-2xl font-bold uppercase tracking-wide">
@@ -245,31 +308,108 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {/* Fuel log list */}
                     {!logsLoading && fuelLogs && fuelLogs.length > 0 && (
                         <div className="space-y-3">
                             {fuelLogs.map((log) => (
                                 <FuelLogCard
                                     key={log.id}
                                     log={log}
-                                    onDelete={handleDelete}
-                                    onEdit={handleEdit}
+                                    onDelete={handleFuelDelete}
+                                    onEdit={handleFuelEdit}
                                 />
                             ))}
                         </div>
                     )}
                 </TabsContent>
 
-                {/* Service logs tab — coming next day */}
-                <TabsContent value="service" className="mt-4">
-                    <div className="text-center py-12 text-muted-foreground">
-                        <p className="font-medium">Service logs coming soon</p>
+                {/* Service logs tab */}
+                <TabsContent value="service" className="mt-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                            {serviceLogs?.length ?? 0} entries
+                        </p>
+
+                        <Sheet
+                            open={serviceSheetOpen}
+                            onOpenChange={handleServiceSheetOpenChange}
+                        >
+                            <SheetTrigger
+                                render={
+                                    <Button
+                                        size="sm"
+                                        className="bg-brand text-brand-foreground hover:bg-brand/90"
+                                    />
+                                }
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Log service
+                            </SheetTrigger>
+                            <SheetContent
+                                side="right"
+                                className="w-full overflow-y-auto border-white/10 sm:max-w-md"
+                            >
+                                <SheetHeader className="mb-6">
+                                    <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
+                                        {editingServiceLog
+                                            ? "Edit service log"
+                                            : "Log service"}
+                                    </SheetTitle>
+                                    <p className="text-sm text-muted-foreground">
+                                        Record what was done and when the next service is due
+                                    </p>
+                                </SheetHeader>
+                                <ServiceLogForm
+                                    key={editingServiceLog?.id ?? "create"}
+                                    defaultValues={editingServiceLog ?? undefined}
+                                    onSubmit={handleServiceSubmit}
+                                    isPending={
+                                        createServiceLog.isPending ||
+                                        updateServiceLog.isPending
+                                    }
+                                    error={
+                                        createServiceLog.error || updateServiceLog.error
+                                    }
+                                />
+                            </SheetContent>
+                        </Sheet>
                     </div>
+
+                    {serviceLogsLoading && (
+                        <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                                <Skeleton key={i} className="h-24 rounded-xl" />
+                            ))}
+                        </div>
+                    )}
+
+                    {!serviceLogsLoading && serviceLogs?.length === 0 && (
+                        <div className="surface-panel px-6 py-14 text-center">
+                            <p className="font-heading text-2xl font-bold uppercase tracking-wide">
+                                No service logs yet
+                            </p>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Tap "Log service" to record your first service
+                            </p>
+                        </div>
+                    )}
+
+                    {!serviceLogsLoading && serviceLogs && serviceLogs.length > 0 && (
+                        <div className="space-y-3">
+                            {serviceLogs.map((log) => (
+                                <ServiceLogCard
+                                    key={log.id}
+                                    log={log}
+                                    onDelete={handleServiceDelete}
+                                    onEdit={handleServiceEdit}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </TabsContent>
 
-                {/* Documents tab — coming next day */}
+                {/* Documents tab — coming next */}
                 <TabsContent value="documents" className="mt-4">
-                    <div className="text-center py-12 text-muted-foreground">
+                    <div className="py-12 text-center text-muted-foreground">
                         <p className="font-medium">Documents coming soon</p>
                     </div>
                 </TabsContent>
