@@ -466,6 +466,164 @@ async def test_delete_fuel_log(client: AsyncClient, auth_headers: dict, created_
     assert response.status_code == 404
 
 
+async def test_create_backdated_fuel_log_recalculates_later_mileage(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Inserting an earlier fill-up recalculates mileage on newer entries."""
+    vehicle_id = created_vehicle["id"]
+    liters = 800 / 110
+
+    later_response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": SECOND_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    assert later_response.status_code == 201
+    later_log_id = later_response.json()["id"]
+    assert later_response.json()["mileage"] == round(
+        (SECOND_LOG_ODO - VEHICLE_ODO) / liters
+    )
+
+    earlier_response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=30)),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    assert earlier_response.status_code == 201
+    assert earlier_response.json()["mileage"] == round(
+        (FIRST_LOG_ODO - VEHICLE_ODO) / liters
+    )
+
+    later_log_response = await client.get(
+        f"/fuel_logs/{later_log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert later_log_response.status_code == 200
+    assert later_log_response.json()["mileage"] == round(
+        (SECOND_LOG_ODO - FIRST_LOG_ODO) / liters
+    )
+
+
+async def test_create_backdated_fuel_log_rejects_impossible_odometer(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Earlier date with odometer ahead of a newer fill-up is rejected."""
+    vehicle_id = created_vehicle["id"]
+
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=30)),
+            "odometer": SECOND_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "previous fill-up" in response.json()["detail"].lower()
+
+
+async def test_delete_fuel_log_recalculates_subsequent_mileage(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Deleting a middle fill-up recalculates mileage on later entries."""
+    vehicle_id = created_vehicle["id"]
+    liters = 800 / 110
+
+    first_response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=2)),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    first_log_id = first_response.json()["id"]
+
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=1)),
+            "odometer": FIRST_LOG_ODO + 400,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+
+    third_response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": SECOND_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    third_log_id = third_response.json()["id"]
+
+    middle_logs = await client.get(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    middle_log_id = next(
+        log["id"]
+        for log in middle_logs.json()
+        if log["id"] not in {first_log_id, third_log_id}
+    )
+
+    delete_response = await client.delete(
+        f"/fuel_logs/{middle_log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert delete_response.status_code == 204
+
+    third_log_response = await client.get(
+        f"/fuel_logs/{third_log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert third_log_response.status_code == 200
+    assert third_log_response.json()["mileage"] == round(
+        (SECOND_LOG_ODO - FIRST_LOG_ODO) / liters
+    )
+
+
 async def test_fuel_log_wrong_vehicle(client: AsyncClient, auth_headers: dict):
     """Test creating a fuel log for a non-existent vehicle returns 404"""
     fake_vehicle_id = "00000000-0000-0000-0000-000000000000"
