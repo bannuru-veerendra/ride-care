@@ -47,8 +47,7 @@ RideCare/
 │   │   │   ├── vehicles/
 │   │   │   ├── fuel-logs/
 │   │   │   ├── service-logs/
-│   │   │   └── documents/
-│   │   ├── hooks/
+│   │   │   └── documents/   # hooks live under each feature
 │   │   ├── lib/             # axios, query-client, utils
 │   │   ├── pages/
 │   │   ├── store/
@@ -168,11 +167,11 @@ Document create/update use `multipart/form-data` in Swagger (same pattern as fil
 | Document API tests | Done |
 | Frontend scaffolding | Done |
 | Frontend auth (login, register, protected routes) | Done |
-| Frontend vehicles (list, create, detail) | Done |
+| Frontend vehicles (list, create, edit, delete, detail) | Done |
 | Frontend fuel logs (entry, history on vehicle detail) | Done |
 | Frontend service logs (entry, history on vehicle detail) | Done |
 | Frontend documents vault (upload, edit, signed URLs) | Done |
-| Next-service reminder UI | Planned |
+| Dashboard (stats, next-service reminder) | Done |
 
 See [ROADMAP.md](ROADMAP.md) for planned features.
 

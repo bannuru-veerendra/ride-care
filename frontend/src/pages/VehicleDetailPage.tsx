@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Plus, ArrowLeft, Gauge, Calendar, Hash, Fuel, Wrench, FileText } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,7 +55,17 @@ import type { DocumentSchema } from "@/features/documents/schemas";
 export default function VehicleDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
+    const actionParam = searchParams.get("action");
+    const initialTab =
+        actionParam === "service"
+            ? "service"
+            : actionParam === "documents"
+              ? "documents"
+              : "fuel";
+
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [fuelSheetOpen, setFuelSheetOpen] = useState(false);
     const [editingLog, setEditingLog] = useState<FuelLog | null>(null);
 
@@ -64,6 +74,24 @@ export default function VehicleDetailPage() {
 
     const [documentSheetOpen, setDocumentSheetOpen] = useState(false);
     const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+
+    // Open fuel/service sheet when linked from dashboard (?action=fuel|service)
+    useEffect(() => {
+        const action = searchParams.get("action");
+        if (!action) return;
+
+        if (action === "fuel") {
+            setActiveTab("fuel");
+            setFuelSheetOpen(true);
+        } else if (action === "service") {
+            setActiveTab("service");
+            setServiceSheetOpen(true);
+        }
+
+        const next = new URLSearchParams(searchParams);
+        next.delete("action");
+        setSearchParams(next, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     const { data: vehicle, isLoading: vehicleLoading } = useVehicle(id!);
     const { data: fuelLogs, isLoading: logsLoading } = useFuelLogs(id!);
@@ -299,7 +327,7 @@ export default function VehicleDetailPage() {
             </div>
 
             {/* Tabs — one per feature */}
-            <Tabs defaultValue="fuel" className="gap-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-0">
                 <TabsList
                     variant="line"
                     className="h-auto w-full justify-start gap-0 rounded-none border-b border-white/10 bg-transparent p-0"
