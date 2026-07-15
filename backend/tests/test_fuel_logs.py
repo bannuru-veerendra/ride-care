@@ -1,6 +1,8 @@
-from datetime import date as dt_date, timedelta
+﻿from datetime import date as dt_date, timedelta
 
 from httpx import AsyncClient
+
+from app.utils.dates import app_today
 
 VEHICLE_ODO = 10000
 FIRST_LOG_ODO = 10500
@@ -131,6 +133,26 @@ async def test_create_fuel_log_invalid_odometer(
     assert response.status_code == 422
 
 
+async def test_create_fuel_log_rejects_future_date(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test the create fuel log endpoint rejects a future date"""
+    vehicle_id = created_vehicle["id"]
+    payload = {
+        "date": str(app_today() + timedelta(days=1)),
+        "odometer": FIRST_LOG_ODO,
+        "total_cost": 800,
+        "price_per_liter": 110,
+    }
+    response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json=payload,
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
 async def test_create_fuel_log_odometer_not_greater_than_vehicle(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
@@ -217,16 +239,16 @@ async def test_create_fuel_log_mileage_from_vehicle_baseline(
     assert response.status_code == 201
     data = response.json()
     liters = payload["total_cost"] / payload["price_per_liter"]
-    expected_mileage = round((10500 - created_vehicle["current_odometer"]) / liters)
+    expected_mileage = round((10500 - created_vehicle["baseline_odometer"]) / liters)
     assert data["mileage"] == expected_mileage
 
 
 async def test_create_fuel_log_does_not_update_vehicle_baseline(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
-    """Test creating a fuel log does not change the vehicle baseline odometer"""
+    """Test creating a fuel log keeps baseline fixed and advances live odometer"""
     vehicle_id = created_vehicle["id"]
-    baseline = created_vehicle["current_odometer"]
+    baseline = created_vehicle["baseline_odometer"]
     response = await client.post(
         "/fuel_logs/",
         params={"vehicle_id": vehicle_id},
@@ -242,7 +264,8 @@ async def test_create_fuel_log_does_not_update_vehicle_baseline(
 
     vehicle_response = await client.get(f"/vehicles/{vehicle_id}", headers=auth_headers)
     assert vehicle_response.status_code == 200
-    assert vehicle_response.json()["current_odometer"] == baseline
+    assert vehicle_response.json()["baseline_odometer"] == baseline
+    assert vehicle_response.json()["current_odometer"] == 12000
 
 
 async def test_get_fuel_logs(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
@@ -271,6 +294,49 @@ async def test_get_fuel_logs(client: AsyncClient, auth_headers: dict, created_ve
     data = response.json()
     assert len(data) == 1
     assert data[0]["id"] == fuel_log_id
+
+
+async def test_get_fuel_logs_ordered_by_date_desc(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Fuel logs are listed newest date first, even if entered out of order."""
+    vehicle_id = created_vehicle["id"]
+
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today()),
+            "odometer": SECOND_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(dt_date.today() - timedelta(days=30)),
+            "odometer": FIRST_LOG_ODO,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.get(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["date"] == str(dt_date.today())
+    assert data[0]["odometer"] == SECOND_LOG_ODO
+    assert data[1]["date"] == str(dt_date.today() - timedelta(days=30))
+    assert data[1]["odometer"] == FIRST_LOG_ODO
 
 
 async def test_get_fuel_log_by_id(client: AsyncClient, auth_headers: dict, created_vehicle: dict):

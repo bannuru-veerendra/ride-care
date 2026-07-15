@@ -122,7 +122,7 @@ async def test_create_vehicle_without_token(client: AsyncClient):
             "vehicle_name": "Shine 100",
             "year": 2022,
             "registration_number": "TS09CD5678",
-            "current_odometer": 3000,
+            "baseline_odometer": 3000,
         },
     )
     assert response.status_code == 401

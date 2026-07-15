@@ -33,17 +33,15 @@ import type { Vehicle } from "@/features/vehicles/types";
 
 const SELECTED_VEHICLE_KEY = "ridecare-dashboard-vehicle";
 
-/** Liters-weighted avg km/l across fuel logs */
-function getWeightedAvgMileage(logs: FuelLog[]): number | null {
-    const usable = logs.filter((log) => log.mileage !== null && log.liters > 0);
-    const totalLiters = usable.reduce((sum, log) => sum + log.liters, 0);
-    if (totalLiters <= 0) return null;
+/** Average km/l across fuel logs that have mileage */
+function getAverageMileage(logs: FuelLog[]): number | null {
+    const mileages = logs
+        .map((log) => log.mileage)
+        .filter((mileage): mileage is number => mileage !== null);
+    if (mileages.length === 0) return null;
 
-    const totalKm = usable.reduce(
-        (sum, log) => sum + (log.mileage ?? 0) * log.liters,
-        0
-    );
-    return Math.round(totalKm / totalLiters);
+    const sum = mileages.reduce((total, mileage) => total + mileage, 0);
+    return Math.round((sum / mileages.length) * 10) / 10;
 }
 
 function getMonthSpend(logs: FuelLog[], month: Date): number {
@@ -56,7 +54,7 @@ function getMonthSpend(logs: FuelLog[], month: Date): number {
 }
 
 function getMonthMileage(logs: FuelLog[], month: Date): number | null {
-    return getWeightedAvgMileage(
+    return getAverageMileage(
         logs.filter((log) => {
             const date = parseISO(log.date);
             return isSameMonth(date, month) && isSameYear(date, month);
@@ -102,7 +100,7 @@ export default function DashboardPage() {
 
     const recentFuelLogs = fuelLogs?.slice(0, 3) ?? [];
     const hasFuelLogs = (fuelLogs?.length ?? 0) > 0;
-    const averageMileage = fuelLogs ? getWeightedAvgMileage(fuelLogs) : null;
+    const averageMileage = fuelLogs ? getAverageMileage(fuelLogs) : null;
 
     const now = new Date();
     const thisMonthSpend = fuelLogs ? getMonthSpend(fuelLogs, now) : 0;

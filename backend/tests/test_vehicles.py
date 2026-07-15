@@ -1,3 +1,5 @@
+from datetime import date
+
 from httpx import AsyncClient
 
 
@@ -8,15 +10,35 @@ async def test_create_vehicle_success(client: AsyncClient, auth_headers: dict):
         "vehicle_name": "Shine 100",
         "year": 2022,
         "registration_number": "TS09CD5678",
-        "current_odometer": 3000,
+        "baseline_odometer": 3000,
     }
     response = await client.post("/vehicles/", json=payload, headers=auth_headers)
     assert response.status_code == 201
     data = response.json()
     assert data["brand"] == payload["brand"]
     assert data["registration_number"] == payload["registration_number"]
+    assert data["baseline_odometer"] == 3000
+    assert data["current_odometer"] == 3000
     assert "id" in data
     assert "owner_id" in data
+
+
+async def test_create_vehicle_accepts_legacy_current_odometer(
+    client: AsyncClient, auth_headers: dict
+):
+    """Legacy create payloads may still send current_odometer as baseline."""
+    payload = {
+        "brand": "TVS",
+        "vehicle_name": "Apache",
+        "year": 2021,
+        "registration_number": "TS09LEGACY1",
+        "current_odometer": 4500,
+    }
+    response = await client.post("/vehicles/", json=payload, headers=auth_headers)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["baseline_odometer"] == 4500
+    assert data["current_odometer"] == 4500
 
 
 async def test_create_vehicle_duplicate_registration(
@@ -28,7 +50,7 @@ async def test_create_vehicle_duplicate_registration(
         "vehicle_name": "Pulsar 150",
         "year": 2021,
         "registration_number": created_vehicle["registration_number"],
-        "current_odometer": 0,
+        "baseline_odometer": 0,
     }
     response = await client.post("/vehicles/", json=payload, headers=auth_headers)
     assert response.status_code == 400
@@ -46,7 +68,7 @@ async def test_update_vehicle_duplicate_registration(
             "vehicle_name": "Pulsar 150",
             "year": 2021,
             "registration_number": "TS09EF9012",
-            "current_odometer": 0,
+            "baseline_odometer": 0,
         },
         headers=auth_headers,
     )
@@ -68,7 +90,7 @@ async def test_create_vehicle_invalid_year(client: AsyncClient, auth_headers: di
         "vehicle_name": "Shine 100",
         "year": 1885,
         "registration_number": "TS09CD5678",
-        "current_odometer": 3000,
+        "baseline_odometer": 3000,
     }
     response = await client.post("/vehicles/", json=payload, headers=auth_headers)
     assert response.status_code == 422
@@ -81,7 +103,7 @@ async def test_create_vehicle_negative_odometer(client: AsyncClient, auth_header
         "vehicle_name": "Shine 100",
         "year": 2022,
         "registration_number": "TS09CD5678",
-        "current_odometer": -1,
+        "baseline_odometer": -1,
     }
     response = await client.post("/vehicles/", json=payload, headers=auth_headers)
     assert response.status_code == 422
@@ -122,18 +144,82 @@ async def test_get_vehicle_not_found(client: AsyncClient, auth_headers: dict):
 async def test_update_vehicle(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
     """Test the update vehicle endpoint"""
     vehicle_id = created_vehicle["id"]
-    payload = {"current_odometer": 6000}
+    payload = {"baseline_odometer": 6000}
     response = await client.patch(f"/vehicles/{vehicle_id}", json=payload, headers=auth_headers)
     assert response.status_code == 200
+    assert response.json()["baseline_odometer"] == 6000
     assert response.json()["current_odometer"] == 6000
 
 
 async def test_update_vehicle_not_found(client: AsyncClient, auth_headers: dict):
     """Test the update vehicle endpoint with a non-existent id"""
     vehicle_id = "00000000-0000-0000-0000-000000000000"
-    payload = {"current_odometer": 6000}
+    payload = {"baseline_odometer": 6000}
     response = await client.patch(f"/vehicles/{vehicle_id}", json=payload, headers=auth_headers)
     assert response.status_code == 404
+
+
+async def test_current_odometer_follows_fuel_and_service_logs(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Live current_odometer advances from fuel/service logs; baseline stays fixed."""
+    vehicle_id = created_vehicle["id"]
+    baseline = created_vehicle["baseline_odometer"]
+
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 11200,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.get(f"/vehicles/{vehicle_id}", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["baseline_odometer"] == baseline
+    assert data["current_odometer"] == 12000
+
+
+async def test_update_baseline_rejects_value_at_or_above_logs(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Baseline cannot be raised to or above existing log odometers."""
+    vehicle_id = created_vehicle["id"]
+    await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 11200,
+            "total_cost": 800,
+            "price_per_liter": 110,
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.patch(
+        f"/vehicles/{vehicle_id}",
+        json={"baseline_odometer": 11200},
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "baseline odometer" in response.json()["detail"].lower()
 
 
 async def test_delete_vehicle(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
@@ -162,7 +248,7 @@ async def test_cannot_update_other_users_vehicle(
     vehicle_id = created_vehicle["id"]
     response = await client.patch(
         f"/vehicles/{vehicle_id}",
-        json={"current_odometer": 9999},
+        json={"baseline_odometer": 9999},
         headers=other_user_headers,
     )
     assert response.status_code == 404

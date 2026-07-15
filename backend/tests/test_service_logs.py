@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 from httpx import AsyncClient
 
+from app.utils.dates import app_today
+
 
 async def test_create_service_log_success(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
@@ -41,6 +43,25 @@ async def test_create_service_log_empty_services(
             "odometer": 12000,
             "total_cost": 1500,
             "services_done": [],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_create_service_log_rejects_future_date(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Test creating a service log with a future date returns 422"""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today() + timedelta(days=1)),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
         },
         headers=auth_headers,
     )
@@ -111,6 +132,51 @@ async def test_get_service_logs(
     assert len(response.json()) == 1
 
 
+async def test_get_service_logs_ordered_by_date_desc(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Service logs are listed newest date first, even if entered out of order."""
+    vehicle_id = created_vehicle["id"]
+    later_date = str(date.today())
+    earlier_date = str(date.today() - timedelta(days=30))
+
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": later_date,
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Chain lube"],
+        },
+        headers=auth_headers,
+    )
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": earlier_date,
+            "odometer": 11000,
+            "total_cost": 1200,
+            "services_done": ["Oil change"],
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.get(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["date"] == later_date
+    assert data[0]["odometer"] == 12000
+    assert data[1]["date"] == earlier_date
+    assert data[1]["odometer"] == 11000
+
+
 async def test_get_next_service(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
@@ -137,6 +203,50 @@ async def test_get_next_service(
     )
     assert response.status_code == 200
     assert response.json()["next_service_date"] == next_date
+
+
+async def test_get_next_service_orders_by_next_service_date(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Next service is the soonest next_service_date, not the oldest visit."""
+    vehicle_id = created_vehicle["id"]
+    sooner = str(date.today() + timedelta(days=14))
+    later = str(date.today() + timedelta(days=90))
+
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today() - timedelta(days=30)),
+            "odometer": 11000,
+            "total_cost": 1200,
+            "services_done": ["Oil change"],
+            "next_service_date": later,
+            "next_service_odometer": 14000,
+        },
+        headers=auth_headers,
+    )
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Chain lube"],
+            "next_service_date": sooner,
+            "next_service_odometer": 13500,
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.get(
+        "/service_logs/next",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["next_service_date"] == sooner
 
 
 async def test_get_next_service_none(

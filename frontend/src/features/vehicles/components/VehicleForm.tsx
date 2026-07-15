@@ -45,7 +45,7 @@ export default function VehicleForm({
         vehicle_name: defaultValues.vehicle_name,
         year: defaultValues.year,
         registration_number: defaultValues.registration_number,
-        current_odometer: defaultValues.current_odometer,
+        baseline_odometer: defaultValues.baseline_odometer,
       });
     }
   }, [defaultValues, reset]);
@@ -115,16 +115,16 @@ export default function VehicleForm({
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="current_odometer">Current odometer (km)</Label>
+          <Label htmlFor="baseline_odometer">Baseline odometer (km)</Label>
           <Input
-            id="current_odometer"
+            id="baseline_odometer"
             type="number"
             placeholder="12000"
-            {...register("current_odometer", { valueAsNumber: true })}
+            {...register("baseline_odometer", { valueAsNumber: true })}
           />
-          {errors.current_odometer && (
+          {errors.baseline_odometer && (
             <p className="text-destructive text-xs">
-              {errors.current_odometer.message}
+              {errors.baseline_odometer.message}
             </p>
           )}
         </div>

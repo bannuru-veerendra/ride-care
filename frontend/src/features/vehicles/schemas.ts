@@ -15,9 +15,9 @@ export const vehicleSchema = z.object({
         .min(1900, { message: "Year must be after 1900" })
         .max(currentYear + 1, { message: `Year cannot exceed ${currentYear + 1}` }),
     registration_number: z.string().min(1, { message: "Registration number is required" }),
-    current_odometer: z
+    baseline_odometer: z
         .number({ error: "Odometer must be a number" })
-        .min(0, { message: "Odometer must be greater than 0" }),
+        .min(0, { message: "Odometer must be greater than or equal to 0" }),
 });
 
 export type VehicleSchema = z.infer<typeof vehicleSchema>;

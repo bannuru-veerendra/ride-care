@@ -3,6 +3,8 @@ from datetime import date as dt_date
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from app.utils.dates import app_today
+
 
 class ServiceLogCreate(BaseModel):
     """Request body for POST /service_logs"""
@@ -17,6 +19,8 @@ class ServiceLogCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_values(self):
+        if self.date > app_today():
+            raise ValueError("Service log date cannot be in the future")
         if self.total_cost <= 0:
             raise ValueError("Total cost must be greater than 0")
         if self.odometer <= 0:
@@ -41,6 +45,8 @@ class ServiceLogUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_values(self):
+        if self.date is not None and self.date > app_today():
+            raise ValueError("Service log date cannot be in the future")
         if self.total_cost is not None and self.total_cost <= 0:
             raise ValueError("Total cost must be greater than 0")
         if self.odometer is not None and self.odometer <= 0:

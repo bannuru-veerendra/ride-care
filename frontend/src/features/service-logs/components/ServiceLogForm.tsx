@@ -3,7 +3,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, X, Plus, Wrench } from "lucide-react";
 import { isAxiosError } from "axios";
-import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +14,7 @@ import {
     COMMON_SERVICES,
 } from "../schemas";
 import type { ServiceLog } from "../types";
+import { appTodayISO } from "@/lib/date";
 
 interface ServiceLogFormProps {
     /** Pass a service log to pre-fill the form for editing */
@@ -53,7 +53,7 @@ export default function ServiceLogForm({
     } = useForm<ServiceLogSchema>({
         resolver: zodResolver(serviceLogSchema),
         defaultValues: {
-            date: format(new Date(), "yyyy-MM-dd"),
+            date: appTodayISO(),
             services_done: [],
         },
     });
@@ -144,6 +144,7 @@ export default function ServiceLogForm({
                         <Input
                             id="date"
                             type="date"
+                            max={appTodayISO()}
                             className={inputClass}
                             {...register("date")}
                         />

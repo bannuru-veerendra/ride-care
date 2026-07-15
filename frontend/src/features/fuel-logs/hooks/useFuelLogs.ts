@@ -52,6 +52,10 @@ export const useUpdateFuelLog = (vehicleId: string, logId: string) => {
             fuelLogsApi.update(vehicleId, logId, payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: fuelLogKeys.all(vehicleId) });
+            queryClient.invalidateQueries({
+                queryKey: vehicleKeys.details(vehicleId),
+            });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
 };
@@ -65,6 +69,10 @@ export const useDeleteFuelLog = (vehicleId: string) => {
         mutationFn: (logId: string) => fuelLogsApi.delete(vehicleId, logId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: fuelLogKeys.all(vehicleId) });
+            queryClient.invalidateQueries({
+                queryKey: vehicleKeys.details(vehicleId),
+            });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
 };
