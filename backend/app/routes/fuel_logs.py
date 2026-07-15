@@ -1,8 +1,7 @@
 import uuid
-from datetime import date as dt_date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -66,126 +65,43 @@ async def get_owned_fuel_log(
     return db_fuel_log
 
 
-async def get_previous_fuel_log(
+async def recalculate_vehicle_fuel_mileage(
     db: AsyncSession,
     vehicle_id: uuid.UUID,
-    log_date: dt_date,
-    odometer: int,
-    exclude_id: uuid.UUID | None = None,
-) -> FuelLog | None:
-    """Find the chronologically prior fill-up for mileage calculation."""
-    conditions = [
-        FuelLog.vehicle_id == vehicle_id,
-        or_(
-            FuelLog.date < log_date,
-            (FuelLog.date == log_date) & (FuelLog.odometer < odometer),
-        ),
-    ]
-    if exclude_id is not None:
-        conditions.append(FuelLog.id != exclude_id)
-
-    result = await db.execute(
-        select(FuelLog)
-        .where(*conditions)
-        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-def validate_odometer_reading(
-    odometer: int,
-    previous_fuel_log: FuelLog | None,
     vehicle: Vehicle,
 ) -> None:
-    """Reject odometer readings that are not ahead of the last known value."""
-    if previous_fuel_log is not None:
-        if odometer <= previous_fuel_log.odometer:
+    """Validate timeline and recalculate mileage for every fill-up in date order.
+
+    Logs are ordered by (date, odometer). Each reading must exceed the previous
+    fill-up's odometer, or the vehicle baseline when it is the earliest log.
+    """
+    result = await db.execute(
+        select(FuelLog)
+        .where(FuelLog.vehicle_id == vehicle_id)
+        .order_by(FuelLog.date.asc(), FuelLog.odometer.asc())
+    )
+    fuel_logs = list(result.scalars().all())
+
+    previous_odometer = vehicle.current_odometer
+    previous_label = (
+        f"the vehicle's baseline odometer ({vehicle.current_odometer})"
+    )
+
+    for fuel_log in fuel_logs:
+        if fuel_log.odometer <= previous_odometer:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    f"Odometer reading ({odometer}) must be greater than "
-                    f"the previous fill-up ({previous_fuel_log.odometer})"
+                    f"Odometer reading ({fuel_log.odometer}) must be greater than "
+                    f"{previous_label}"
                 ),
             )
-        return
 
-    if odometer <= vehicle.current_odometer:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Odometer reading ({odometer}) must be greater than "
-                f"the vehicle's baseline odometer ({vehicle.current_odometer})"
-            ),
+        fuel_log.mileage = round(
+            (fuel_log.odometer - previous_odometer) / fuel_log.liters
         )
-
-
-async def refresh_mileage(
-    db: AsyncSession,
-    vehicle_id: uuid.UUID,
-    fuel_log: FuelLog,
-    vehicle: Vehicle,
-    *,
-    exclude_id: uuid.UUID | None = None,
-    validate: bool = False,
-) -> None:
-    """Validate (optional) and recalculate mileage for one fuel log."""
-    previous_fuel_log = await get_previous_fuel_log(
-        db,
-        vehicle_id,
-        fuel_log.date,
-        fuel_log.odometer,
-        exclude_id=exclude_id,
-    )
-    if validate:
-        validate_odometer_reading(fuel_log.odometer, previous_fuel_log, vehicle)
-
-    previous_odometer = (
-        previous_fuel_log.odometer
-        if previous_fuel_log is not None
-        else vehicle.current_odometer
-    )
-    fuel_log.mileage = round(
-        (fuel_log.odometer - previous_odometer) / fuel_log.liters
-    )
-
-
-async def refresh_mileage_chain(
-    db: AsyncSession,
-    vehicle_id: uuid.UUID,
-    fuel_log: FuelLog,
-    vehicle: Vehicle,
-) -> None:
-    """Recalculate mileage for a fuel log and every later fill-up."""
-    await refresh_mileage(
-        db,
-        vehicle_id,
-        fuel_log,
-        vehicle,
-        exclude_id=fuel_log.id,
-        validate=True,
-    )
-
-    result = await db.execute(
-        select(FuelLog)
-        .where(
-            FuelLog.vehicle_id == vehicle_id,
-            or_(
-                FuelLog.date > fuel_log.date,
-                (FuelLog.date == fuel_log.date)
-                & (FuelLog.odometer > fuel_log.odometer),
-            ),
-        )
-        .order_by(FuelLog.date.asc(), FuelLog.odometer.asc())
-    )
-    for subsequent_log in result.scalars():
-        await refresh_mileage(
-            db,
-            vehicle_id,
-            subsequent_log,
-            vehicle,
-            validate=True,
-        )
+        previous_odometer = fuel_log.odometer
+        previous_label = f"the previous fill-up ({fuel_log.odometer})"
 
 
 @router.post("/", response_model=FuelLogResponse, status_code=status.HTTP_201_CREATED)
@@ -202,14 +118,9 @@ async def create_fuel_log(
         vehicle_id=vehicle_id,
         liters=fuel_log.total_cost / fuel_log.price_per_liter,
     )
-    await refresh_mileage(
-        db,
-        vehicle_id,
-        db_fuel_log,
-        db_vehicle,
-        validate=True,
-    )
     db.add(db_fuel_log)
+    await db.flush()
+    await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
     await db.commit()
     await db.refresh(db_fuel_log)
     return db_fuel_log
@@ -274,18 +185,8 @@ async def update_fuel_log(
         )
 
     if {"date", "odometer", "total_cost", "price_per_liter"} & updates.keys():
-        if {"date", "odometer"} & updates.keys():
-            await refresh_mileage_chain(
-                db, vehicle_id, db_fuel_log, db_vehicle
-            )
-        else:
-            await refresh_mileage(
-                db,
-                vehicle_id,
-                db_fuel_log,
-                db_vehicle,
-                exclude_id=fuel_log_id,
-            )
+        await db.flush()
+        await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
 
     await db.commit()
     await db.refresh(db_fuel_log)
@@ -300,6 +201,7 @@ async def delete_fuel_log(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a fuel log by ID"""
+    db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
     db_fuel_log = await get_owned_fuel_log(
         fuel_log_id,
         vehicle_id,
@@ -307,5 +209,7 @@ async def delete_fuel_log(
         db,
     )
     await db.delete(db_fuel_log)
+    await db.flush()
+    await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
     await db.commit()
     return None
