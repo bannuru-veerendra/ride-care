@@ -1,8 +1,14 @@
-# Python (backend)
+# Frontend
+frontend/.env
+frontend/.env.local
+
+# Backend
+backend/.env
+backend/.env.test
+backend/.env.backup
 backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
-backend/.env
 backend/.pytest_cache/
 backend/.mypy_cache/
 backend/htmlcov/
