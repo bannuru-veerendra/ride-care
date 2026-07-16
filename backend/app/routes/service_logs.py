@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,11 +86,10 @@ async def get_service_logs(
 ) -> list[ServiceLogResponse]:
     """Get all service logs for a vehicle"""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
-    
     result = await db.execute(
         select(ServiceLog)
         .where(ServiceLog.vehicle_id == vehicle_id)
-        .order_by(ServiceLog.date.desc())
+        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
     )
     return result.scalars().all()
 
@@ -108,7 +108,7 @@ async def get_next_service_log(
             ServiceLog.vehicle_id == vehicle_id,
             ServiceLog.next_service_date.isnot(None),
         )
-        .order_by(ServiceLog.date.asc())
+        .order_by(ServiceLog.next_service_date.asc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -139,15 +139,20 @@ async def update_service_log(
     db: AsyncSession = Depends(get_db),
 ) -> ServiceLogResponse:
     """Update a service log by ID"""
-    db_service_log = await get_owned_service_log(service_log_id, vehicle_id, current_user, db)
-    
+    db_service_log = await get_owned_service_log(
+        service_log_id,
+        vehicle_id,
+        current_user,
+        db,
+    )
+
     updates = service_log.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(db_service_log, key, value)
     await db.commit()
     await db.refresh(db_service_log)
     return db_service_log
-    
+
 
 @router.delete("/{service_log_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_service_log(
@@ -157,7 +162,12 @@ async def delete_service_log(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a service log by ID"""
-    db_service_log = await get_owned_service_log(service_log_id, vehicle_id, current_user, db)
+    db_service_log = await get_owned_service_log(
+        service_log_id,
+        vehicle_id,
+        current_user,
+        db,
+    )
     await db.delete(db_service_log)
     await db.commit()
     return None

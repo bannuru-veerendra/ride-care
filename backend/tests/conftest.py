@@ -168,7 +168,7 @@ async def created_vehicle(client: AsyncClient, auth_headers: dict):
         "vehicle_name": "Test Vehicle",
         "year": 2020,
         "registration_number": "1234567890",
-        "current_odometer": 10000,
+        "baseline_odometer": 10000,
     }
     response = await client.post("/vehicles/", json=payload, headers=auth_headers)
     return response.json()

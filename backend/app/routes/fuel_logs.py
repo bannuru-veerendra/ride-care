@@ -70,11 +70,7 @@ async def recalculate_vehicle_fuel_mileage(
     vehicle_id: uuid.UUID,
     vehicle: Vehicle,
 ) -> None:
-    """Validate timeline and recalculate mileage for every fill-up in date order.
-
-    Logs are ordered by (date, odometer). Each reading must exceed the previous
-    fill-up's odometer, or the vehicle baseline when it is the earliest log.
-    """
+    """Validate timeline and recalculate mileage for all fill-ups"""
     result = await db.execute(
         select(FuelLog)
         .where(FuelLog.vehicle_id == vehicle_id)
@@ -137,7 +133,7 @@ async def get_fuel_logs(
     result = await db.execute(
         select(FuelLog)
         .where(FuelLog.vehicle_id == vehicle_id)
-        .order_by(FuelLog.date.desc())
+        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
     )
     return result.scalars().all()
 

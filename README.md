@@ -144,7 +144,7 @@ npm run preview  # preview production build
 | Module | Endpoints | Notes |
 |--------|-----------|-------|
 | Auth | `/auth/register`, `/auth/login`, `/auth/token` | JWT bearer auth |
-| Vehicles | `/vehicles/` CRUD | `current_odometer` is a fixed baseline at registration |
+| Vehicles | `/vehicles/` CRUD | `baseline_odometer` at registration (legacy `current_odometer` still accepted); response `current_odometer` is live (max of baseline, fuel, service) |
 | Fuel logs | `/fuel_logs/` CRUD | Auto-calculates km/L; validates odometer against baseline or previous fill-up |
 | Service logs | `/service_logs/` CRUD, `/service_logs/next` | Tracks services and next service date/odometer |
 | Documents | `/documents/` CRUD | Multipart upload (PDF/JPEG/PNG); types: insurance, driving license, RC; signed download URLs |

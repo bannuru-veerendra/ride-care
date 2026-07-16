@@ -3,13 +3,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Fuel, Gauge, Loader2, TrendingUp } from "lucide-react";
 import { isAxiosError } from "axios";
-import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fuelLogSchema, type FuelLogSchema } from "../schemas";
 import type { FuelLog } from "../types";
+import { appTodayISO } from "@/lib/date";
 
 interface FuelLogFormProps {
     /** Pass a fuel log to pre-fill the form for editing */
@@ -39,7 +39,7 @@ export default function FuelLogForm({
     } = useForm<FuelLogSchema>({
         resolver: zodResolver(fuelLogSchema),
         defaultValues: {
-            date: format(new Date(), "yyyy-MM-dd"),
+            date: appTodayISO(),
         },
     });
 
@@ -122,6 +122,7 @@ export default function FuelLogForm({
                     <Input
                         id="date"
                         type="date"
+                        max={appTodayISO()}
                         className={inputClass}
                         {...register("date")}
                     />

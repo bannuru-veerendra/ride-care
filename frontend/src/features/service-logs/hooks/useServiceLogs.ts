@@ -7,8 +7,8 @@ import type {
 import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
 
 /**
- * Query keys for service log queries.
- * Scoped under vehicle ID so invalidation is precise.
+ * Query keys for service log queries
+ * Scoped under vehicle ID so invalidation is precise
  */
 export const serviceLogKeys = {
     all: (vehicleId: string) => ["service-logs", vehicleId] as const,
@@ -63,6 +63,10 @@ export const useUpdateServiceLog = (vehicleId: string, logId: string) => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: serviceLogKeys.all(vehicleId) });
             queryClient.invalidateQueries({ queryKey: serviceLogKeys.next(vehicleId) });
+            queryClient.invalidateQueries({
+                queryKey: vehicleKeys.details(vehicleId),
+            });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
 };
@@ -76,6 +80,10 @@ export const useDeleteServiceLog = (vehicleId: string) => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: serviceLogKeys.all(vehicleId) });
             queryClient.invalidateQueries({ queryKey: serviceLogKeys.next(vehicleId) });
+            queryClient.invalidateQueries({
+                queryKey: vehicleKeys.details(vehicleId),
+            });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
 };

@@ -12,6 +12,7 @@ export interface Vehicle {
     vehicle_name: string;
     year: number;
     registration_number: string;
+    baseline_odometer: number;
     current_odometer: number;
 }
 
@@ -21,7 +22,7 @@ export interface CreateVehiclePayload {
     vehicle_name: string;
     year: number;
     registration_number: string;
-    current_odometer: number;
+    baseline_odometer: number;
 }
 
 export interface UpdateVehiclePayload {
@@ -29,7 +30,7 @@ export interface UpdateVehiclePayload {
     vehicle_name?: string;
     year?: number;
     registration_number?: string;
-    current_odometer?: number;
+    baseline_odometer?: number;
 }
 
 export const vehiclesApi = {
