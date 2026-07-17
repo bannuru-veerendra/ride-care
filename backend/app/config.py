@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str
     SUPABASE_STORAGE_BUCKET: str
-    FRONTEND_URL: str
+    ALLOWED_ORIGINS: str = "http://localhost:5173"
 
 
 settings = Settings()
