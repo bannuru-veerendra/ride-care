@@ -28,6 +28,9 @@
 
 ### Quality
 - Automated API tests for auth, vehicles, fuel logs, service logs, and documents
+- Separate test Supabase project via `backend/.env.test`
+- `ENV_FILE` switch in `app/config.py`; `tests/conftest.py` forces `.env.test`
+- GitHub Actions CI runs pytest with repository secrets
 
 ---
 
@@ -73,6 +76,16 @@
 - Home hub with vehicle picker, fuel spend / mileage stats, and quick actions
 - Next-service reminder from `GET /service_logs/next` (overdue and soon-within-14-days)
 - Deep links into vehicle fuel / service tabs
+
+### Resilience
+- `ErrorBoundary` around app shell and main routes
+- `NotFoundPage` for unknown paths and as a boundary fallback
+
+### Deployment prep
+- Production `VITE_API_URL` via `.env.production` / `.env.example` (Render placeholder)
+- Build script runs `tsc -b && vite build` before bundling
+- Vercel SPA fallback (`public/_redirects`) so client routes refresh correctly
+- Root `.gitignore` covers `frontend/.env`, `frontend/.env.local`, `backend/.env`, `backend/.env.test`, and venv/cache
 
 ---
 

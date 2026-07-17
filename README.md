@@ -55,7 +55,9 @@ RideCare/
 │   │   ├── App.tsx
 │   │   └── main.tsx
 │   ├── package.json
-│   └── .env.example
+│   ├── .env.example
+│   └── .env.production
+├── .github/workflows/
 ├── .gitignore
 ├── README.md
 └── ROADMAP.md
@@ -97,11 +99,26 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### Test
 
+Tests use a separate Supabase project via `backend/.env.test` (never commit this file).
+
+1. Copy secrets into `backend/.env.test` (test DB URL, JWT, Supabase, Redis).
+2. Apply migrations to the test database once:
+
+```bash
+cp .env .env.backup
+cp .env.test .env
+alembic upgrade head
+cp .env.backup .env
+```
+
+3. Run the suite (`tests/conftest.py` sets `ENV_FILE=.env.test` so pytest never hits your dev DB):
+
 ```bash
 pytest tests/ -v
 ```
 
 All backend API tests should pass (auth, vehicles, fuel logs, service logs, documents).
+GitHub Actions CI runs the same suite using repository secrets.
 
 ### Swagger authentication
 
@@ -120,8 +137,11 @@ All backend API tests should pass (auth, vehicles, fuel logs, service logs, docu
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # VITE_API_URL=http://localhost:8000
+cp .env.example .env
+# For local: set VITE_API_URL=http://localhost:8000 in frontend/.env
 ```
+
+`.env.example` and `.env.production` default to a Render placeholder (`https://your-backend.onrender.com`). Replace that with your live backend URL before deploying. Vite uses `.env` for `npm run dev` and `.env.production` for `npm run build`.
 
 ### Run
 
@@ -134,10 +154,12 @@ App: [http://localhost:5173](http://localhost:5173)
 ### Other scripts
 
 ```bash
-npm run build    # production build
+npm run build    # tsc -b && vite build
 npm run lint     # oxlint
 npm run preview  # preview production build
 ```
+
+`frontend/public/_redirects` enables SPA routing on Vercel so deep links (for example `/vehicles/:id`) refresh correctly.
 
 ## API Overview
 
@@ -172,14 +194,20 @@ Document create/update use `multipart/form-data` in Swagger (same pattern as fil
 | Frontend service logs (entry, history on vehicle detail) | Done |
 | Frontend documents vault (upload, edit, signed URLs) | Done |
 | Dashboard (stats, next-service reminder) | Done |
+| Error boundary + 404 page | Done |
+| Deployment prep (env, SPA redirects, CI secrets) | Done |
 
 See [ROADMAP.md](ROADMAP.md) for planned features.
 
 ## Environment Variables
 
-| File | Purpose |
-|------|---------|
-| `backend/.env` | Database, Supabase, Redis, JWT secrets |
-| `frontend/.env` | `VITE_API_URL` — backend base URL for Axios |
+| File | Purpose | Commit? |
+|------|---------|---------|
+| `backend/.env` | Local/dev Database, Supabase, Redis, JWT | No |
+| `backend/.env.test` | Test DB and secrets for pytest | No |
+| `backend/.env.example` | Placeholder names for backend setup | Yes |
+| `frontend/.env` | Local `VITE_API_URL` (usually `http://localhost:8000`) | No |
+| `frontend/.env.example` | Documented production API URL template | Yes |
+| `frontend/.env.production` | Production `VITE_API_URL` used by `vite build` | Yes (no secrets) |
 
-Copy each `.env.example` to `.env` and fill in your values. Never commit `.env` files — they are listed in `.gitignore`.
+Copy each `.env.example` to `.env` (and create `.env.test` for the test project). Never commit secret-bearing env files — they are listed in `.gitignore`.
