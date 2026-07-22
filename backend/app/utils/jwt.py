@@ -5,19 +5,22 @@ from jose import jwt
 from app.config import settings
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
 
 
-def create_access_token(data: dict) -> str:
+def create_access_token(user_id: str) -> str:
     """Create an access token"""
-    to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES,
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
+    payload = {"sub": user_id, "exp": expire, "type": "access"}
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict:
     """Decode an access token"""
-    return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+    payload = jwt.decode(
+        token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM]
+    )
+    if payload.get("type") != "access":
+        raise ValueError("Invalid token type")
+    return payload

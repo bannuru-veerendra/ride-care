@@ -11,6 +11,8 @@ class Settings(BaseSettings):
 
     APP_ENV: str
     JWT_SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     DATABASE_URL: str
     REDIS_URL: str
     UPSTASH_REDIS_REST_URL: str

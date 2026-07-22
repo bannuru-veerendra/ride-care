@@ -1,10 +1,9 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { isAxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +18,9 @@ import { loginSchema, type LoginSchema } from "@/features/auth/schemas";
  * Login page — immersive rider entry.
  */
 export default function LoginPage() {
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { mutate: login, isPending, error } = useLogin();
+    const { mutate: login, isPending } = useLogin();
     const {
         register,
         handleSubmit,
@@ -30,18 +30,19 @@ export default function LoginPage() {
     });
 
     useEffect(() => {
-        if (searchParams.get("registered") === "true") {
-            toast.success("Registration successful! Please login.");
+        if (searchParams.get("registered") !== "true") {
+            return;
         }
-    }, [searchParams]);
+        // Stable id prevents Strict Mode double-mount from stacking two toasts
+        toast.success("Registration successful! Please login.", {
+            id: "registration-success",
+        });
+        navigate("/login", { replace: true });
+    }, [searchParams, navigate]);
 
     const onSubmit = (data: LoginSchema) => {
         login(data);
     };
-
-    const apiError = isAxiosError(error)
-        ? error.response?.data?.detail ?? "Login failed. Please try again."
-        : null;
 
     return (
         <div className="relative flex min-h-dvh">
@@ -72,13 +73,10 @@ export default function LoginPage() {
                         Sign in and get back on the road
                     </p>
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
-                        {apiError && (
-                            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                                {apiError}
-                            </div>
-                        )}
-
+                    <form
+                        onSubmit={handleSubmit(onSubmit)}
+                        className="mt-6 space-y-5"
+                    >
                         <div className="space-y-1.5">
                             <Label htmlFor="email">Email</Label>
                             <Input
@@ -86,11 +84,16 @@ export default function LoginPage() {
                                 type="email"
                                 placeholder="your@email.com"
                                 autoComplete="email"
-                                className="border-white/15 bg-white/5"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                className="border-white/15 bg-white/5 lowercase"
                                 {...register("email")}
                             />
                             {errors.email && (
-                                <p className="text-sm text-destructive">{errors.email.message}</p>
+                                <p className="text-sm text-destructive">
+                                    {errors.email.message}
+                                </p>
                             )}
                         </div>
 

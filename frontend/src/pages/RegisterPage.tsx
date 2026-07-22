@@ -2,7 +2,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import { isAxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +14,10 @@ import { registerSchema, type RegisterSchema } from "@/features/auth/schemas";
 
 /**
  * Register page — immersive rider onboarding.
+ * Auth rules (password strength, email normalization) are enforced by the API.
  */
 export default function RegisterPage() {
-    const { mutate: registerUser, isPending, error } = useRegister();
+    const { mutate: registerUser, isPending } = useRegister();
     const {
         register,
         handleSubmit,
@@ -29,10 +29,6 @@ export default function RegisterPage() {
     const onSubmit = (data: RegisterSchema) => {
         registerUser(data);
     };
-
-    const apiError = isAxiosError(error)
-        ? error.response?.data?.detail ?? "Registration failed. Please try again."
-        : null;
 
     return (
         <div className="relative flex min-h-dvh">
@@ -62,13 +58,10 @@ export default function RegisterPage() {
                         Set up your garage in under a minute
                     </p>
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
-                        {apiError && (
-                            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                                {apiError}
-                            </div>
-                        )}
-
+                    <form
+                        onSubmit={handleSubmit(onSubmit)}
+                        className="mt-6 space-y-5"
+                    >
                         <div className="space-y-1.5">
                             <Label htmlFor="full_name">Full Name</Label>
                             <Input
@@ -93,11 +86,16 @@ export default function RegisterPage() {
                                 type="email"
                                 placeholder="your@email.com"
                                 autoComplete="email"
-                                className="border-white/15 bg-white/5"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                className="border-white/15 bg-white/5 lowercase"
                                 {...register("email")}
                             />
                             {errors.email && (
-                                <p className="text-sm text-destructive">{errors.email.message}</p>
+                                <p className="text-sm text-destructive">
+                                    {errors.email.message}
+                                </p>
                             )}
                         </div>
 
@@ -110,6 +108,10 @@ export default function RegisterPage() {
                                 className="border-white/15 bg-white/5"
                                 {...register("password")}
                             />
+                            <p className="text-xs text-muted-foreground">
+                                At least 8 characters, with one uppercase
+                                letter, one number, and one special character.
+                            </p>
                             {errors.password && (
                                 <p className="text-sm text-destructive">
                                     {errors.password.message}
@@ -118,7 +120,9 @@ export default function RegisterPage() {
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label htmlFor="confirm_password">Confirm Password</Label>
+                            <Label htmlFor="confirm_password">
+                                Confirm Password
+                            </Label>
                             <PasswordInput
                                 id="confirm_password"
                                 placeholder="Confirm password"
