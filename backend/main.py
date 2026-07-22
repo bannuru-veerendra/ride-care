@@ -13,13 +13,17 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Normalize origins: trim whitespace/quotes and drop trailing slashes so
+# browser Origin (no slash) matches env values that may include one.
+_allowed_origins = [
+    origin.strip().strip("\"'").rstrip("/")
+    for origin in settings.ALLOWED_ORIGINS.split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip()
-        for origin in settings.ALLOWED_ORIGINS.split(",")
-        if origin.strip()
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
