@@ -19,7 +19,65 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.service_log import ServiceLog
 from app.models.document import Document
+from app.utils.redis_client import get_redis
 from main import app
+
+
+class FakeRedis:
+    """In-memory Redis stand-in for auth refresh-token tests."""
+
+    def __init__(self) -> None:
+        self._store: dict[str, bytes] = {}
+        self._sets: dict[str, set[bytes]] = {}
+
+    def _as_bytes(self, value: str | bytes) -> bytes:
+        return value if isinstance(value, bytes) else value.encode()
+
+    async def setex(self, name: str, time: int, value: str | bytes) -> bool:
+        self._store[name] = self._as_bytes(value)
+        return True
+
+    async def getdel(self, name: str) -> bytes | None:
+        return self._store.pop(name, None)
+
+    async def delete(self, *names: str) -> int:
+        deleted = 0
+        for name in names:
+            if name in self._store:
+                del self._store[name]
+                deleted += 1
+            if name in self._sets:
+                del self._sets[name]
+                deleted += 1
+        return deleted
+
+    async def sadd(self, name: str, *values: str | bytes) -> int:
+        bucket = self._sets.setdefault(name, set())
+        before = len(bucket)
+        for value in values:
+            bucket.add(self._as_bytes(value))
+        return len(bucket) - before
+
+    async def srem(self, name: str, *values: str | bytes) -> int:
+        bucket = self._sets.get(name)
+        if not bucket:
+            return 0
+        removed = 0
+        for value in values:
+            encoded = self._as_bytes(value)
+            if encoded in bucket:
+                bucket.remove(encoded)
+                removed += 1
+        return removed
+
+    async def smembers(self, name: str) -> set[bytes]:
+        return set(self._sets.get(name, set()))
+
+    async def expire(self, name: str, time: int) -> bool:
+        return name in self._store or name in self._sets
+
+    async def aclose(self) -> None:
+        return None
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -106,7 +164,10 @@ async def client(test_session_maker):
         async with test_session_maker() as session:
             yield session
 
+    fake_redis = FakeRedis()
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_redis] = lambda: fake_redis
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app),
@@ -151,16 +212,17 @@ async def other_user_headers(client: AsyncClient):
         json={
             "email": "otheruser@ridecare.com",
             "full_name": "Other User",
-            "password": "OtherPass123",
+            "password": "OtherPass123!",
         },
     )
     login_response = await client.post(
         "/auth/login",
         json={
             "email": "otheruser@ridecare.com",
-            "password": "OtherPass123",
+            "password": "OtherPass123!",
         },
     )
+
     return {"Authorization": f"Bearer {login_response.json()['access_token']}"}
 
 

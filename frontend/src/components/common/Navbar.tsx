@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { authApi } from "@/api/auth.api";
 import useAuthStore from "@/store/auth.store";
 import RideCareLogo from "./RideCareLogo";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,15 @@ export default function Navbar() {
     const location = useLocation();
     const clearToken = useAuthStore((state) => state.clearToken);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        const refreshToken = localStorage.getItem("refresh_token");
+        if (refreshToken) {
+            try {
+                await authApi.logout(refreshToken);
+            } catch {
+                // Still clear local session if revoke fails
+            }
+        }
         clearToken();
         toast.success("Logged out successfully");
         navigate("/login");

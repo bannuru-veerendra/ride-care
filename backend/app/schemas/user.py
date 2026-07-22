@@ -1,19 +1,49 @@
 import uuid
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.utils.security import validate_password_strength
+
+
+def normalize_email(value: str) -> str:
+    """Store and compare emails in lowercase."""
+    return value.strip().lower()
 
 
 class UserCreate(BaseModel):
     """Request body for POST /auth/register"""
     email: EmailStr
-    full_name: str
+    full_name: str = Field(min_length=2, max_length=100)
     password: str = Field(min_length=8)
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, value: str) -> str:
+        return normalize_email(value)
+
+    @field_validator("full_name")
+    @classmethod
+    def strip_full_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            raise ValueError("Full name must be at least 2 characters long")
+        return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def check_password_strength(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 class LoginRequest(BaseModel):
     """Request body for POST /auth/login"""
     email: EmailStr
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, value: str) -> str:
+        return normalize_email(value)
 
 
 class UserResponse(BaseModel):
@@ -26,6 +56,17 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Response body for POST /auth/login"""
+    """Response body for login / refresh"""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    """Request body for POST /auth/refresh"""
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Request body for POST /auth/logout"""
+    refresh_token: str
