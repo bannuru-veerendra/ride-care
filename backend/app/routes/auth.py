@@ -1,8 +1,9 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,7 @@ from app.schemas.user import (
     normalize_email,
 )
 from app.utils.jwt import create_access_token
+from app.utils.rate_limiter import auth_rate_limit
 from app.utils.redis_client import get_redis
 from app.utils.refresh_token_service import (
     revoke_refresh_token,
@@ -29,6 +31,11 @@ from app.utils.security import hash_password, verify_password
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_REDIS_UNAVAILABLE = HTTPException(
+    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    detail="Authentication service temporarily unavailable",
+)
 
 
 async def _authenticate_user(
@@ -65,7 +72,12 @@ async def _authenticate_user(
 
     user_id = str(db_user.id)
     access_token = create_access_token(user_id)
-    refresh_token = await store_refresh_token(redis, user_id)
+    try:
+        refresh_token = await store_refresh_token(redis, user_id)
+    except RedisError:
+        logger.exception("Redis unavailable while issuing refresh token")
+        raise _REDIS_UNAVAILABLE
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -74,8 +86,15 @@ async def _authenticate_user(
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user: UserCreate, db: AsyncSession = Depends(get_db)) -> UserResponse:
+async def register(
+    request: Request,
+    user: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> UserResponse:
     """Register a new user"""
+    await auth_rate_limit(request, redis)
+
     result = await db.execute(select(User).where(User.email == user.email))
     if result.scalar_one_or_none():
         raise HTTPException(
@@ -97,11 +116,13 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)) -> User
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     credentials: LoginRequest,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> TokenResponse:
     """Login with JSON body (`email` + `password`)."""
+    await auth_rate_limit(request, redis)
     return await _authenticate_user(
         credentials.email, credentials.password, db, redis
     )
@@ -109,11 +130,13 @@ async def login(
 
 @router.post("/token", response_model=TokenResponse)
 async def token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> TokenResponse:
     """OAuth2 token endpoint for Swagger Authorize (`username` = email)."""
+    await auth_rate_limit(request, redis)
     return await _authenticate_user(
         form_data.username, form_data.password, db, redis
     )
@@ -125,7 +148,12 @@ async def refresh(
     redis: Redis = Depends(get_redis),
 ) -> TokenResponse:
     """Rotate refresh token and issue a new access token."""
-    result = await rotate_refresh_token(redis, body.refresh_token)
+    try:
+        result = await rotate_refresh_token(redis, body.refresh_token)
+    except RedisError:
+        logger.exception("Redis unavailable during refresh")
+        raise _REDIS_UNAVAILABLE
+
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -146,5 +174,9 @@ async def logout(
     redis: Redis = Depends(get_redis),
 ) -> Response:
     """Revoke the given refresh token."""
-    await revoke_refresh_token(redis, body.refresh_token)
+    try:
+        await revoke_refresh_token(redis, body.refresh_token)
+    except RedisError:
+        logger.exception("Redis unavailable during logout")
+        raise _REDIS_UNAVAILABLE
     return Response(status_code=status.HTTP_204_NO_CONTENT)

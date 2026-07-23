@@ -1,12 +1,17 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.models import User, Vehicle, FuelLog, ServiceLog, Document
 from app.routes import auth, fuel_logs, vehicles, service_logs, documents
-from app.utils.redis_client import close_redis
+from app.utils.rate_limiter import user_rate_limit
+from app.utils.redis_client import close_redis, get_redis
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -39,6 +44,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def general_rate_limit_middleware(request: Request, call_next):
+    """
+    User-based rate limiting for all authenticated API endpoints.
+    Auth endpoints handle their own IP-based limiting.
+    Health and docs endpoints are skipped entirely.
+    """
+    skip_paths = {"/health", "/docs", "/openapi.json", "/redoc"}
+    skip_prefixes = ("/auth/",)
+
+    path = request.url.path
+
+    if path not in skip_paths and not any(
+        path.startswith(p) for p in skip_prefixes
+    ):
+        try:
+            redis = get_redis()
+            await user_rate_limit(request, redis)
+        except Exception as e:
+            if hasattr(e, "status_code") and e.status_code == 429:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": e.detail},
+                    headers=e.headers or {},
+                )
+            logger.warning("Rate limiter error: %s", e)
+
+    return await call_next(request)
 
 
 @app.get("/health")
