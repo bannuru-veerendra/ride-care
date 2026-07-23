@@ -73,6 +73,13 @@ class FakeRedis:
     async def smembers(self, name: str) -> set[bytes]:
         return set(self._sets.get(name, set()))
 
+    async def incr(self, name: str) -> int:
+        """Increment counter, initialize to 0 if not exists."""
+        current = self._store.get(name, b"0")
+        new_value = int(current) + 1
+        self._store[name] = str(new_value).encode()
+        return new_value
+
     async def expire(self, name: str, time: int) -> bool:
         return name in self._store or name in self._sets
 
@@ -159,12 +166,16 @@ async def cleanup_db(test_session_maker):
 
 
 @pytest_asyncio.fixture
-async def client(test_session_maker):
+async def client(test_session_maker, monkeypatch):
     async def override_get_db():
         async with test_session_maker() as session:
             yield session
 
     fake_redis = FakeRedis()
+
+    # Middleware calls get_redis() directly (not via Depends), so patch both.
+    monkeypatch.setattr("app.utils.redis_client.get_redis", lambda: fake_redis)
+    monkeypatch.setattr("main.get_redis", lambda: fake_redis)
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_redis] = lambda: fake_redis
