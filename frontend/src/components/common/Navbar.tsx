@@ -1,100 +1,110 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { LogOut, Menu, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { authApi } from "@/api/auth.api";
-import useAuthStore from "@/store/auth.store";
+import { useLogout } from "@/features/auth/hooks/useLogout";
+import AccountMenu from "./AccountMenu";
 import RideCareLogo from "./RideCareLogo";
 import { cn } from "@/lib/utils";
 
 /**
- * Navigation bar — sticky glass bar over night asphalt UI.
+ * Navigation bar — product links + account menu (Settings / Log out).
  */
 export default function Navbar() {
-    const navigate = useNavigate();
     const location = useLocation();
-    const clearToken = useAuthStore((state) => state.clearToken);
-
-    const handleLogout = async () => {
-        const refreshToken = localStorage.getItem("refresh_token");
-        if (refreshToken) {
-            try {
-                await authApi.logout(refreshToken);
-            } catch {
-                // Still clear local session if revoke fails
-            }
-        }
-        clearToken();
-        toast.success("Logged out successfully");
-        navigate("/login");
-    };
+    const logout = useLogout();
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const links = [
         { to: "/dashboard", label: "Dashboard" },
         { to: "/vehicles", label: "Garage" },
     ];
 
-    const navLinks = (
-        <>
-            {links.map((link) => {
-                const active = location.pathname.startsWith(link.to);
-                return (
-                    <Link
-                        key={link.to}
-                        to={link.to}
-                        className={cn(
-                            "relative text-sm font-semibold uppercase tracking-[0.12em] transition-colors",
-                            active
-                                ? "text-foreground"
-                                : "text-muted-foreground hover:text-foreground"
-                        )}
-                    >
-                        {link.label}
-                        {active && (
-                            <span className="absolute -bottom-1 left-0 h-0.5 w-full bg-brand" />
-                        )}
-                    </Link>
-                );
-            })}
-        </>
-    );
+    const renderLinks = (onNavigate?: () => void) =>
+        links.map((link) => {
+            const active = location.pathname.startsWith(link.to);
+            return (
+                <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={onNavigate}
+                    className={cn(
+                        "relative text-sm font-semibold uppercase tracking-[0.12em] transition-colors",
+                        active
+                            ? "text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                    {link.label}
+                    {active && (
+                        <span className="absolute -bottom-1 left-0 h-0.5 w-full bg-brand" />
+                    )}
+                </Link>
+            );
+        });
+
+    const settingsActive = location.pathname.startsWith("/settings");
 
     return (
         <header className="sticky top-0 z-50 border-b border-white/10 bg-background/70 backdrop-blur-xl">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
                 <RideCareLogo inverted />
 
-                <nav className="hidden items-center gap-8 md:flex">
-                    {navLinks}
-                    <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-brand"
-                    >
-                        <LogOut className="h-3.5 w-3.5" />
-                        Logout
-                    </button>
-                </nav>
+                <div className="hidden items-center gap-8 md:flex">
+                    <nav className="flex items-center gap-8">{renderLinks()}</nav>
+                    <AccountMenu />
+                </div>
 
                 <div className="md:hidden">
-                    <Sheet>
-                        <SheetTrigger render={<Button variant="ghost" size="icon" />}>
+                    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                        <SheetTrigger
+                            render={<Button variant="ghost" size="icon" />}
+                        >
                             <Menu className="h-6 w-6" />
                             <span className="sr-only">Open Menu</span>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-64 border-white/10 bg-background">
-                            <div className="flex flex-col gap-6 pt-8">
-                                <nav className="flex flex-col gap-4">{navLinks}</nav>
-                                <button
-                                    type="button"
-                                    onClick={handleLogout}
-                                    className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-brand"
-                                >
-                                    <LogOut className="h-4 w-4" />
-                                    Logout
-                                </button>
+                        <SheetContent
+                            side="right"
+                            className="w-64 border-white/10 bg-background p-0"
+                        >
+                            <div className="flex flex-col gap-6 px-6 pb-6 pt-14">
+                                <nav className="flex flex-col gap-5">
+                                    {renderLinks(() => setMobileOpen(false))}
+                                </nav>
+
+                                <div className="border-t border-white/10 pt-5">
+                                    <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                        Account
+                                    </p>
+                                    <div className="flex flex-col gap-4">
+                                        <Link
+                                            to="/settings"
+                                            onClick={() => setMobileOpen(false)}
+                                            className={cn(
+                                                "inline-flex cursor-pointer items-center gap-2 text-sm font-medium transition-colors",
+                                                settingsActive
+                                                    ? "text-foreground"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            <Settings className="h-4 w-4" />
+                                            Settings
+                                        </Link>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMobileOpen(false);
+                                                void logout();
+                                            }}
+                                            className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-brand"
+                                        >
+                                            <LogOut className="h-4 w-4" />
+                                            Log out
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </SheetContent>
                     </Sheet>

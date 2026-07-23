@@ -9,15 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import (
+from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
     TokenResponse,
     UserCreate,
-    UserResponse,
-    normalize_email,
 )
+from app.schemas.user import UserResponse
 from app.utils.jwt import create_access_token
 from app.utils.rate_limiter import auth_rate_limit
 from app.utils.redis_client import get_redis
@@ -26,7 +25,7 @@ from app.utils.refresh_token_service import (
     rotate_refresh_token,
     store_refresh_token,
 )
-from app.utils.security import hash_password, verify_password
+from app.utils.security import hash_password, normalize_email, verify_password
 
 logger = logging.getLogger(__name__)
 
