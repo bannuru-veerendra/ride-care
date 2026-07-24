@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +13,9 @@ from app.schemas.fuel_log import (
     FuelLogResponse,
     FuelLogUpdate,
 )
+from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
+from app.utils.pagination import paginate
 
 
 router = APIRouter(prefix="/fuel_logs", tags=["fuel_logs"])
@@ -122,20 +124,27 @@ async def create_fuel_log(
     return db_fuel_log
 
 
-@router.get("/", response_model=list[FuelLogResponse])
+@router.get("/", response_model=CursorPage[FuelLogResponse])
 async def get_fuel_logs(
     vehicle_id: uuid.UUID,
+    cursor: str | None = Query(None),
+    size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[FuelLogResponse]:
-    """Get all fuel logs for a vehicle"""
+) -> CursorPage[FuelLogResponse]:
+    """Get paginated fuel logs for a vehicle"""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
-    result = await db.execute(
-        select(FuelLog)
-        .where(FuelLog.vehicle_id == vehicle_id)
-        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
+
+    return await paginate(
+        db,
+        FuelLog,
+        filter_clause=FuelLog.vehicle_id == vehicle_id,
+        order_by_column=FuelLog.date,
+        cursor_column=FuelLog.date,
+        cursor=cursor,
+        size=size,
+        descending=True,
     )
-    return result.scalars().all()
 
 
 @router.get("/{fuel_log_id}", response_model=FuelLogResponse)

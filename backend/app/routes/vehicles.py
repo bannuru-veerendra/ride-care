@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,12 +9,14 @@ from app.models.fuel_log import FuelLog
 from app.models.service_log import ServiceLog
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.schemas.pagination import CursorPage
 from app.schemas.vehicle import (
     VehicleCreate,
     VehicleResponse,
     VehicleUpdate,
 )
 from app.utils.auth_dependency import get_current_user
+from app.utils.pagination import paginate
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
@@ -145,21 +147,34 @@ async def create_vehicle(
     return await to_vehicle_response(db, db_vehicle)
 
 
-@router.get("/", response_model=list[VehicleResponse])
+@router.get("/", response_model=CursorPage[VehicleResponse])
 async def get_vehicles(
+    cursor: str | None = Query(None),
+    size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[VehicleResponse]:
-    """Get all vehicles for the current user"""
-    result = await db.execute(
-        select(Vehicle).where(Vehicle.owner_id == current_user.id)
+) -> CursorPage[VehicleResponse]:
+    """Get paginated vehicles for the current user"""
+    page = await paginate(
+        db,
+        Vehicle,
+        filter_clause=Vehicle.owner_id == current_user.id,
+        order_by_column=Vehicle.created_at,
+        cursor_column=Vehicle.created_at,
+        cursor=cursor,
+        size=size,
+        descending=True,
     )
-    vehicles = list(result.scalars().all())
-    live_odometers = await get_live_odometers_map(db, vehicles)
-    return [
-        build_vehicle_response(vehicle, live_odometers[vehicle.id])
-        for vehicle in vehicles
-    ]
+    live_odometers = await get_live_odometers_map(db, page.items)
+    return CursorPage(
+        items=[
+            build_vehicle_response(vehicle, live_odometers[vehicle.id])
+            for vehicle in page.items
+        ],
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+        total=page.total,
+    )
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)

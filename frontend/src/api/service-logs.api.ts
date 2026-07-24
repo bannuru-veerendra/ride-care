@@ -1,4 +1,5 @@
 import apiClient from "@/lib/axios";
+import type { CursorPage } from "@/types";
 
 /**
  * Service log API calls.
@@ -42,7 +43,7 @@ export interface UpdateServiceLogPayload {
 }
 
 export const serviceLogsApi = {
-    getAll: async (vehicleId: string): Promise<ServiceLog[]> => {
+    getAll: async (vehicleId: string): Promise<CursorPage<ServiceLog>> => {
         const { data } = await apiClient.get("/service_logs/", {
             params: { vehicle_id: vehicleId },
         });

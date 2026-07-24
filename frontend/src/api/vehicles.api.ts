@@ -1,4 +1,5 @@
 import apiClient from "@/lib/axios";
+import type { CursorPage } from "@/types";
 
 /**
  * Vehicles API calls
@@ -34,7 +35,7 @@ export interface UpdateVehiclePayload {
 }
 
 export const vehiclesApi = {
-    getAll: async (): Promise<Vehicle[]> => {
+    getAll: async (): Promise<CursorPage<Vehicle>> => {
         const { data } = await apiClient.get("/vehicles/");
         return data;
     },

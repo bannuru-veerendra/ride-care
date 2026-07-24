@@ -94,9 +94,15 @@ export default function VehicleDetailPage() {
     }, [searchParams, setSearchParams]);
 
     const { data: vehicle, isLoading: vehicleLoading } = useVehicle(id!);
-    const { data: fuelLogs, isLoading: logsLoading } = useFuelLogs(id!);
-    const { data: serviceLogs, isLoading: serviceLogsLoading } = useServiceLogs(id!);
+    const { data: fuelLogsPage, isLoading: logsLoading } = useFuelLogs(id!);
+    const { data: serviceLogsPage, isLoading: serviceLogsLoading } =
+        useServiceLogs(id!);
     const { data: documents, isLoading: documentsLoading } = useDocuments(id!);
+
+    const fuelLogs = fuelLogsPage?.items ?? [];
+    const fuelTotal = fuelLogsPage?.total ?? 0;
+    const serviceLogs = serviceLogsPage?.items ?? [];
+    const serviceTotal = serviceLogsPage?.total ?? 0;
 
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
@@ -359,7 +365,7 @@ export default function VehicleDetailPage() {
                 <TabsContent value="fuel" className="mt-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">
-                            {fuelLogs?.length ?? 0} entries
+                            {fuelTotal} entries
                         </p>
 
                         <Sheet open={fuelSheetOpen} onOpenChange={handleFuelSheetOpenChange}>
@@ -406,7 +412,7 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {!logsLoading && fuelLogs?.length === 0 && (
+                    {!logsLoading && fuelLogs.length === 0 && (
                         <div className="surface-panel px-6 py-14 text-center">
                             <p className="font-heading text-2xl font-bold uppercase tracking-wide">
                                 No fuel logs yet
@@ -417,7 +423,7 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {!logsLoading && fuelLogs && fuelLogs.length > 0 && (
+                    {!logsLoading && fuelLogs.length > 0 && (
                         <div className="space-y-3">
                             {fuelLogs.map((log) => (
                                 <FuelLogCard
@@ -435,7 +441,7 @@ export default function VehicleDetailPage() {
                 <TabsContent value="service" className="mt-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">
-                            {serviceLogs?.length ?? 0} entries
+                            {serviceTotal} entries
                         </p>
 
                         <Sheet
@@ -491,7 +497,7 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {!serviceLogsLoading && serviceLogs?.length === 0 && (
+                    {!serviceLogsLoading && serviceLogs.length === 0 && (
                         <div className="surface-panel px-6 py-14 text-center">
                             <p className="font-heading text-2xl font-bold uppercase tracking-wide">
                                 No service logs yet
@@ -502,7 +508,7 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {!serviceLogsLoading && serviceLogs && serviceLogs.length > 0 && (
+                    {!serviceLogsLoading && serviceLogs.length > 0 && (
                         <div className="space-y-3">
                             {serviceLogs.map((log) => (
                                 <ServiceLogCard
