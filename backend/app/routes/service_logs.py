@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,8 +8,10 @@ from app.database import get_db
 from app.models.service_log import ServiceLog
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.schemas.pagination import CursorPage
 from app.schemas.service_log import ServiceLogCreate, ServiceLogResponse, ServiceLogUpdate
 from app.utils.auth_dependency import get_current_user
+from app.utils.pagination import paginate
 
 
 router = APIRouter(prefix="/service_logs", tags=["service_logs"])
@@ -78,20 +80,27 @@ async def create_service_log(
     return db_service_log
 
 
-@router.get("/", response_model=list[ServiceLogResponse])
+@router.get("/", response_model=CursorPage[ServiceLogResponse])
 async def get_service_logs(
     vehicle_id: uuid.UUID,
+    cursor: str | None = Query(None),
+    size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[ServiceLogResponse]:
-    """Get all service logs for a vehicle"""
+) -> CursorPage[ServiceLogResponse]:
+    """Get paginated service logs for a vehicle"""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
-    result = await db.execute(
-        select(ServiceLog)
-        .where(ServiceLog.vehicle_id == vehicle_id)
-        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
+
+    return await paginate(
+        db,
+        ServiceLog,
+        filter_clause=ServiceLog.vehicle_id == vehicle_id,
+        order_by_column=ServiceLog.date,
+        cursor_column=ServiceLog.date,
+        cursor=cursor,
+        size=size,
+        descending=True,
     )
-    return result.scalars().all()
 
 
 @router.get("/next", response_model=ServiceLogResponse | None)

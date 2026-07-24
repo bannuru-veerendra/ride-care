@@ -292,8 +292,13 @@ async def test_get_fuel_logs(client: AsyncClient, auth_headers: dict, created_ve
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["id"] == fuel_log_id
+    assert "items" in data
+    assert "has_more" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == fuel_log_id
 
 
 async def test_get_fuel_logs_ordered_by_date_desc(
@@ -332,11 +337,12 @@ async def test_get_fuel_logs_ordered_by_date_desc(
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["date"] == str(dt_date.today())
-    assert data[0]["odometer"] == SECOND_LOG_ODO
-    assert data[1]["date"] == str(dt_date.today() - timedelta(days=30))
-    assert data[1]["odometer"] == FIRST_LOG_ODO
+    assert len(data["items"]) == 2
+    assert data["total"] == 2
+    assert data["items"][0]["date"] == str(dt_date.today())
+    assert data["items"][0]["odometer"] == SECOND_LOG_ODO
+    assert data["items"][1]["date"] == str(dt_date.today() - timedelta(days=30))
+    assert data["items"][1]["odometer"] == FIRST_LOG_ODO
 
 
 async def test_get_fuel_log_by_id(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
@@ -668,7 +674,7 @@ async def test_delete_fuel_log_recalculates_subsequent_mileage(
     )
     middle_log_id = next(
         log["id"]
-        for log in middle_logs.json()
+        for log in middle_logs.json()["items"]
         if log["id"] not in {first_log_id, third_log_id}
     )
 

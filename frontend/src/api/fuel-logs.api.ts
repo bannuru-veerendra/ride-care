@@ -1,4 +1,5 @@
 import apiClient from "@/lib/axios";
+import type { CursorPage } from "@/types";
 
 /**
  * Fuel log API calls
@@ -36,7 +37,7 @@ export interface UpdateFuelLogPayload {
 }
 
 export const fuelLogsApi = {
-    getAll: async (vehicleId: string): Promise<FuelLog[]> => {
+    getAll: async (vehicleId: string): Promise<CursorPage<FuelLog>> => {
         const { data } = await apiClient.get("/fuel_logs/", {
             params: { vehicle_id: vehicleId },
         });

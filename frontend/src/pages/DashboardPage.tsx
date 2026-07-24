@@ -66,13 +66,14 @@ function getMonthMileage(logs: FuelLog[], month: Date): number | null {
  * Dashboard home — actionable hub for returning riders.
  */
 export default function DashboardPage() {
-    const { data: vehicles, isLoading: vehiclesLoading } = useVehicles();
-    const count = vehicles?.length ?? 0;
+    const { data: vehiclesPage, isLoading: vehiclesLoading } = useVehicles();
+    const vehicles = vehiclesPage?.items ?? [];
+    const count = vehiclesPage?.total ?? 0;
 
     const [selectedVehicleId, setSelectedVehicleId] = useState("");
 
     useEffect(() => {
-        if (!vehicles?.length) {
+        if (!vehicles.length) {
             setSelectedVehicleId("");
             return;
         }
@@ -88,27 +89,32 @@ export default function DashboardPage() {
     };
 
     const selectedVehicle: Vehicle | undefined =
-        vehicles?.find((vehicle) => vehicle.id === selectedVehicleId) ??
-        vehicles?.[0];
+        vehicles.find((vehicle) => vehicle.id === selectedVehicleId) ??
+        vehicles[0];
 
-    const { data: fuelLogs, isLoading: fuelLogsLoading } = useFuelLogs(
+    const { data: fuelLogsPage, isLoading: fuelLogsLoading } = useFuelLogs(
         selectedVehicle?.id ?? ""
     );
     const { data: nextService, isLoading: nextServiceLoading } = useNextService(
         selectedVehicle?.id ?? ""
     );
 
-    const recentFuelLogs = fuelLogs?.slice(0, 3) ?? [];
-    const hasFuelLogs = (fuelLogs?.length ?? 0) > 0;
-    const averageMileage = fuelLogs ? getAverageMileage(fuelLogs) : null;
+    const fuelLogs = fuelLogsPage?.items ?? [];
+    const recentFuelLogs = fuelLogs.slice(0, 3);
+    const hasFuelLogs = (fuelLogsPage?.total ?? 0) > 0;
+    const averageMileage = fuelLogs.length
+        ? getAverageMileage(fuelLogs)
+        : null;
 
     const now = new Date();
-    const thisMonthSpend = fuelLogs ? getMonthSpend(fuelLogs, now) : 0;
-    const lastMonthSpend = fuelLogs
+    const thisMonthSpend = fuelLogs.length ? getMonthSpend(fuelLogs, now) : 0;
+    const lastMonthSpend = fuelLogs.length
         ? getMonthSpend(fuelLogs, subMonths(now, 1))
         : 0;
-    const thisMonthMileage = fuelLogs ? getMonthMileage(fuelLogs, now) : null;
-    const lastMonthMileage = fuelLogs
+    const thisMonthMileage = fuelLogs.length
+        ? getMonthMileage(fuelLogs, now)
+        : null;
+    const lastMonthMileage = fuelLogs.length
         ? getMonthMileage(fuelLogs, subMonths(now, 1))
         : null;
     const mileageDelta =
@@ -315,7 +321,7 @@ export default function DashboardPage() {
                         </p>
                         {count > 1 && (
                             <div className="flex flex-wrap gap-2">
-                                {vehicles?.map((vehicle) => (
+                                {vehicles.map((vehicle) => (
                                     <button
                                         key={vehicle.id}
                                         type="button"

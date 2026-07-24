@@ -129,7 +129,13 @@ async def test_get_service_logs(
         headers=auth_headers,
     )
     assert response.status_code == 200
-    assert len(response.json()) == 1
+    data = response.json()
+    assert "items" in data
+    assert "has_more" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
 
 
 async def test_get_service_logs_ordered_by_date_desc(
@@ -170,11 +176,12 @@ async def test_get_service_logs_ordered_by_date_desc(
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["date"] == later_date
-    assert data[0]["odometer"] == 12000
-    assert data[1]["date"] == earlier_date
-    assert data[1]["odometer"] == 11000
+    assert len(data["items"]) == 2
+    assert data["total"] == 2
+    assert data["items"][0]["date"] == later_date
+    assert data["items"][0]["odometer"] == 12000
+    assert data["items"][1]["date"] == earlier_date
+    assert data["items"][1]["odometer"] == 11000
 
 
 async def test_get_next_service(

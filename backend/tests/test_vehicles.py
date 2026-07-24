@@ -110,10 +110,14 @@ async def test_create_vehicle_negative_odometer(client: AsyncClient, auth_header
 
 
 async def test_get_vehicles_empty(client: AsyncClient, auth_headers: dict):
-    """Test the get vehicles endpoint returns an empty list when none exist"""
+    """Test the get vehicles endpoint returns an empty page when none exist"""
     response = await client.get("/vehicles/", headers=auth_headers)
     assert response.status_code == 200
-    assert response.json() == []
+    data = response.json()
+    assert data["items"] == []
+    assert data["total"] == 0
+    assert data["has_more"] is False
+    assert data["next_cursor"] is None
 
 
 async def test_get_vehicles(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
@@ -121,9 +125,13 @@ async def test_get_vehicles(client: AsyncClient, auth_headers: dict, created_veh
     response = await client.get("/vehicles/", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["id"] == created_vehicle["id"]
+    assert "items" in data
+    assert "has_more" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == created_vehicle["id"]
 
 
 async def test_get_vehicle_by_id(client: AsyncClient, auth_headers: dict, created_vehicle: dict):

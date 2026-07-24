@@ -16,7 +16,7 @@ export const vehicleKeys = {
 export const useVehicles = () => {
     return useQuery({
         queryKey: vehicleKeys.all,
-        queryFn: vehiclesApi.getAll,
+        queryFn: () => vehiclesApi.getAll(),
     });
 };
 

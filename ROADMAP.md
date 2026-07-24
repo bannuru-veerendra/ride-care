@@ -1,108 +1,113 @@
 # RideCare Product Roadmap
 
+Living checklist of what shipped and what’s next. For a product + architecture overview, see [README.md](README.md).
+
+---
+
 ## Completed (Backend)
 
-### Auth & vehicles
-- User registration and login (JWT)
-- Vehicle CRUD with baseline odometer at registration
+### Auth & users
+- Registration and login with JWT access tokens
+- Refresh-token rotation stored in Redis; logout revokes refresh sessions
+- Password strength policy (bcrypt hashing)
+- `GET/PATCH /users/me` and `PATCH /users/me/password`
+- Rate limiting on auth and general API traffic
 
-### Fuel and mileage tracking
-- Log fill-ups (date, odometer, cost, price per liter)
-- Auto-calculate liters and km/L (mileage)
-- Validate odometer against vehicle baseline (first entry) or previous fill-up
-- Recalculate mileage on update, including later fill-ups when date/odometer changes
-- Vehicle baseline odometer is not overwritten by fuel logs
+### Vehicles
+- Full CRUD with ownership checks
+- Baseline odometer at registration (legacy `current_odometer` accepted)
+- Live odometer = max(baseline, fuel max, service max)
+- Cursor-paginated list (`CursorPage`: items, next_cursor, has_more, total)
+
+### Fuel and mileage
+- Log fill-ups (date, odometer, cost, price per liter, notes)
+- Server-side liters and km/L calculation
+- Odometer validated against baseline or previous fill-up (timeline-aware)
+- Full mileage recalculation on create / update / delete
+- Baseline never overwritten by fuel logs
+- Cursor-paginated list (newest first)
 
 ### Service history
-- Log service visits (center, cost, services performed, notes)
-- Track next service date and odometer
-- `GET /service_logs/next` returns the upcoming scheduled service
+- Log visits (center, cost, services done, next date / odometer, notes)
+- `GET /service_logs/next` for dashboard reminders
+- Cursor-paginated list (newest first)
 
 ### Document vault
-- Upload vehicle documents to Supabase Storage (PDF, JPEG, PNG; max 10 MB)
-- Document types: insurance, driving license, registration certificate
-- Link documents to vehicles with optional expiry date and notes
-- List, get, update metadata, replace file, and delete via `/documents/` API
-- Signed URLs for secure file access
-- DB and storage kept consistent on create, update, and delete
+- Upload to Supabase Storage (PDF, JPEG, PNG; max 10 MB)
+- Types: insurance, driving license, registration certificate
+- Metadata (expiry, notes); replace file or update fields
+- Signed download URLs; DB and storage stay consistent on delete
 
-### Quality
-- Automated API tests for auth, vehicles, fuel logs, service logs, and documents
-- Separate test Supabase project via `backend/.env.test`
-- `ENV_FILE` switch in `app/config.py`; `tests/conftest.py` forces `.env.test`
-- GitHub Actions CI runs pytest with repository secrets
+### Platform & quality
+- Shared cursor pagination utility (`app/utils/pagination.py`)
+- Alembic migrations; async SQLAlchemy + PostgreSQL
+- Automated API tests: auth, users, vehicles, fuel, service, documents, pagination
+- Isolated test project via `backend/.env.test` + `ENV_FILE`
+- GitHub Actions CI with repository secrets
 
 ---
 
 ## Completed (Frontend)
 
 ### Scaffolding
-- Vite + React 19 + TypeScript project setup
-- Tailwind CSS v4 and shadcn/ui configuration
-- Feature-based folder structure (`auth`, `vehicles`, `fuel-logs`, `service-logs`, `documents`)
-- Axios client with JWT interceptors (`src/lib/axios.ts`)
-- React Query client (`src/lib/query-client.ts`)
-- Zustand auth store with persistence (`src/store/auth.store.ts`)
-- App shell with `BrowserRouter`, `QueryClientProvider`, layout, and navbar
+- Vite + React 19 + TypeScript
+- Tailwind CSS v4 and shadcn/ui
+- Feature folders: auth, vehicles, fuel-logs, service-logs, documents, users
+- Axios JWT client, TanStack Query, Zustand auth store
+- App shell: router, layout, navbar, account menu
 
-### Auth & core UI
-- Login and register pages
-- Protected routes
-- shadcn/ui components (`Button`, `Input`, `Sheet`, `Tabs`, `Toaster`, etc.)
-- `src/lib/utils.ts` (`cn` helper)
+### Auth & settings
+- Login / register + protected routes
+- Logout with refresh cleanup
+- Settings: profile update and password change
 
-### Vehicles
-- Vehicle list, create, edit, and delete
-- Vehicle detail page with tabbed fuel / service / documents sections
+### Garage & vehicle detail
+- Vehicle list, create, edit, delete
+- Detail tabs: Fuel · Service · Docs
+- Thin client over `CursorPage` (`items` / `total`)
 
-### Fuel logs
-- Log fill-ups from the vehicle detail Fuel tab
-- Fuel history cards with mileage as the primary metric
-- Create, edit, and delete via Sheet + React Query hooks
-
-### Service logs
-- Log service visits from the vehicle detail Service tab
-- Service history cards (cost, services done, next service hints)
-- Common service badges plus custom service entry
-- Create, edit, and delete via Sheet + React Query hooks
-- API client and `useNextService` hook ready (`GET /service_logs/next`)
-
-### Documents
-- Upload and manage documents from the vehicle detail Docs tab
-- Document cards with expiry warnings and signed-URL viewing
-- Create, edit (metadata / replace file), and delete via Sheet + React Query hooks
+### Fuel, service, documents
+- Sheet-based create / edit flows
+- Fuel cards centered on km/L; service cards with tags and next-due
+- Document cards with expiry cues and signed-URL open
 
 ### Dashboard
-- Home hub with vehicle picker, fuel spend / mileage stats, and quick actions
-- Next-service reminder from `GET /service_logs/next` (overdue and soon-within-14-days)
-- Deep links into vehicle fuel / service tabs
+- Multi-bike picker, odometer, avg mileage, next-service countdown
+- Monthly spend + mileage trend
+- Quick actions deep-linking into fuel / service tabs
 
-### Resilience
-- `ErrorBoundary` around app shell and main routes
-- `NotFoundPage` for unknown paths and as a boundary fallback
-
-### Deployment prep
-- Production `VITE_API_URL` via `.env.production` / `.env.example` (Render placeholder)
-- Build script runs `tsc -b && vite build` before bundling
-- Vercel SPA fallback (`public/_redirects`) so client routes refresh correctly
-- Root `.gitignore` covers `frontend/.env`, `frontend/.env.local`, `backend/.env`, `backend/.env.test`, and venv/cache
+### Resilience & deploy
+- Error boundary + 404 page
+- Production `VITE_API_URL`, `tsc -b && vite build`, Vercel SPA `_redirects`
+- Secrets kept out of git via root `.gitignore`
 
 ---
 
 ## Planned
 
 ### Insurance management
-- Policy details beyond file storage (provider, policy number, coverage)
+- Structured policy fields (provider, number, coverage) beyond the vault file
 - Expiry reminders and renewal tracking
 
 ### Maintenance guidance
-- Practical maintenance recommendations (for example, oil change intervals and chain lubrication timing)
+- Interval suggestions (oil, chain, filters) driven by odometer and last service
 
 ### Notifications
-- Reminders for upcoming service and insurance expiry (Redis / push — TBD)
+- Upcoming service and document-expiry reminders (email / push — TBD)
+- Prefer server-side scheduling; Redis already in stack for auth and rate limits
+
+### List UX (optional)
+- Infinite scroll or “load more” on fuel / service when totals exceed the default page
+- Keep pagination logic on the API; frontend stays a consumer
+
+### Documents API
+- Cursor pagination for document lists (parity with vehicles / fuel / service)
 
 ---
 
-## Future Scope
+## Future scope
 
-- AI-powered enhancements, such as live fuel price insights and personalized responses to rider questions
+- Cost analytics (per-km fuel + service over time)
+- Export (CSV / PDF) for fill-ups and service history
+- Multi-rider / shared garage permissions
+- AI assists: fuel-price context, natural-language “when is my next service?” answers

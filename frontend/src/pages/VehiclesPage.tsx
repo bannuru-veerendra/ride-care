@@ -30,7 +30,8 @@ export default function VehiclesPage() {
     const [sheetOpen, setSheetOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
-    const { data: vehicles, isLoading } = useVehicles();
+    const { data, isLoading } = useVehicles();
+    const vehicles = data?.items ?? [];
     const createVehicle = useCreateVehicle();
     const updateVehicle = useUpdateVehicle(editingVehicle?.id ?? "");
     const deleteVehicle = useDeleteVehicle();
@@ -123,7 +124,7 @@ export default function VehiclesPage() {
                 </div>
             )}
 
-            {!isLoading && vehicles?.length === 0 && (
+            {!isLoading && vehicles.length === 0 && (
                 <div className="surface-panel relative overflow-hidden px-6 py-16 text-center">
                     <p className="font-heading text-3xl font-bold uppercase italic tracking-wide">
                         Empty bay
@@ -134,7 +135,7 @@ export default function VehiclesPage() {
                 </div>
             )}
 
-            {!isLoading && vehicles && vehicles.length > 0 && (
+            {!isLoading && vehicles.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {vehicles.map((vehicle, index) => (
                         <div
