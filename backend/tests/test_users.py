@@ -1,0 +1,234 @@
+from httpx import AsyncClient
+
+
+async def test_get_profile(client: AsyncClient, auth_headers: dict, registered_user: dict):
+    """Test the get profile endpoint"""
+    response = await client.get("/users/me", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["email"] == registered_user["email"]
+    assert data["full_name"] == "Test User"
+    assert "hashed_password" not in data
+    assert "id" in data
+
+
+async def test_get_profile_without_token(client: AsyncClient):
+    """Test the get profile endpoint without a token"""
+    response = await client.get("/users/me")
+    assert response.status_code == 401
+
+
+async def test_update_full_name(client: AsyncClient, auth_headers: dict):
+    """Test updating the current user's full name"""
+    response = await client.patch(
+        "/users/me",
+        json={"full_name": "Veerendra Bannuru"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["full_name"] == "Veerendra Bannuru"
+
+
+async def test_update_email(client: AsyncClient, auth_headers: dict):
+    """Test updating the current user's email"""
+    response = await client.patch(
+        "/users/me",
+        json={"email": "newemail@ridecare.com"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["email"] == "newemail@ridecare.com"
+
+
+async def test_update_email_conflict(
+    client: AsyncClient,
+    auth_headers: dict,
+    other_user_headers: dict,
+):
+    """Test updating email to one already used by another account"""
+    other_profile = await client.get("/users/me", headers=other_user_headers)
+    other_email = other_profile.json()["email"]
+
+    response = await client.patch(
+        "/users/me",
+        json={"email": other_email},
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "already" in response.json()["detail"].lower()
+
+
+async def test_update_email_same_as_current(
+    client: AsyncClient,
+    auth_headers: dict,
+    registered_user: dict,
+):
+    """Test updating email to the same value succeeds without conflict"""
+    response = await client.patch(
+        "/users/me",
+        json={"email": registered_user["email"]},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["email"] == registered_user["email"]
+
+
+async def test_update_profile_empty_body(client: AsyncClient, auth_headers: dict):
+    """Test that an empty update body is rejected"""
+    response = await client.patch(
+        "/users/me",
+        json={},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_update_full_name_too_short(client: AsyncClient, auth_headers: dict):
+    """Test that a full name under 2 characters is rejected"""
+    response = await client.patch(
+        "/users/me",
+        json={"full_name": "A"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_update_invalid_email(client: AsyncClient, auth_headers: dict):
+    """Test that an invalid email format is rejected"""
+    response = await client.patch(
+        "/users/me",
+        json={"email": "not-an-email"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_change_password_success(
+    client: AsyncClient,
+    auth_headers: dict,
+    registered_user: dict,
+):
+    """Test changing password returns 204 and allows login with the new password"""
+    response = await client.patch(
+        "/users/me/password",
+        json={
+            "current_password": registered_user["password"],
+            "new_password": "NewPassword456@",
+            "confirm_password": "NewPassword456@",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 204
+
+    login_response = await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": "NewPassword456@",
+        },
+    )
+    assert login_response.status_code == 200
+    assert "access_token" in login_response.json()
+
+
+async def test_change_password_wrong_current(client: AsyncClient, auth_headers: dict):
+    """Test changing password with the wrong current password"""
+    response = await client.patch(
+        "/users/me/password",
+        json={
+            "current_password": "WrongPassword999!",
+            "new_password": "NewPassword456@",
+            "confirm_password": "NewPassword456@",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 401
+    assert "incorrect" in response.json()["detail"].lower()
+
+
+async def test_change_password_mismatch(
+    client: AsyncClient,
+    auth_headers: dict,
+    registered_user: dict,
+):
+    """Test that mismatched new passwords are rejected"""
+    response = await client.patch(
+        "/users/me/password",
+        json={
+            "current_password": registered_user["password"],
+            "new_password": "NewPassword456@",
+            "confirm_password": "DifferentPassword789@",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_change_password_same_as_current(
+    client: AsyncClient,
+    auth_headers: dict,
+    registered_user: dict,
+):
+    """Test that reusing the current password is rejected"""
+    response = await client.patch(
+        "/users/me/password",
+        json={
+            "current_password": registered_user["password"],
+            "new_password": registered_user["password"],
+            "confirm_password": registered_user["password"],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_change_password_weak(
+    client: AsyncClient,
+    auth_headers: dict,
+    registered_user: dict,
+):
+    """Test that a weak new password is rejected"""
+    response = await client.patch(
+        "/users/me/password",
+        json={
+            "current_password": registered_user["password"],
+            "new_password": "weakpassword",
+            "confirm_password": "weakpassword",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+async def test_change_password_revokes_sessions(
+    client: AsyncClient,
+    registered_user: dict,
+):
+    """After password change, old refresh tokens cannot be reused"""
+    login_response = await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+    access_token = login_response.json()["access_token"]
+    refresh_token = login_response.json()["refresh_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    change_response = await client.patch(
+        "/users/me/password",
+        json={
+            "current_password": registered_user["password"],
+            "new_password": "NewPassword456@",
+            "confirm_password": "NewPassword456@",
+        },
+        headers=headers,
+    )
+    assert change_response.status_code == 204
+
+    refresh_response = await client.post(
+        "/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert refresh_response.status_code == 401

@@ -11,6 +11,11 @@ PASSWORD_PATTERN = re.compile(
 )
 
 
+def normalize_email(value: str) -> str:
+    """Store and compare emails in lowercase."""
+    return value.strip().lower()
+
+
 def validate_password_strength(password: str) -> str:
     """Raise ValueError when the password does not meet policy."""
     if not PASSWORD_PATTERN.match(password):

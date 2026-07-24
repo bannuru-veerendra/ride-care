@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.models import User, Vehicle, FuelLog, ServiceLog, Document
-from app.routes import auth, fuel_logs, vehicles, service_logs, documents
+from app.routes import auth, fuel_logs, vehicles, service_logs, documents, users
 from app.utils.rate_limiter import user_rate_limit
 from app.utils.redis_client import close_redis, get_redis
 
@@ -87,3 +87,4 @@ app.include_router(vehicles.router)
 app.include_router(fuel_logs.router)
 app.include_router(service_logs.router)
 app.include_router(documents.router)
+app.include_router(users.router)
