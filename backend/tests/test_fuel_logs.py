@@ -674,7 +674,7 @@ async def test_delete_fuel_log_recalculates_subsequent_mileage(
     )
     middle_log_id = next(
         log["id"]
-        for log in middle_logs.json()
+        for log in middle_logs.json()["items"]
         if log["id"] not in {first_log_id, third_log_id}
     )
 
