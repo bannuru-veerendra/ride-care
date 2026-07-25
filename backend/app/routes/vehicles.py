@@ -1,4 +1,6 @@
 import uuid
+from calendar import monthrange
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -13,12 +15,34 @@ from app.schemas.pagination import CursorPage
 from app.schemas.vehicle import (
     VehicleCreate,
     VehicleResponse,
+    VehicleSummaryResponse,
     VehicleUpdate,
 )
 from app.utils.auth_dependency import get_current_user
+from app.utils.dates import app_today
 from app.utils.pagination import paginate
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
+
+
+def _month_bounds(ref: date) -> tuple[date, date]:
+    """Inclusive start/end dates for the calendar month of ref."""
+    start = date(ref.year, ref.month, 1)
+    end = date(ref.year, ref.month, monthrange(ref.year, ref.month)[1])
+    return start, end
+
+
+def _shift_month(ref: date, months: int) -> date:
+    """Return the first day of the month offset by months from ref."""
+    year = ref.year + (ref.month - 1 + months) // 12
+    month = (ref.month - 1 + months) % 12 + 1
+    return date(year, month, 1)
+
+
+def _round_mileage(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 1)
 
 
 async def get_live_odometer(
@@ -174,6 +198,97 @@ async def get_vehicles(
         next_cursor=page.next_cursor,
         has_more=page.has_more,
         total=page.total,
+    )
+
+
+@router.get("/{vehicle_id}/summary", response_model=VehicleSummaryResponse)
+async def get_vehicle_summary(
+    vehicle_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> VehicleSummaryResponse:
+    """Return dashboard aggregations scanned across all fuel/service logs."""
+    result = await db.execute(
+        select(Vehicle).where(
+            Vehicle.id == vehicle_id,
+            Vehicle.owner_id == current_user.id,
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehicle not found",
+        )
+
+    today = app_today()
+    this_start, this_end = _month_bounds(today)
+    last_start, last_end = _month_bounds(_shift_month(today, -1))
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(FuelLog)
+        .where(FuelLog.vehicle_id == vehicle_id)
+    )
+    fuel_log_count = int(count_result.scalar_one())
+
+    avg_result = await db.execute(
+        select(func.avg(FuelLog.mileage)).where(
+            FuelLog.vehicle_id == vehicle_id,
+            FuelLog.mileage.isnot(None),
+        )
+    )
+    average_mileage = _round_mileage(avg_result.scalar_one_or_none())
+
+    async def month_spend(start: date, end: date) -> float:
+        spend_result = await db.execute(
+            select(func.coalesce(func.sum(FuelLog.total_cost), 0.0)).where(
+                FuelLog.vehicle_id == vehicle_id,
+                FuelLog.date >= start,
+                FuelLog.date <= end,
+            )
+        )
+        return float(spend_result.scalar_one())
+
+    async def month_mileage(start: date, end: date) -> float | None:
+        mileage_result = await db.execute(
+            select(func.avg(FuelLog.mileage)).where(
+                FuelLog.vehicle_id == vehicle_id,
+                FuelLog.date >= start,
+                FuelLog.date <= end,
+                FuelLog.mileage.isnot(None),
+            )
+        )
+        return _round_mileage(mileage_result.scalar_one_or_none())
+
+    recent_result = await db.execute(
+        select(FuelLog)
+        .where(FuelLog.vehicle_id == vehicle_id)
+        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
+        .limit(3)
+    )
+    recent_fuel_logs = list(recent_result.scalars().all())
+
+    next_service_result = await db.execute(
+        select(ServiceLog)
+        .where(
+            ServiceLog.vehicle_id == vehicle_id,
+            ServiceLog.next_service_date.isnot(None),
+        )
+        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
+        .limit(1)
+    )
+    next_service = next_service_result.scalar_one_or_none()
+
+    return VehicleSummaryResponse(
+        vehicle_id=vehicle_id,
+        fuel_log_count=fuel_log_count,
+        average_mileage=average_mileage,
+        this_month_spend=await month_spend(this_start, this_end),
+        last_month_spend=await month_spend(last_start, last_end),
+        this_month_mileage=await month_mileage(this_start, this_end),
+        last_month_mileage=await month_mileage(last_start, last_end),
+        recent_fuel_logs=recent_fuel_logs,
+        next_service=next_service,
     )
 
 
