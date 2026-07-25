@@ -87,7 +87,7 @@ export default function ServiceLogCard({
                                 <Badge
                                     key={service}
                                     variant="secondary"
-                                    className="border-0 bg-brand/15 text-xs font-medium text-brand"
+                                    className="border-0 bg-white/10 text-xs font-medium text-foreground"
                                 >
                                     {service}
                                 </Badge>

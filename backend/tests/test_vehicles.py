@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from httpx import AsyncClient
 
@@ -89,6 +89,19 @@ async def test_create_vehicle_invalid_year(client: AsyncClient, auth_headers: di
         "brand": "Honda",
         "vehicle_name": "Shine 100",
         "year": 1885,
+        "registration_number": "TS09CD5678",
+        "baseline_odometer": 3000,
+    }
+    response = await client.post("/vehicles/", json=payload, headers=auth_headers)
+    assert response.status_code == 422
+
+
+async def test_create_vehicle_future_year(client: AsyncClient, auth_headers: dict):
+    """Test the create vehicle endpoint rejects a year after the current year"""
+    payload = {
+        "brand": "Honda",
+        "vehicle_name": "Shine 100",
+        "year": datetime.now().year + 1,
         "registration_number": "TS09CD5678",
         "baseline_odometer": 3000,
     }

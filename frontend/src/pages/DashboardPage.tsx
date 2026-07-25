@@ -44,6 +44,20 @@ function getAverageMileage(logs: FuelLog[]): number | null {
     return Math.round((sum / mileages.length) * 10) / 10;
 }
 
+/** Friendly remaining time: "12d", or "1 month 10 days" when over a month. */
+function formatServiceCountdown(days: number): string {
+    if (days <= 30) {
+        return `${days}d`;
+    }
+    const months = Math.floor(days / 30);
+    const remDays = days % 30;
+    const monthPart = `${months} month${months === 1 ? "" : "s"}`;
+    if (remDays === 0) {
+        return monthPart;
+    }
+    return `${monthPart} ${remDays} day${remDays === 1 ? "" : "s"}`;
+}
+
 function getMonthSpend(logs: FuelLog[], month: Date): number {
     return logs
         .filter((log) => {
@@ -403,10 +417,20 @@ export default function DashboardPage() {
                                         <Skeleton className="mt-2 h-9 w-32" />
                                     ) : nextService?.next_service_date ? (
                                         <>
-                                            <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
+                                            <p
+                                                className={cn(
+                                                    "font-heading mt-2 font-extrabold tracking-wide",
+                                                    daysUntilNextService !== null &&
+                                                        daysUntilNextService > 30
+                                                        ? "text-xl leading-snug"
+                                                        : "text-3xl"
+                                                )}
+                                            >
                                                 {daysUntilNextService !== null &&
                                                 daysUntilNextService >= 0
-                                                    ? `${daysUntilNextService}d`
+                                                    ? formatServiceCountdown(
+                                                          daysUntilNextService
+                                                      )
                                                     : "Overdue"}
                                             </p>
                                             <div className="mt-1 flex items-center gap-1.5">

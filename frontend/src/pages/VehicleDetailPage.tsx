@@ -156,31 +156,44 @@ export default function VehicleDetailPage() {
     };
 
     const handleServiceSubmit = (values: ServiceLogSchema) => {
-        const payload = {
-            ...values,
-            service_center: values.service_center || undefined,
-            next_service_date: values.next_service_date || undefined,
-            next_service_odometer: values.next_service_odometer || undefined,
-            notes: values.notes || undefined,
-        };
-
         if (editingServiceLog) {
-            updateServiceLog.mutate(payload, {
-                onSuccess: () => {
-                    toast.success("Service log updated");
-                    setServiceSheetOpen(false);
-                    setEditingServiceLog(null);
+            // Explicit null clears optional fields; omitting them leaves the old value.
+            updateServiceLog.mutate(
+                {
+                    ...values,
+                    service_center: values.service_center || null,
+                    next_service_date: values.next_service_date || null,
+                    next_service_odometer:
+                        values.next_service_odometer ?? null,
+                    notes: values.notes || null,
                 },
-                onError: () => toast.error("Failed to update service log"),
-            });
+                {
+                    onSuccess: () => {
+                        toast.success("Service log updated");
+                        setServiceSheetOpen(false);
+                        setEditingServiceLog(null);
+                    },
+                    onError: () => toast.error("Failed to update service log"),
+                }
+            );
         } else {
-            createServiceLog.mutate(payload, {
-                onSuccess: () => {
-                    toast.success("Service log added");
-                    setServiceSheetOpen(false);
+            createServiceLog.mutate(
+                {
+                    ...values,
+                    service_center: values.service_center || undefined,
+                    next_service_date: values.next_service_date || undefined,
+                    next_service_odometer:
+                        values.next_service_odometer || undefined,
+                    notes: values.notes || undefined,
                 },
-                onError: () => toast.error("Failed to add service log"),
-            });
+                {
+                    onSuccess: () => {
+                        toast.success("Service log added");
+                        setServiceSheetOpen(false);
+                    },
+                    onError: () => toast.error("Failed to add service log"),
+                }
+            );
         }
     };
 
@@ -382,9 +395,9 @@ export default function VehicleDetailPage() {
                             </SheetTrigger>
                             <SheetContent
                                 side="right"
-                                className="w-full overflow-y-auto border-white/10 sm:max-w-md"
+                                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
                             >
-                                <SheetHeader className="mb-6">
+                                <SheetHeader className="mb-6 p-0">
                                     <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
                                         {editingLog ? "Edit fuel log" : "Log fuel"}
                                     </SheetTitle>
@@ -461,9 +474,9 @@ export default function VehicleDetailPage() {
                             </SheetTrigger>
                             <SheetContent
                                 side="right"
-                                className="w-full overflow-y-auto border-white/10 sm:max-w-md"
+                                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
                             >
-                                <SheetHeader className="mb-6">
+                                <SheetHeader className="mb-6 p-0">
                                     <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
                                         {editingServiceLog
                                             ? "Edit service log"
@@ -546,9 +559,9 @@ export default function VehicleDetailPage() {
                             </SheetTrigger>
                             <SheetContent
                                 side="right"
-                                className="w-full overflow-y-auto border-white/10 sm:max-w-md"
+                                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
                             >
-                                <SheetHeader className="mb-6">
+                                <SheetHeader className="mb-6 p-0">
                                     <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
                                         {editingDocument
                                             ? "Edit document"
