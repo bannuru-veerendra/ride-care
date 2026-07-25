@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
@@ -18,8 +19,9 @@ class VehicleCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_values(self):
-        if self.year < 1886 or self.year > 2100:
-            raise ValueError("Year must be between 1886 and 2100")
+        current_year = datetime.now().year
+        if self.year < 1886 or self.year > current_year:
+            raise ValueError(f"Year must be between 1886 and {current_year}")
         if self.baseline_odometer < 0:
             raise ValueError("Odometer cannot be negative")
         return self
@@ -40,8 +42,9 @@ class VehicleUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_values(self):
-        if self.year is not None and (self.year < 1886 or self.year > 2100):
-            raise ValueError("Year must be between 1886 and 2100")
+        current_year = datetime.now().year
+        if self.year is not None and (self.year < 1886 or self.year > current_year):
+            raise ValueError(f"Year must be between 1886 and {current_year}")
         if self.baseline_odometer is not None and self.baseline_odometer < 0:
             raise ValueError("Odometer cannot be negative")
         return self

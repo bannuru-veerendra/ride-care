@@ -212,23 +212,23 @@ async def test_get_next_service(
     assert response.json()["next_service_date"] == next_date
 
 
-async def test_get_next_service_orders_by_next_service_date(
+async def test_get_next_service_uses_most_recent_visit(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
-    """Next service is the soonest next_service_date, not the oldest visit."""
+    """Next service comes from the latest visit, not an older overdue next date."""
     vehicle_id = created_vehicle["id"]
-    sooner = str(date.today() + timedelta(days=14))
-    later = str(date.today() + timedelta(days=90))
+    older_next = str(date.today() - timedelta(days=30))
+    newer_next = str(date.today() + timedelta(days=90))
 
     await client.post(
         "/service_logs/",
         params={"vehicle_id": vehicle_id},
         json={
-            "date": str(date.today() - timedelta(days=30)),
+            "date": str(date.today() - timedelta(days=180)),
             "odometer": 11000,
             "total_cost": 1200,
             "services_done": ["Oil change"],
-            "next_service_date": later,
+            "next_service_date": older_next,
             "next_service_odometer": 14000,
         },
         headers=auth_headers,
@@ -241,8 +241,8 @@ async def test_get_next_service_orders_by_next_service_date(
             "odometer": 12000,
             "total_cost": 1500,
             "services_done": ["Chain lube"],
-            "next_service_date": sooner,
-            "next_service_odometer": 13500,
+            "next_service_date": newer_next,
+            "next_service_odometer": 15000,
         },
         headers=auth_headers,
     )
@@ -253,7 +253,7 @@ async def test_get_next_service_orders_by_next_service_date(
         headers=auth_headers,
     )
     assert response.status_code == 200
-    assert response.json()["next_service_date"] == sooner
+    assert response.json()["next_service_date"] == newer_next
 
 
 async def test_get_next_service_none(
@@ -309,6 +309,38 @@ async def test_update_service_log(
     data = response.json()
     assert data["services_done"] == ["Engine oil", "Brake pads"]
     assert data["total_cost"] == 2500
+
+
+async def test_update_service_log_clears_next_service_fields(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Explicit null on PATCH clears next service date and odometer."""
+    vehicle_id = created_vehicle["id"]
+    create_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+            "next_service_date": str(date.today() + timedelta(days=90)),
+            "next_service_odometer": 15000,
+        },
+        headers=auth_headers,
+    )
+    log_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/service_logs/{log_id}",
+        params={"vehicle_id": vehicle_id},
+        json={"next_service_date": None, "next_service_odometer": None},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["next_service_date"] is None
+    assert data["next_service_odometer"] is None
 
 
 async def test_delete_service_log(

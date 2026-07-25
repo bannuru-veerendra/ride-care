@@ -34,12 +34,12 @@ export interface CreateServiceLogPayload {
 export interface UpdateServiceLogPayload {
     date?: string;
     odometer?: number;
-    service_center?: string;
+    service_center?: string | null;
     total_cost?: number;
     services_done?: string[];
-    next_service_date?: string;
-    next_service_odometer?: number;
-    notes?: string;
+    next_service_date?: string | null;
+    next_service_odometer?: number | null;
+    notes?: string | null;
 }
 
 export const serviceLogsApi = {

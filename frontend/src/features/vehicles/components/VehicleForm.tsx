@@ -93,6 +93,7 @@ export default function VehicleForm({
             id="year"
             type="number"
             placeholder="2023"
+            max={new Date().getFullYear()}
             {...register("year", { valueAsNumber: true })}
           />
           {errors.year && (

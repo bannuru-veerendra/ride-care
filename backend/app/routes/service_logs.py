@@ -109,7 +109,7 @@ async def get_next_service_log(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ServiceLogResponse | None:
-    """Get the next service log for a vehicle"""
+    """Next due service comes from the most recent visit that set a next date."""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
     result = await db.execute(
         select(ServiceLog)
@@ -117,7 +117,7 @@ async def get_next_service_log(
             ServiceLog.vehicle_id == vehicle_id,
             ServiceLog.next_service_date.isnot(None),
         )
-        .order_by(ServiceLog.next_service_date.asc())
+        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
