@@ -3,6 +3,9 @@ from datetime import datetime
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.fuel_log import FuelLogResponse
+from app.schemas.service_log import ServiceLogResponse
+
 
 class VehicleCreate(BaseModel):
     """Request body for POST /vehicles"""
@@ -62,3 +65,16 @@ class VehicleResponse(BaseModel):
     current_odometer: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VehicleSummaryResponse(BaseModel):
+    """Aggregated dashboard stats for a single vehicle"""
+    vehicle_id: uuid.UUID
+    fuel_log_count: int
+    average_mileage: float | None
+    this_month_spend: float
+    last_month_spend: float
+    this_month_mileage: float | None
+    last_month_mileage: float | None
+    recent_fuel_logs: list[FuelLogResponse]
+    next_service: ServiceLogResponse | None = None
