@@ -35,6 +35,7 @@ Most “garage apps” are thin CRUD wrappers. RideCare puts **domain logic on t
 | Live odometer = max(baseline, fuel, service) | Dashboard always shows the real highest reading |
 | Cursor pagination (`items`, `next_cursor`, `has_more`, `total`) | List endpoints stay bounded as logs grow |
 | JWT + refresh tokens in Redis, rate limiting | Auth is production-shaped, not demo-only |
+| Redis caching with auto-invalidation on writes | Read-heavy endpoints stay fast without stale data |
 | Document vault with typed uploads + signed URLs | RC / licence / insurance never live as public blobs |
 
 The frontend stays a thin client: forms, sheets, and dashboards that consume a well-designed REST API.
@@ -117,8 +118,9 @@ Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, with signed 
 | [`backend/app/routes/`](backend/app/routes/) | Auth, users, vehicles, fuel, service, documents |
 | [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Shared cursor paginator |
 | [`backend/app/routes/fuel_logs.py`](backend/app/routes/fuel_logs.py) | Mileage recalculation + odometer rules |
-| [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Baseline vs live odometer |
-| [`backend/tests/`](backend/tests/) | Auth, CRUD, pagination, ownership edge cases |
+| [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Baseline vs live odometer, Redis caching |
+| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache get/set/invalidate helpers + key builders |
+| [`backend/tests/`](backend/tests/) | Auth, CRUD, pagination, caching, ownership edge cases |
 | [`frontend/src/features/`](frontend/src/features/) | Feature modules (api · hooks · forms · cards) |
 | [`frontend/src/pages/`](frontend/src/pages/) | Dashboard, garage, vehicle detail, settings |
 | [`ROADMAP.md`](ROADMAP.md) | Shipped work and what’s next |
@@ -130,7 +132,7 @@ RideCare/
 │   │   ├── models/          # SQLAlchemy entities + mixins
 │   │   ├── routes/          # HTTP surface
 │   │   ├── schemas/         # Pydantic request/response (incl. CursorPage)
-│   │   └── utils/           # JWT, Redis, storage, pagination, rate limits
+│   │   └── utils/           # JWT, Redis, storage, pagination, rate limits, cache
 │   ├── migrations/          # Alembic
 │   ├── tests/               # Isolated .env.test + fixtures
 │   └── main.py
@@ -156,9 +158,9 @@ Interactive docs when the API is running: **[http://localhost:8000/docs](http://
 |--------|---------|--------------------|
 | **Auth** | `POST /auth/register` · `login` · `token` · `refresh` · `logout` | Password policy, refresh in Redis, Swagger OAuth2 form |
 | **Users** | `GET/PATCH /users/me` · `PATCH /users/me/password` | Profile + password change |
-| **Vehicles** | CRUD `/vehicles/` | Cursor page; live odometer aggregation |
+| **Vehicles** | CRUD `/vehicles/` | Cursor page; live odometer aggregation; Redis-cached reads |
 | **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc on edit/delete |
-| **Service** | CRUD `/service_logs/` · `GET …/next` | Next-due helper for dashboard reminders |
+| **Service** | CRUD `/service_logs/` · `GET …/next` | Next-due helper for dashboard reminders; cached |
 | **Documents** | Multipart CRUD `/documents/` | Type enum, 10 MB cap, signed URLs |
 
 Vehicle-scoped routes require `Authorization: Bearer <access_token>` and `vehicle_id` where noted. List endpoints for vehicles, fuel, and service return:
@@ -252,6 +254,7 @@ CI runs the same suite with repository secrets (see `.github/workflows/`).
 - Document vault (upload / replace / signed view / delete)  
 - Dashboard insights (spend, trend, service soon/overdue)  
 - Cursor pagination on list APIs  
+- Redis caching on vehicle list/detail and next-service with write-through invalidation  
 - Automated backend tests + GitHub Actions  
 
 See [ROADMAP.md](ROADMAP.md) for planned follow-ups.

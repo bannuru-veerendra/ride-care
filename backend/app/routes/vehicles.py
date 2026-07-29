@@ -3,6 +3,7 @@ from calendar import monthrange
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,8 +20,19 @@ from app.schemas.vehicle import (
     VehicleUpdate,
 )
 from app.utils.auth_dependency import get_current_user
+from app.utils.cache import (
+    VEHICLE_CACHE_TTL,
+    cache_delete,
+    cache_delete_pattern,
+    cache_get,
+    cache_set,
+    next_service_key,
+    vehicle_detail_key,
+    vehicle_list_key,
+)
 from app.utils.dates import app_today
 from app.utils.pagination import paginate
+from app.utils.redis_client import get_redis
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
@@ -145,8 +157,9 @@ async def create_vehicle(
     vehicle: VehicleCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> VehicleResponse:
-    """Create a new vehicle"""
+    """Create a new vehicle. Invalidates vehicle list cache."""
     result = await db.execute(
         select(Vehicle).where(
             Vehicle.registration_number == vehicle.registration_number
@@ -168,6 +181,11 @@ async def create_vehicle(
     db.add(db_vehicle)
     await db.commit()
     await db.refresh(db_vehicle)
+
+    # Invalidate list cache — new vehicle must appear immediately
+    await cache_delete_pattern(
+        redis, f"cache:vehicles:user:{current_user.id}*"
+    )
     return await to_vehicle_response(db, db_vehicle)
 
 
@@ -177,8 +195,23 @@ async def get_vehicles(
     size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> CursorPage[VehicleResponse]:
-    """Get paginated vehicles for the current user"""
+    """
+    Get paginated vehicles for the current user.
+    Cached per user for 5 minutes.
+    Cache invalidated on any vehicle create/update/delete.
+    """
+    cache_key = vehicle_list_key(str(current_user.id))
+    # Include cursor and size in cache key so different
+    # pages are cached independently
+    if cursor or size != 20:
+        cache_key = f"{cache_key}:{cursor}:{size}"
+
+    cached = await cache_get(redis, cache_key)
+    if cached is not None:
+        return cached
+
     page = await paginate(
         db,
         Vehicle,
@@ -190,7 +223,7 @@ async def get_vehicles(
         descending=True,
     )
     live_odometers = await get_live_odometers_map(db, page.items)
-    return CursorPage(
+    result = CursorPage(
         items=[
             build_vehicle_response(vehicle, live_odometers[vehicle.id])
             for vehicle in page.items
@@ -199,6 +232,9 @@ async def get_vehicles(
         has_more=page.has_more,
         total=page.total,
     )
+
+    await cache_set(redis, cache_key, result.model_dump(mode="json"), VEHICLE_CACHE_TTL)
+    return result
 
 
 @router.get("/{vehicle_id}/summary", response_model=VehicleSummaryResponse)
@@ -297,8 +333,20 @@ async def get_vehicle(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> VehicleResponse:
-    """Get a vehicle by ID"""
+    """
+    Get a single vehicle by ID.
+    Cached per vehicle for 5 minutes.
+    """
+    cache_key = vehicle_detail_key(str(vehicle_id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not None:
+        # Verify ownership even on cache hit
+        if cached.get("owner_id") != str(current_user.id):
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+        return cached
+
     result = await db.execute(
         select(Vehicle).where(
             Vehicle.id == vehicle_id,
@@ -311,7 +359,15 @@ async def get_vehicle(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehicle not found",
         )
-    return await to_vehicle_response(db, db_vehicle)
+
+    vehicle_response = await to_vehicle_response(db, db_vehicle)
+    await cache_set(
+        redis,
+        cache_key,
+        vehicle_response.model_dump(mode="json"),
+        VEHICLE_CACHE_TTL,
+    )
+    return vehicle_response
 
 
 @router.patch("/{vehicle_id}", response_model=VehicleResponse)
@@ -320,8 +376,9 @@ async def update_vehicle(
     vehicle: VehicleUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> VehicleResponse:
-    """Update a vehicle"""
+    """Update a vehicle. Invalidates vehicle list and detail cache."""
     result = await db.execute(
         select(Vehicle).where(
             Vehicle.id == vehicle_id,
@@ -367,6 +424,12 @@ async def update_vehicle(
 
     await db.commit()
     await db.refresh(db_vehicle)
+
+    # Invalidate both list and detail cache
+    await cache_delete(redis, vehicle_detail_key(str(vehicle_id)))
+    await cache_delete_pattern(
+        redis, f"cache:vehicles:user:{current_user.id}*"
+    )
     return await to_vehicle_response(db, db_vehicle)
 
 
@@ -375,8 +438,9 @@ async def delete_vehicle(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> None:
-    """Delete a vehicle"""
+    """Delete a vehicle. Invalidates all related caches."""
     result = await db.execute(
         select(Vehicle).where(
             Vehicle.id == vehicle_id,
@@ -392,4 +456,11 @@ async def delete_vehicle(
 
     await db.delete(db_vehicle)
     await db.commit()
+
+    # Invalidate caches
+    await cache_delete(redis, vehicle_detail_key(str(vehicle_id)))
+    await cache_delete(redis, next_service_key(str(vehicle_id)))
+    await cache_delete_pattern(
+        redis, f"cache:vehicles:user:{current_user.id}*"
+    )
     return None
