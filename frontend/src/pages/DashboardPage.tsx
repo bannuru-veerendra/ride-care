@@ -10,39 +10,21 @@ import {
     TrendingUp,
     Wrench,
 } from "lucide-react";
-import {
-    format,
-    differenceInDays,
-    isSameMonth,
-    isSameYear,
-    subMonths,
-    parseISO,
-} from "date-fns";
+import { format, differenceInDays } from "date-fns";
 
 import { buttonVariants } from "@/components/ui/button";
 import RideCareLogo from "@/components/common/RideCareLogo";
-import { useVehicles } from "@/features/vehicles/hooks/useVehicles";
-import { useNextService } from "@/features/service-logs/hooks/useServiceLogs";
-import { useFuelLogs } from "@/features/fuel-logs/hooks/useFuelLogs";
+import {
+    useVehicles,
+    useVehicleSummary,
+} from "@/features/vehicles/hooks/useVehicles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { FuelLog } from "@/features/fuel-logs/types";
 import type { Vehicle } from "@/features/vehicles/types";
 
 const SELECTED_VEHICLE_KEY = "ridecare-dashboard-vehicle";
-
-/** Average km/l across fuel logs that have mileage */
-function getAverageMileage(logs: FuelLog[]): number | null {
-    const mileages = logs
-        .map((log) => log.mileage)
-        .filter((mileage): mileage is number => mileage !== null);
-    if (mileages.length === 0) return null;
-
-    const sum = mileages.reduce((total, mileage) => total + mileage, 0);
-    return Math.round((sum / mileages.length) * 10) / 10;
-}
 
 /** Friendly remaining time: "12d", or "1 month 10 days" when over a month. */
 function formatServiceCountdown(days: number): string {
@@ -56,24 +38,6 @@ function formatServiceCountdown(days: number): string {
         return monthPart;
     }
     return `${monthPart} ${remDays} day${remDays === 1 ? "" : "s"}`;
-}
-
-function getMonthSpend(logs: FuelLog[], month: Date): number {
-    return logs
-        .filter((log) => {
-            const date = parseISO(log.date);
-            return isSameMonth(date, month) && isSameYear(date, month);
-        })
-        .reduce((sum, log) => sum + log.total_cost, 0);
-}
-
-function getMonthMileage(logs: FuelLog[], month: Date): number | null {
-    return getAverageMileage(
-        logs.filter((log) => {
-            const date = parseISO(log.date);
-            return isSameMonth(date, month) && isSameYear(date, month);
-        })
-    );
 }
 
 /**
@@ -106,34 +70,21 @@ export default function DashboardPage() {
         vehicles.find((vehicle) => vehicle.id === selectedVehicleId) ??
         vehicles[0];
 
-    const { data: fuelLogsPage, isLoading: fuelLogsLoading } = useFuelLogs(
-        selectedVehicle?.id ?? ""
-    );
-    const { data: nextService, isLoading: nextServiceLoading } = useNextService(
+    const { data: summary, isLoading: summaryLoading } = useVehicleSummary(
         selectedVehicle?.id ?? ""
     );
 
-    const fuelLogs = fuelLogsPage?.items ?? [];
-    const recentFuelLogs = fuelLogs.slice(0, 3);
-    const hasFuelLogs = (fuelLogsPage?.total ?? 0) > 0;
-    const averageMileage = fuelLogs.length
-        ? getAverageMileage(fuelLogs)
-        : null;
-
-    const now = new Date();
-    const thisMonthSpend = fuelLogs.length ? getMonthSpend(fuelLogs, now) : 0;
-    const lastMonthSpend = fuelLogs.length
-        ? getMonthSpend(fuelLogs, subMonths(now, 1))
-        : 0;
-    const thisMonthMileage = fuelLogs.length
-        ? getMonthMileage(fuelLogs, now)
-        : null;
-    const lastMonthMileage = fuelLogs.length
-        ? getMonthMileage(fuelLogs, subMonths(now, 1))
-        : null;
+    const recentFuelLogs = summary?.recent_fuel_logs ?? [];
+    const hasFuelLogs = (summary?.fuel_log_count ?? 0) > 0;
+    const averageMileage = summary?.average_mileage ?? null;
+    const thisMonthSpend = summary?.this_month_spend ?? 0;
+    const lastMonthSpend = summary?.last_month_spend ?? 0;
+    const thisMonthMileage = summary?.this_month_mileage ?? null;
+    const lastMonthMileage = summary?.last_month_mileage ?? null;
+    const nextService = summary?.next_service ?? null;
     const mileageDelta =
         thisMonthMileage !== null && lastMonthMileage !== null
-            ? thisMonthMileage - lastMonthMileage
+            ? Math.round((thisMonthMileage - lastMonthMileage) * 10) / 10
             : null;
 
     const daysUntilNextService = nextService?.next_service_date
@@ -387,7 +338,7 @@ export default function DashboardPage() {
                                         <Fuel className="h-3.5 w-3.5 text-brand" />
                                         Avg mileage
                                     </div>
-                                    {fuelLogsLoading ? (
+                                    {summaryLoading ? (
                                         <Skeleton className="mt-2 h-9 w-20" />
                                     ) : (
                                         <>
@@ -413,7 +364,7 @@ export default function DashboardPage() {
                                         <Wrench className="h-3.5 w-3.5 text-brand" />
                                         Next service
                                     </div>
-                                    {nextServiceLoading ? (
+                                    {summaryLoading ? (
                                         <Skeleton className="mt-2 h-9 w-32" />
                                     ) : nextService?.next_service_date ? (
                                         <>
@@ -490,7 +441,7 @@ export default function DashboardPage() {
                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                             This month
                         </p>
-                        {fuelLogsLoading ? (
+                        {summaryLoading ? (
                             <Skeleton className="mt-2 h-9 w-24" />
                         ) : (
                             <>
@@ -510,7 +461,7 @@ export default function DashboardPage() {
                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                             Mileage trend
                         </p>
-                        {fuelLogsLoading ? (
+                        {summaryLoading ? (
                             <Skeleton className="mt-2 h-9 w-24" />
                         ) : mileageDelta !== null ? (
                             <>
@@ -546,7 +497,7 @@ export default function DashboardPage() {
             )}
 
             {/* Empty fuel state */}
-            {selectedVehicle && !fuelLogsLoading && !hasFuelLogs && (
+            {selectedVehicle && !summaryLoading && !hasFuelLogs && (
                 <section
                     className="animate-fade-up surface-panel px-6 py-8 text-center sm:px-8"
                     style={{ animationDelay: "200ms" }}
@@ -574,7 +525,7 @@ export default function DashboardPage() {
 
             {/* Empty service state */}
             {selectedVehicle &&
-                !nextServiceLoading &&
+                !summaryLoading &&
                 !nextService?.next_service_date && (
                     <section
                         className="animate-fade-up surface-panel flex flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8"

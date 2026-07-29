@@ -1,5 +1,7 @@
 import apiClient from "@/lib/axios";
 import type { CursorPage } from "@/types";
+import type { FuelLog } from "@/features/fuel-logs/types";
+import type { ServiceLog } from "@/features/service-logs/types";
 
 /**
  * Vehicles API calls
@@ -15,6 +17,18 @@ export interface Vehicle {
     registration_number: string;
     baseline_odometer: number;
     current_odometer: number;
+}
+
+export interface VehicleSummary {
+    vehicle_id: string;
+    fuel_log_count: number;
+    average_mileage: number | null;
+    this_month_spend: number;
+    last_month_spend: number;
+    this_month_mileage: number | null;
+    last_month_mileage: number | null;
+    recent_fuel_logs: FuelLog[];
+    next_service: ServiceLog | null;
 }
 
 
@@ -41,6 +55,10 @@ export const vehiclesApi = {
     },
     getById: async (id: string): Promise<Vehicle> => {
         const { data } = await apiClient.get(`/vehicles/${id}`);
+        return data;
+    },
+    getSummary: async (id: string): Promise<VehicleSummary> => {
+        const { data } = await apiClient.get(`/vehicles/${id}/summary`);
         return data;
     },
     create: async (payload: CreateVehiclePayload): Promise<Vehicle> => {
