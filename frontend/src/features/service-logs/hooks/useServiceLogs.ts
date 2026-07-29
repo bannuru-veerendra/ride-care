@@ -48,6 +48,7 @@ export const useCreateServiceLog = (vehicleId: string) => {
             queryClient.invalidateQueries({
                 queryKey: vehicleKeys.details(vehicleId),
             });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
@@ -66,6 +67,7 @@ export const useUpdateServiceLog = (vehicleId: string, logId: string) => {
             queryClient.invalidateQueries({
                 queryKey: vehicleKeys.details(vehicleId),
             });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
@@ -83,6 +85,7 @@ export const useDeleteServiceLog = (vehicleId: string) => {
             queryClient.invalidateQueries({
                 queryKey: vehicleKeys.details(vehicleId),
             });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
