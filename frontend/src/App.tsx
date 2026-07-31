@@ -10,6 +10,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import VehiclesPage from "@/pages/VehiclesPage";
 import VehicleDetailPage from "@/pages/VehicleDetailPage";
 import SettingsPage from "@/pages/SettingsPage";
+import MaintenanceGuidelinesPage from "@/pages/MaintenanceGuidelinesPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 /**
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/vehicles" element={<><ErrorBoundary><VehiclesPage /></ErrorBoundary></>} />
             <Route path="/vehicles/:id" element={<><ErrorBoundary><VehicleDetailPage /></ErrorBoundary></>} />
             <Route path="/settings" element={<><ErrorBoundary><SettingsPage /></ErrorBoundary></>} />
+            <Route path="/maintenance" element={<><ErrorBoundary><MaintenanceGuidelinesPage /></ErrorBoundary></>} />
           </Route>
         </Route>
 
