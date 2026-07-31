@@ -38,10 +38,20 @@ Living checklist of what shipped and what’s next. For a product + architecture
 - Metadata (expiry, notes); replace file or update fields
 - Signed download URLs; DB and storage stay consistent on delete
 
+### Caching
+- Redis caching utility (`app/utils/cache.py`) with non-fatal get/set/delete helpers
+- Vehicle list cached per user (with cursor/size in key); vehicle detail cached per ID
+- Next-service endpoint cached per vehicle
+- Write-through invalidation: create/update/delete routes clear relevant cache keys
+- Pattern-based invalidation via `SCAN` for broad key removal (e.g. all pages for a user)
+- Ownership verified on cache hit for detail endpoints
+- TTLs: 5 min for vehicles and next-service, 24 h for guidelines
+- 7 dedicated cache tests (list/detail caching, invalidation on create/update/delete, next-service)
+
 ### Platform & quality
 - Shared cursor pagination utility (`app/utils/pagination.py`)
 - Alembic migrations; async SQLAlchemy + PostgreSQL
-- Automated API tests: auth, users, vehicles, fuel, service, documents, pagination
+- Automated API tests: auth, users, vehicles, fuel, service, documents, pagination, caching
 - Isolated test project via `backend/.env.test` + `ENV_FILE`
 - GitHub Actions CI with repository secrets
 

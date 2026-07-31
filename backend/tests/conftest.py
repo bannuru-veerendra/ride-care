@@ -37,8 +37,20 @@ class FakeRedis:
         self._store[name] = self._as_bytes(value)
         return True
 
+    async def get(self, name: str) -> bytes | None:
+        """Get a value without deleting it."""
+        return self._store.get(name)
+
     async def getdel(self, name: str) -> bytes | None:
         return self._store.pop(name, None)
+
+    async def scan_iter(self, pattern: str = "*"):
+        """Yield keys matching a glob pattern."""
+        import fnmatch
+
+        for key in list(self._store.keys()):
+            if fnmatch.fnmatch(key, pattern):
+                yield key
 
     async def delete(self, *names: str) -> int:
         deleted = 0

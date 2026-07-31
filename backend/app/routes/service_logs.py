@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,15 @@ from app.models.vehicle import Vehicle
 from app.schemas.pagination import CursorPage
 from app.schemas.service_log import ServiceLogCreate, ServiceLogResponse, ServiceLogUpdate
 from app.utils.auth_dependency import get_current_user
+from app.utils.cache import (
+    NEXT_SERVICE_CACHE_TTL,
+    cache_delete,
+    cache_get,
+    cache_set,
+    next_service_key,
+)
 from app.utils.pagination import paginate
+from app.utils.redis_client import get_redis
 
 
 router = APIRouter(prefix="/service_logs", tags=["service_logs"])
@@ -67,6 +76,7 @@ async def create_service_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> ServiceLogResponse:
     """Create a new service log"""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
@@ -77,6 +87,7 @@ async def create_service_log(
     db.add(db_service_log)
     await db.commit()
     await db.refresh(db_service_log)
+    await cache_delete(redis, next_service_key(str(vehicle_id)))
     return db_service_log
 
 
@@ -108,9 +119,19 @@ async def get_next_service_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> ServiceLogResponse | None:
-    """Next due service comes from the most recent visit that set a next date."""
+    """
+    Returns the most recent service log with next service info.
+    Cached per vehicle for 5 minutes.
+    """
     await verify_vehicle_ownership(vehicle_id, current_user, db)
+
+    cache_key = next_service_key(str(vehicle_id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(ServiceLog)
         .where(
@@ -120,7 +141,15 @@ async def get_next_service_log(
         .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    service_log = result.scalar_one_or_none()
+
+    value = (
+        ServiceLogResponse.model_validate(service_log).model_dump(mode="json")
+        if service_log
+        else None
+    )
+    await cache_set(redis, cache_key, value, NEXT_SERVICE_CACHE_TTL)
+    return service_log
 
 
 @router.get("/{service_log_id}", response_model=ServiceLogResponse)
@@ -146,6 +175,7 @@ async def update_service_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> ServiceLogResponse:
     """Update a service log by ID"""
     db_service_log = await get_owned_service_log(
@@ -160,6 +190,7 @@ async def update_service_log(
         setattr(db_service_log, key, value)
     await db.commit()
     await db.refresh(db_service_log)
+    await cache_delete(redis, next_service_key(str(vehicle_id)))
     return db_service_log
 
 
@@ -169,6 +200,7 @@ async def delete_service_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> None:
     """Delete a service log by ID"""
     db_service_log = await get_owned_service_log(
@@ -179,4 +211,5 @@ async def delete_service_log(
     )
     await db.delete(db_service_log)
     await db.commit()
+    await cache_delete(redis, next_service_key(str(vehicle_id)))
     return None
