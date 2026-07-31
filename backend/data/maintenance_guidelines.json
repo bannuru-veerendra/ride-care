@@ -1,0 +1,242 @@
+[
+  {
+    "id": "1",
+    "component": "Engine",
+    "task": "Engine oil change",
+    "interval_km": 3000,
+    "interval_months": 3,
+    "description": "Change engine oil every 3,000 km or 3 months, whichever comes first. Use manufacturer-recommended viscosity (10W-30 for most commuters). Old, dark oil loses lubrication efficiency and increases engine wear. Always replace the oil filter at the same time.",
+    "severity": "high",
+    "sort_order": 1
+  },
+  {
+    "id": "2",
+    "component": "Engine",
+    "task": "Oil filter replacement",
+    "interval_km": 3000,
+    "interval_months": 3,
+    "description": "Replace the oil filter every time you change the engine oil. A clogged filter bypasses dirty oil directly into the engine. Never reuse an old filter with fresh oil.",
+    "severity": "high",
+    "sort_order": 2
+  },
+  {
+    "id": "3",
+    "component": "Air filter",
+    "task": "Air filter cleaning",
+    "interval_km": 5000,
+    "interval_months": 6,
+    "description": "Remove the air filter and tap out dust. For foam filters, wash with mild soap, dry fully, and lightly oil before reinstalling. A clogged air filter reduces mileage by 10-15% and causes a rich fuel mixture leading to black smoke.",
+    "severity": "medium",
+    "sort_order": 3
+  },
+  {
+    "id": "4",
+    "component": "Air filter",
+    "task": "Air filter replacement",
+    "interval_km": 15000,
+    "interval_months": 12,
+    "description": "Replace the air filter annually or every 15,000 km. Paper filters cannot be washed and must be replaced. Riding in dusty conditions requires more frequent replacement.",
+    "severity": "medium",
+    "sort_order": 4
+  },
+  {
+    "id": "5",
+    "component": "Drive chain",
+    "task": "Chain lubrication",
+    "interval_km": 500,
+    "interval_months": null,
+    "description": "Clean the chain with a brush and kerosene, then apply chain lubricant spray on the inner links while rotating the rear wheel slowly. A dry chain wears out sprockets 3x faster and reduces power transfer. Best done after a ride when the chain is warm.",
+    "severity": "medium",
+    "sort_order": 5
+  },
+  {
+    "id": "6",
+    "component": "Drive chain",
+    "task": "Chain tension check",
+    "interval_km": 1000,
+    "interval_months": null,
+    "description": "Check chain slack - 20-30 mm free play at the midpoint is ideal for most bikes. Too tight causes bearing wear; too loose causes slapping and jumping. Adjust via the rear axle adjusters.",
+    "severity": "medium",
+    "sort_order": 6
+  },
+  {
+    "id": "7",
+    "component": "Drive chain",
+    "task": "Chain and sprocket replacement",
+    "interval_km": 25000,
+    "interval_months": null,
+    "description": "Replace chain and both sprockets together - front and rear. A worn chain accelerates sprocket wear. Mixing old sprockets with a new chain causes rapid wear on both. Look for hooked teeth on sprockets or a stretched chain as warning signs.",
+    "severity": "high",
+    "sort_order": 7
+  },
+  {
+    "id": "8",
+    "component": "Spark plug",
+    "task": "Spark plug inspection",
+    "interval_km": 6000,
+    "interval_months": 6,
+    "description": "Inspect spark plug for carbon deposits and electrode wear. Clean with a wire brush or replace if gap exceeds 0.8 mm. A worn plug causes hard starting, misfires, and poor fuel efficiency. Black sooty deposits indicate a rich mixture.",
+    "severity": "medium",
+    "sort_order": 8
+  },
+  {
+    "id": "9",
+    "component": "Spark plug",
+    "task": "Spark plug replacement",
+    "interval_km": 12000,
+    "interval_months": 12,
+    "description": "Replace spark plug annually or every 12,000 km. Iridium plugs last up to 30,000 km but cost more. Always use the manufacturer specified plug grade - wrong heat range causes misfires or pre-ignition.",
+    "severity": "medium",
+    "sort_order": 9
+  },
+  {
+    "id": "10",
+    "component": "Brakes",
+    "task": "Brake pad inspection",
+    "interval_km": 5000,
+    "interval_months": null,
+    "description": "Inspect brake pad thickness visually. Replace if worn below 2 mm or if you hear grinding noises - that is metal on metal. Disc brake pads last 8,000-15,000 km depending on riding style. Never delay brake pad replacement - it is a safety item.",
+    "severity": "critical",
+    "sort_order": 10
+  },
+  {
+    "id": "11",
+    "component": "Brakes",
+    "task": "Brake fluid change",
+    "interval_km": null,
+    "interval_months": 24,
+    "description": "Replace brake fluid every 2 years regardless of km. Brake fluid absorbs moisture over time, lowering its boiling point and causing spongy brakes or brake fade under hard use. Use DOT 3 or DOT 4 as specified by the manufacturer.",
+    "severity": "critical",
+    "sort_order": 11
+  },
+  {
+    "id": "12",
+    "component": "Tyres",
+    "task": "Tyre pressure check",
+    "interval_km": 500,
+    "interval_months": null,
+    "description": "Check tyre pressure every 500 km or before long rides. Correct pressure is on the swing arm sticker or owner manual. Under-inflated tyres increase rolling resistance, reduce mileage, and cause uneven wear. Over-inflation reduces grip.",
+    "severity": "critical",
+    "sort_order": 12
+  },
+  {
+    "id": "13",
+    "component": "Tyres",
+    "task": "Tyre replacement",
+    "interval_km": 20000,
+    "interval_months": null,
+    "description": "Replace tyres when tread depth reaches the wear indicator (typically 1.6 mm). Most tyres last 15,000-25,000 km depending on compound and riding style. Cracks or bulges mean immediate replacement regardless of tread depth.",
+    "severity": "critical",
+    "sort_order": 13
+  },
+  {
+    "id": "14",
+    "component": "Coolant",
+    "task": "Coolant level check",
+    "interval_km": 5000,
+    "interval_months": 6,
+    "description": "Check coolant level in the reservoir - should be between MIN and MAX marks when cold. Low coolant causes overheating. Never open the radiator cap when hot. Top up with the same type of coolant already in the system.",
+    "severity": "high",
+    "sort_order": 14
+  },
+  {
+    "id": "15",
+    "component": "Coolant",
+    "task": "Coolant flush",
+    "interval_km": null,
+    "interval_months": 24,
+    "description": "Flush and replace coolant every 2 years. Old coolant loses its anti-corrosion properties and pH balance, causing internal corrosion of the cooling system. Use distilled water when mixing coolant concentrate.",
+    "severity": "high",
+    "sort_order": 15
+  },
+  {
+    "id": "16",
+    "component": "Battery",
+    "task": "Battery check",
+    "interval_km": null,
+    "interval_months": 6,
+    "description": "Check battery terminals for corrosion and tighten loose connections. Test voltage - a healthy battery reads 12.6V or above when fully charged. Batteries last 2-3 years typically. Hard starting is usually the first sign of a weak battery.",
+    "severity": "medium",
+    "sort_order": 16
+  },
+  {
+    "id": "17",
+    "component": "Clutch",
+    "task": "Clutch free play check",
+    "interval_km": 2000,
+    "interval_months": null,
+    "description": "Check clutch lever free play - typically 10-20 mm of play at the lever tip before resistance. Too little free play causes clutch slip and premature wear; too much causes hard shifting and incomplete disengagement. Adjust via the cable adjuster at the lever or engine end.",
+    "severity": "medium",
+    "sort_order": 17
+  },
+  {
+    "id": "18",
+    "component": "Clutch",
+    "task": "Clutch cable lubrication",
+    "interval_km": 5000,
+    "interval_months": 6,
+    "description": "Lubricate the clutch cable with cable lube or light oil. A dry or frayed cable makes the clutch heavy and can snap without warning. Replace the cable if outer sheathing is cracked or the inner wire shows broken strands.",
+    "severity": "medium",
+    "sort_order": 18
+  },
+  {
+    "id": "19",
+    "component": "Engine",
+    "task": "Valve clearance check",
+    "interval_km": 12000,
+    "interval_months": null,
+    "description": "Have valve clearances checked and adjusted by a mechanic every 12,000 km (or per the owner manual). Tight valves cause hard starting and burnt valve seats; loose valves cause ticking noise and lost power. This is a shop-level job requiring feeler gauges.",
+    "severity": "high",
+    "sort_order": 19
+  },
+  {
+    "id": "20",
+    "component": "Suspension",
+    "task": "Fork oil replacement",
+    "interval_km": 20000,
+    "interval_months": 24,
+    "description": "Replace front fork oil every 20,000 km or 2 years. Old fork oil loses damping, causing a bouncy front end and poor braking stability. Look for oil seepage around the fork seals as an early warning. Use the viscosity grade specified by the manufacturer.",
+    "severity": "medium",
+    "sort_order": 20
+  },
+  {
+    "id": "21",
+    "component": "Wheels",
+    "task": "Wheel bearing and spoke check",
+    "interval_km": 10000,
+    "interval_months": 12,
+    "description": "Lift each wheel and check for side-to-side play or grinding when spun - both indicate worn wheel bearings. On spoked wheels, tap spokes with a metal tool; a dull thud means a loose spoke that needs tightening. Uneven spoke tension warps the rim over time.",
+    "severity": "high",
+    "sort_order": 21
+  },
+  {
+    "id": "22",
+    "component": "Electrical",
+    "task": "Lights and horn check",
+    "interval_km": 1000,
+    "interval_months": 1,
+    "description": "Check headlight (high and low beam), indicators, brake light, and horn before rides. A failed brake light is a safety and legal risk. Replace bulbs promptly; corrosion in bulb sockets is common in rainy climates - clean with contact cleaner if lights flicker.",
+    "severity": "critical",
+    "sort_order": 22
+  },
+  {
+    "id": "23",
+    "component": "CVT / Belt drive",
+    "task": "CVT belt inspection",
+    "interval_km": 10000,
+    "interval_months": 12,
+    "description": "For scooters and belt-drive bikes: inspect the CVT drive belt for cracks, glazing, or frayed edges. Belts typically last 15,000-25,000 km. A worn belt causes sluggish acceleration and can snap, leaving you stranded. Also check rollers and clutch shoes when the cover is off.",
+    "severity": "high",
+    "sort_order": 23
+  },
+  {
+    "id": "24",
+    "component": "CVT / Belt drive",
+    "task": "CVT belt replacement",
+    "interval_km": 20000,
+    "interval_months": null,
+    "description": "Replace the CVT belt every 20,000 km or sooner if cracked or glazed. Always replace rollers (variator weights) at the same time if worn flat - old rollers cause poor takeoff and higher fuel use. Use an OEM or quality aftermarket belt; cheap belts fail early.",
+    "severity": "high",
+    "sort_order": 24
+  }
+]
