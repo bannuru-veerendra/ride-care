@@ -40,15 +40,15 @@ async def test_vehicle_summary_aggregates_across_all_logs(
     """Spend and mileage averages scan every log, not just a page."""
     vehicle_id = created_vehicle["id"]
     today = app_today()
-    this_month_day = min(15, monthrange(today.year, today.month)[1])
-    this_month_date = date(today.year, today.month, this_month_day)
-    earlier_this_month = date(today.year, today.month, max(1, this_month_day - 2))
+    # Stay on/before today — using a fixed day like 15 fails early in the month
+    this_month_date = today
+    earlier_this_month = date(today.year, today.month, max(1, today.day - 2))
     last_month_ref = _shift_month(today, -1)
     last_month_day = min(10, monthrange(last_month_ref.year, last_month_ref.month)[1])
     last_month_date = date(last_month_ref.year, last_month_ref.month, last_month_day)
 
     # Older fill-up last month (mileage computed from baseline 10000)
-    await client.post(
+    last_month_resp = await client.post(
         "/fuel_logs/",
         params={"vehicle_id": vehicle_id},
         json={
@@ -59,8 +59,9 @@ async def test_vehicle_summary_aggregates_across_all_logs(
         },
         headers=auth_headers,
     )
+    assert last_month_resp.status_code == 201
     # Two fill-ups this month
-    await client.post(
+    earlier_resp = await client.post(
         "/fuel_logs/",
         params={"vehicle_id": vehicle_id},
         json={
@@ -71,7 +72,8 @@ async def test_vehicle_summary_aggregates_across_all_logs(
         },
         headers=auth_headers,
     )
-    await client.post(
+    assert earlier_resp.status_code == 201
+    this_month_resp = await client.post(
         "/fuel_logs/",
         params={"vehicle_id": vehicle_id},
         json={
@@ -82,9 +84,10 @@ async def test_vehicle_summary_aggregates_across_all_logs(
         },
         headers=auth_headers,
     )
+    assert this_month_resp.status_code == 201
 
     next_date = str(today + timedelta(days=45))
-    await client.post(
+    service_resp = await client.post(
         "/service_logs/",
         params={"vehicle_id": vehicle_id},
         json={
@@ -97,6 +100,7 @@ async def test_vehicle_summary_aggregates_across_all_logs(
         },
         headers=auth_headers,
     )
+    assert service_resp.status_code == 201
 
     response = await client.get(
         f"/vehicles/{vehicle_id}/summary",
