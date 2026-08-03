@@ -20,6 +20,7 @@ export default function Navbar() {
     const links = [
         { to: "/dashboard", label: "Dashboard" },
         { to: "/vehicles", label: "Garage" },
+        { to: "/maintenance", label: "Maintenance" },
     ];
 
     const renderLinks = (onNavigate?: () => void) =>
