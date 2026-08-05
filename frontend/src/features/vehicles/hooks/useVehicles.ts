@@ -11,6 +11,7 @@ export const vehicleKeys = {
     all: ["vehicles"] as const,
     details: (id: string) => ["vehicle", id] as const,
     analytics: (id: string) => ["vehicle-analytics", id] as const,
+    summary: (id: string) => ["vehicle", id, "summary"] as const,
 }
 
 /** Fetch all vehicles for the current user */
@@ -27,6 +28,15 @@ export const useVehicle = (id: string) => {
     return useQuery({
         queryKey: vehicleKeys.details(id),
         queryFn: () => vehiclesApi.getById(id),
+        enabled: !!id,
+    });
+};
+
+/** Fetch dashboard aggregations for a vehicle */
+export const useVehicleSummary = (id: string) => {
+    return useQuery({
+        queryKey: vehicleKeys.summary(id),
+        queryFn: () => vehiclesApi.getSummary(id),
         enabled: !!id,
     });
 };

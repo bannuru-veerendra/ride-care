@@ -61,6 +61,7 @@ export const useCreateFuelLog = (vehicleId: string) => {
             queryClient.invalidateQueries({
                 queryKey: vehicleKeys.analytics(vehicleId),
             });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
@@ -85,6 +86,7 @@ export const useUpdateFuelLog = (vehicleId: string, logId: string) => {
             queryClient.invalidateQueries({
                 queryKey: vehicleKeys.analytics(vehicleId),
             });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
@@ -108,6 +110,7 @@ export const useDeleteFuelLog = (vehicleId: string) => {
             queryClient.invalidateQueries({
                 queryKey: vehicleKeys.analytics(vehicleId),
             });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
         },
     });
