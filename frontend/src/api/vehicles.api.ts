@@ -85,6 +85,8 @@ export const vehiclesApi = {
     },
     getAnalytics: async (id: string): Promise<VehicleAnalytics> => {
         const { data } = await apiClient.get(`/vehicles/${id}/analytics`);
+        return data;
+    },
     getSummary: async (id: string): Promise<VehicleSummary> => {
         const { data } = await apiClient.get(`/vehicles/${id}/summary`);
         return data;
