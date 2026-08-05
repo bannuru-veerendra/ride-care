@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Plus, ArrowLeft, Gauge, Calendar, Hash, Fuel, Wrench, FileText } from "lucide-react";
+import { Plus, ArrowLeft, Gauge, Calendar, Hash, Fuel, Wrench, FileText, BarChart2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { useVehicle } from "@/features/vehicles/hooks/useVehicles";
 import FuelLogCard from "@/features/fuel-logs/components/FuelLogCard";
 import FuelLogForm from "@/features/fuel-logs/components/FuelLogForm";
 import {
-    useFuelLogs,
+    useInfiniteFuelLogs,
     useCreateFuelLog,
     useUpdateFuelLog,
     useDeleteFuelLog,
@@ -46,11 +46,12 @@ import {
 } from "@/features/documents/hooks/useDocuments";
 import type { Document } from "@/features/documents/types";
 import type { DocumentSchema } from "@/features/documents/schemas";
+import AnalyticsTab from "@/features/analytics/components/AnalyticsTab";
 
 /**
  * Vehicle detail page.
  * Shows vehicle info and tabbed sections for fuel logs,
- * service logs, and documents.
+ * service logs, documents, and analytics.
  */
 export default function VehicleDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -94,13 +95,19 @@ export default function VehicleDetailPage() {
     }, [searchParams, setSearchParams]);
 
     const { data: vehicle, isLoading: vehicleLoading } = useVehicle(id!);
-    const { data: fuelLogsPage, isLoading: logsLoading } = useFuelLogs(id!);
+    const {
+        data: fuelLogsData,
+        isLoading: logsLoading,
+        hasNextPage: fuelHasNextPage,
+        isFetchingNextPage: fuelFetchingNextPage,
+        fetchNextPage: fetchNextFuelPage,
+    } = useInfiniteFuelLogs(id!);
     const { data: serviceLogsPage, isLoading: serviceLogsLoading } =
         useServiceLogs(id!);
     const { data: documents, isLoading: documentsLoading } = useDocuments(id!);
 
-    const fuelLogs = fuelLogsPage?.items ?? [];
-    const fuelTotal = fuelLogsPage?.total ?? 0;
+    const fuelLogs = fuelLogsData?.pages.flatMap((page) => page.items) ?? [];
+    const fuelTotal = fuelLogsData?.pages[0]?.total ?? 0;
     const serviceLogs = serviceLogsPage?.items ?? [];
     const serviceTotal = serviceLogsPage?.total ?? 0;
 
@@ -372,6 +379,13 @@ export default function VehicleDetailPage() {
                         <FileText className="h-4 w-4" />
                         Docs
                     </TabsTrigger>
+                    <TabsTrigger
+                        value="analytics"
+                        className="font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5"
+                    >
+                        <BarChart2 className="h-4 w-4" />
+                        Analytics
+                    </TabsTrigger>
                 </TabsList>
 
                 {/* Fuel logs tab */}
@@ -446,6 +460,18 @@ export default function VehicleDetailPage() {
                                     onEdit={handleFuelEdit}
                                 />
                             ))}
+                            {fuelHasNextPage && (
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    disabled={fuelFetchingNextPage}
+                                    onClick={() => void fetchNextFuelPage()}
+                                >
+                                    {fuelFetchingNextPage
+                                        ? "Loading..."
+                                        : `Load more (${fuelLogs.length} of ${fuelTotal})`}
+                                </Button>
+                            )}
                         </div>
                     )}
                 </TabsContent>
@@ -618,6 +644,10 @@ export default function VehicleDetailPage() {
                             ))}
                         </div>
                     )}
+                </TabsContent>
+
+                <TabsContent value="analytics" className="mt-5">
+                    <AnalyticsTab vehicleId={id!} />
                 </TabsContent>
             </Tabs>
         </div>

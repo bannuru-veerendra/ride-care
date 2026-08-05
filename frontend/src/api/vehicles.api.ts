@@ -34,6 +34,32 @@ export interface UpdateVehiclePayload {
     baseline_odometer?: number;
 }
 
+export interface MileageTrendPoint {
+    date: string;
+    date_label: string;
+    mileage: number;
+    odometer: number;
+}
+
+export interface MonthlySpendPoint {
+    month: string;
+    year_month: string;
+    spend: number;
+    liters: number;
+}
+
+export interface VehicleAnalytics {
+    vehicle_id: string;
+    total_spend: number;
+    total_liters: number;
+    avg_mileage: number | null;
+    best_mileage: number | null;
+    worst_mileage: number | null;
+    total_fill_ups: number;
+    mileage_trend: MileageTrendPoint[];
+    monthly_spend: MonthlySpendPoint[];
+}
+
 export const vehiclesApi = {
     getAll: async (): Promise<CursorPage<Vehicle>> => {
         const { data } = await apiClient.get("/vehicles/");
@@ -41,6 +67,10 @@ export const vehiclesApi = {
     },
     getById: async (id: string): Promise<Vehicle> => {
         const { data } = await apiClient.get(`/vehicles/${id}`);
+        return data;
+    },
+    getAnalytics: async (id: string): Promise<VehicleAnalytics> => {
+        const { data } = await apiClient.get(`/vehicles/${id}/analytics`);
         return data;
     },
     create: async (payload: CreateVehiclePayload): Promise<Vehicle> => {

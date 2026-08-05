@@ -14,6 +14,9 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.pagination import CursorPage
 from app.schemas.vehicle import (
+    MileageTrendPoint,
+    MonthlySpendPoint,
+    VehicleAnalyticsResponse,
     VehicleCreate,
     VehicleResponse,
     VehicleSummaryResponse,
@@ -27,8 +30,10 @@ from app.utils.cache import (
     cache_get,
     cache_set,
     next_service_key,
+    vehicle_analytics_key,
     vehicle_detail_key,
     vehicle_list_key,
+    vehicle_summary_key,
 )
 from app.utils.dates import app_today
 from app.utils.pagination import paginate
@@ -242,6 +247,7 @@ async def get_vehicle_summary(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> VehicleSummaryResponse:
     """Return dashboard aggregations scanned across all fuel/service logs."""
     result = await db.execute(
@@ -255,6 +261,11 @@ async def get_vehicle_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehicle not found",
         )
+
+    cache_key = vehicle_summary_key(str(vehicle_id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not None:
+        return cached
 
     today = app_today()
     this_start, this_end = _month_bounds(today)
@@ -315,7 +326,7 @@ async def get_vehicle_summary(
     )
     next_service = next_service_result.scalar_one_or_none()
 
-    return VehicleSummaryResponse(
+    payload = VehicleSummaryResponse(
         vehicle_id=vehicle_id,
         fuel_log_count=fuel_log_count,
         average_mileage=average_mileage,
@@ -326,6 +337,124 @@ async def get_vehicle_summary(
         recent_fuel_logs=recent_fuel_logs,
         next_service=next_service,
     )
+    await cache_set(
+        redis,
+        cache_key,
+        payload.model_dump(mode="json"),
+        VEHICLE_CACHE_TTL,
+    )
+    return payload
+
+
+@router.get("/{vehicle_id}/analytics", response_model=VehicleAnalyticsResponse)
+async def get_vehicle_analytics(
+    vehicle_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> VehicleAnalyticsResponse:
+    """Return chart-ready analytics scanned across all fuel logs."""
+    result = await db.execute(
+        select(Vehicle).where(
+            Vehicle.id == vehicle_id,
+            Vehicle.owner_id == current_user.id,
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehicle not found",
+        )
+
+    cache_key = vehicle_analytics_key(str(vehicle_id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not None:
+        return cached
+
+    totals_result = await db.execute(
+        select(
+            func.count().label("total_fill_ups"),
+            func.coalesce(func.sum(FuelLog.total_cost), 0.0).label("total_spend"),
+            func.coalesce(func.sum(FuelLog.liters), 0.0).label("total_liters"),
+        ).where(FuelLog.vehicle_id == vehicle_id)
+    )
+    totals = totals_result.one()
+
+    mileage_stats_result = await db.execute(
+        select(
+            func.avg(FuelLog.mileage),
+            func.max(FuelLog.mileage),
+            func.min(FuelLog.mileage),
+        ).where(
+            FuelLog.vehicle_id == vehicle_id,
+            FuelLog.mileage.isnot(None),
+        )
+    )
+    avg_raw, best_raw, worst_raw = mileage_stats_result.one()
+
+    trend_result = await db.execute(
+        select(FuelLog)
+        .where(
+            FuelLog.vehicle_id == vehicle_id,
+            FuelLog.mileage.isnot(None),
+        )
+        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
+        .limit(10)
+    )
+    trend_logs = list(reversed(list(trend_result.scalars().all())))
+    mileage_trend = [
+        MileageTrendPoint(
+            date=log.date,
+            date_label=log.date.strftime("%d %b"),
+            mileage=_round_mileage(log.mileage) or 0.0,
+            odometer=log.odometer,
+        )
+        for log in trend_logs
+    ]
+
+    today = app_today()
+    monthly_spend: list[MonthlySpendPoint] = []
+    for i in range(5, -1, -1):
+        month_ref = _shift_month(today, -i)
+        start, end = _month_bounds(month_ref)
+        month_result = await db.execute(
+            select(
+                func.coalesce(func.sum(FuelLog.total_cost), 0.0),
+                func.coalesce(func.sum(FuelLog.liters), 0.0),
+            ).where(
+                FuelLog.vehicle_id == vehicle_id,
+                FuelLog.date >= start,
+                FuelLog.date <= end,
+            )
+        )
+        spend, liters = month_result.one()
+        monthly_spend.append(
+            MonthlySpendPoint(
+                month=month_ref.strftime("%b"),
+                year_month=month_ref.strftime("%Y-%m"),
+                spend=float(spend),
+                liters=round(float(liters), 2),
+            )
+        )
+
+    payload = VehicleAnalyticsResponse(
+        vehicle_id=vehicle_id,
+        total_spend=float(totals.total_spend),
+        total_liters=round(float(totals.total_liters), 2),
+        avg_mileage=_round_mileage(avg_raw),
+        best_mileage=_round_mileage(best_raw),
+        worst_mileage=_round_mileage(worst_raw),
+        total_fill_ups=int(totals.total_fill_ups),
+        mileage_trend=mileage_trend,
+        monthly_spend=monthly_spend,
+    )
+    await cache_set(
+        redis,
+        cache_key,
+        payload.model_dump(mode="json"),
+        VEHICLE_CACHE_TTL,
+    )
+    return payload
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
@@ -427,6 +556,11 @@ async def update_vehicle(
 
     # Invalidate both list and detail cache
     await cache_delete(redis, vehicle_detail_key(str(vehicle_id)))
+    await cache_delete(
+        redis,
+        vehicle_summary_key(str(vehicle_id)),
+        vehicle_analytics_key(str(vehicle_id)),
+    )
     await cache_delete_pattern(
         redis, f"cache:vehicles:user:{current_user.id}*"
     )
@@ -460,6 +594,11 @@ async def delete_vehicle(
     # Invalidate caches
     await cache_delete(redis, vehicle_detail_key(str(vehicle_id)))
     await cache_delete(redis, next_service_key(str(vehicle_id)))
+    await cache_delete(
+        redis,
+        vehicle_summary_key(str(vehicle_id)),
+        vehicle_analytics_key(str(vehicle_id)),
+    )
     await cache_delete_pattern(
         redis, f"cache:vehicles:user:{current_user.id}*"
     )
