@@ -10,6 +10,7 @@ import type { CreateVehiclePayload, UpdateVehiclePayload } from "@/api/vehicles.
 export const vehicleKeys = {
     all: ["vehicles"] as const,
     details: (id: string) => ["vehicle", id] as const,
+    analytics: (id: string) => ["vehicle-analytics", id] as const,
     summary: (id: string) => ["vehicle", id, "summary"] as const,
 }
 
@@ -36,6 +37,16 @@ export const useVehicleSummary = (id: string) => {
     return useQuery({
         queryKey: vehicleKeys.summary(id),
         queryFn: () => vehiclesApi.getSummary(id),
+        enabled: !!id,
+    });
+};
+
+
+/** Fetch analytics aggregates for a vehicle */
+export const useVehicleAnalytics = (id: string) => {
+    return useQuery({
+        queryKey: vehicleKeys.analytics(id),
+        queryFn: () => vehiclesApi.getAnalytics(id),
         enabled: !!id,
     });
 };

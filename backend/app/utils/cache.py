@@ -31,6 +31,16 @@ def next_service_key(vehicle_id: str) -> str:
     return f"cache:next_service:{vehicle_id}"
 
 
+def vehicle_summary_key(vehicle_id: str) -> str:
+    """Cache key for vehicle dashboard summary."""
+    return f"cache:vehicle_summary:{vehicle_id}"
+
+
+def vehicle_analytics_key(vehicle_id: str) -> str:
+    """Cache key for vehicle analytics charts."""
+    return f"cache:vehicle_analytics:{vehicle_id}"
+
+
 def guidelines_key() -> str:
     """Cache key for maintenance guidelines."""
     return "cache:guidelines"

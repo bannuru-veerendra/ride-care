@@ -168,3 +168,112 @@ async def test_next_service_cache_invalidated_on_create(
     )
     assert response2.json() is not None
     assert response2.json()["next_service_date"] == next_date
+
+
+async def test_vehicle_summary_cached(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Summary endpoint is cached across identical requests."""
+    vehicle_id = created_vehicle["id"]
+
+    response1 = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    response2 = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+
+    assert response1.status_code == 200
+    assert response1.json() == response2.json()
+
+
+async def test_vehicle_analytics_cached(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Analytics endpoint is cached across identical requests."""
+    vehicle_id = created_vehicle["id"]
+
+    response1 = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+    response2 = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+
+    assert response1.status_code == 200
+    assert response1.json() == response2.json()
+
+
+async def test_vehicle_analytics_cache_invalidated_on_fuel_create(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Creating a fuel log invalidates analytics cache."""
+    from app.utils.dates import app_today
+
+    vehicle_id = created_vehicle["id"]
+
+    warm = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+    assert warm.json()["total_fill_ups"] == 0
+
+    create_resp = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today()),
+            "odometer": 10500,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+
+    refreshed = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["total_fill_ups"] == 1
+    assert refreshed.json()["total_spend"] == 500
+
+
+async def test_vehicle_summary_cache_invalidated_on_fuel_create(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Creating a fuel log invalidates summary cache."""
+    from app.utils.dates import app_today
+
+    vehicle_id = created_vehicle["id"]
+
+    warm = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert warm.json()["fuel_log_count"] == 0
+
+    create_resp = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today()),
+            "odometer": 10500,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+
+    refreshed = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["fuel_log_count"] == 1

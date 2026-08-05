@@ -37,9 +37,12 @@ export interface UpdateFuelLogPayload {
 }
 
 export const fuelLogsApi = {
-    getAll: async (vehicleId: string): Promise<CursorPage<FuelLog>> => {
+    getAll: async (
+        vehicleId: string,
+        params?: { cursor?: string; size?: number }
+    ): Promise<CursorPage<FuelLog>> => {
         const { data } = await apiClient.get("/fuel_logs/", {
-            params: { vehicle_id: vehicleId },
+            params: { vehicle_id: vehicleId, ...params },
         });
         return data;
     },

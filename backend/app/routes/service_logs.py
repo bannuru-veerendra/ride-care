@@ -18,6 +18,7 @@ from app.utils.cache import (
     cache_get,
     cache_set,
     next_service_key,
+    vehicle_summary_key,
 )
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
@@ -87,7 +88,11 @@ async def create_service_log(
     db.add(db_service_log)
     await db.commit()
     await db.refresh(db_service_log)
-    await cache_delete(redis, next_service_key(str(vehicle_id)))
+    await cache_delete(
+        redis,
+        next_service_key(str(vehicle_id)),
+        vehicle_summary_key(str(vehicle_id)),
+    )
     return db_service_log
 
 
@@ -190,7 +195,11 @@ async def update_service_log(
         setattr(db_service_log, key, value)
     await db.commit()
     await db.refresh(db_service_log)
-    await cache_delete(redis, next_service_key(str(vehicle_id)))
+    await cache_delete(
+        redis,
+        next_service_key(str(vehicle_id)),
+        vehicle_summary_key(str(vehicle_id)),
+    )
     return db_service_log
 
 
@@ -211,5 +220,9 @@ async def delete_service_log(
     )
     await db.delete(db_service_log)
     await db.commit()
-    await cache_delete(redis, next_service_key(str(vehicle_id)))
+    await cache_delete(
+        redis,
+        next_service_key(str(vehicle_id)),
+        vehicle_summary_key(str(vehicle_id)),
+    )
     return None

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
@@ -78,3 +78,32 @@ class VehicleSummaryResponse(BaseModel):
     last_month_mileage: float | None
     recent_fuel_logs: list[FuelLogResponse]
     next_service: ServiceLogResponse | None = None
+
+
+class MileageTrendPoint(BaseModel):
+    """Single point on the mileage trend chart."""
+    date: date
+    date_label: str
+    mileage: float
+    odometer: int
+
+
+class MonthlySpendPoint(BaseModel):
+    """Monthly fuel spend bucket for the bar chart."""
+    month: str
+    year_month: str
+    spend: float
+    liters: float
+
+
+class VehicleAnalyticsResponse(BaseModel):
+    """Full analytics payload for the vehicle Analytics tab."""
+    vehicle_id: uuid.UUID
+    total_spend: float
+    total_liters: float
+    avg_mileage: float | None
+    best_mileage: float | None
+    worst_mileage: float | None
+    total_fill_ups: int
+    mileage_trend: list[MileageTrendPoint]
+    monthly_spend: list[MonthlySpendPoint]

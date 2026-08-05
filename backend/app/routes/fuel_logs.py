@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,10 +16,27 @@ from app.schemas.fuel_log import (
 )
 from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
+from app.utils.cache import (
+    cache_delete,
+    vehicle_analytics_key,
+    vehicle_detail_key,
+    vehicle_summary_key,
+)
 from app.utils.pagination import paginate
+from app.utils.redis_client import get_redis
 
 
 router = APIRouter(prefix="/fuel_logs", tags=["fuel_logs"])
+
+
+async def _invalidate_fuel_derived_caches(redis: Redis, vehicle_id: uuid.UUID) -> None:
+    """Drop caches that depend on fuel log aggregates."""
+    await cache_delete(
+        redis,
+        vehicle_detail_key(str(vehicle_id)),
+        vehicle_summary_key(str(vehicle_id)),
+        vehicle_analytics_key(str(vehicle_id)),
+    )
 
 
 async def verify_vehicle_ownership(
@@ -108,6 +126,7 @@ async def create_fuel_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> FuelLogResponse:
     """Create a new fuel log"""
     db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
@@ -121,6 +140,7 @@ async def create_fuel_log(
     await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
     await db.commit()
     await db.refresh(db_fuel_log)
+    await _invalidate_fuel_derived_caches(redis, vehicle_id)
     return db_fuel_log
 
 
@@ -170,6 +190,7 @@ async def update_fuel_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> FuelLogResponse:
     """Update a fuel log by ID"""
     db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
@@ -195,6 +216,7 @@ async def update_fuel_log(
 
     await db.commit()
     await db.refresh(db_fuel_log)
+    await _invalidate_fuel_derived_caches(redis, vehicle_id)
     return db_fuel_log
 
 
@@ -204,6 +226,7 @@ async def delete_fuel_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> None:
     """Delete a fuel log by ID"""
     db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
@@ -217,4 +240,5 @@ async def delete_fuel_log(
     await db.flush()
     await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
     await db.commit()
+    await _invalidate_fuel_derived_caches(redis, vehicle_id)
     return None
