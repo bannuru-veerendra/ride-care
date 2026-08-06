@@ -8,16 +8,16 @@ import type { LoginFormValues } from "../types";
 
 /**
  * Handles user login.
- * Stores tokens from the backend and redirects on success.
+ * Server sets httpOnly cookies; we only mark the UI session as authenticated.
  */
 export const useLogin = () => {
     const navigate = useNavigate();
-    const setTokens = useAuthStore((state) => state.setTokens);
+    const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
 
     return useMutation({
         mutationFn: (values: LoginFormValues) => authApi.login(values),
-        onSuccess: (data) => {
-            setTokens(data.access_token, data.refresh_token);
+        onSuccess: () => {
+            setAuthenticated();
             navigate("/dashboard");
         },
         onError: (error) => {

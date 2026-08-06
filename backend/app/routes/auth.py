@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -13,10 +14,12 @@ from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
+    SessionResponse,
     TokenResponse,
     UserCreate,
 )
 from app.schemas.user import UserResponse
+from app.utils.auth_cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from app.utils.jwt import create_access_token
 from app.utils.rate_limiter import auth_rate_limit
 from app.utils.redis_client import get_redis
@@ -37,13 +40,19 @@ _REDIS_UNAVAILABLE = HTTPException(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class _IssuedTokens:
+    access_token: str
+    refresh_token: str
+
+
 async def _authenticate_user(
     email: str,
     password: str,
     db: AsyncSession,
     redis: Redis,
-) -> TokenResponse:
-    """Validate credentials and return access + refresh tokens."""
+) -> _IssuedTokens:
+    """Validate credentials and issue access + refresh tokens."""
     email = normalize_email(email)
     result = await db.execute(select(User).where(User.email == email))
     db_user = result.scalar_one_or_none()
@@ -77,11 +86,11 @@ async def _authenticate_user(
         logger.exception("Redis unavailable while issuing refresh token")
         raise _REDIS_UNAVAILABLE
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-    )
+    return _IssuedTokens(access_token=access_token, refresh_token=refresh_token)
+
+
+def _refresh_token_from(request: Request, body: RefreshRequest | LogoutRequest) -> str | None:
+    return body.refresh_token or request.cookies.get(REFRESH_COOKIE)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -113,69 +122,92 @@ async def register(
     return db_user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=SessionResponse)
 async def login(
     request: Request,
     credentials: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
-) -> TokenResponse:
-    """Login with JSON body (`email` + `password`)."""
+) -> SessionResponse:
+    """Login with JSON body (`email` + `password`). Sets httpOnly auth cookies."""
     await auth_rate_limit(request, redis)
-    return await _authenticate_user(
+    tokens = await _authenticate_user(
         credentials.email, credentials.password, db, redis
     )
+    set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return SessionResponse()
 
 
 @router.post("/token", response_model=TokenResponse)
 async def token(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> TokenResponse:
     """OAuth2 token endpoint for Swagger Authorize (`username` = email)."""
     await auth_rate_limit(request, redis)
-    return await _authenticate_user(
+    tokens = await _authenticate_user(
         form_data.username, form_data.password, db, redis
+    )
+    set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return TokenResponse(
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=SessionResponse)
 async def refresh(
-    body: RefreshRequest,
+    request: Request,
+    response: Response,
+    body: RefreshRequest = RefreshRequest(),
     redis: Redis = Depends(get_redis),
-) -> TokenResponse:
-    """Rotate refresh token and issue a new access token."""
+) -> SessionResponse:
+    """Rotate refresh token and issue a new access token. Reads cookie if body omits token."""
+    refresh_token = _refresh_token_from(request, body)
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
     try:
-        result = await rotate_refresh_token(redis, body.refresh_token)
+        result = await rotate_refresh_token(redis, refresh_token)
     except RedisError:
         logger.exception("Redis unavailable during refresh")
         raise _REDIS_UNAVAILABLE
 
     if result is None:
+        clear_auth_cookies(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
     new_refresh_token, user_id = result
-    return TokenResponse(
-        access_token=create_access_token(user_id),
-        refresh_token=new_refresh_token,
-        token_type="bearer",
-    )
+    access_token = create_access_token(user_id)
+    set_auth_cookies(response, access_token, new_refresh_token)
+    return SessionResponse()
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
-    body: LogoutRequest,
+    request: Request,
+    response: Response,
+    body: LogoutRequest = LogoutRequest(),
     redis: Redis = Depends(get_redis),
 ) -> Response:
-    """Revoke the given refresh token."""
-    try:
-        await revoke_refresh_token(redis, body.refresh_token)
-    except RedisError:
-        logger.exception("Redis unavailable during logout")
-        raise _REDIS_UNAVAILABLE
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    """Revoke the refresh token (body or cookie) and clear auth cookies."""
+    refresh_token = _refresh_token_from(request, body)
+    if refresh_token:
+        try:
+            await revoke_refresh_token(redis, refresh_token)
+        except RedisError:
+            logger.exception("Redis unavailable during logout")
+            raise _REDIS_UNAVAILABLE
+    clear_auth_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response

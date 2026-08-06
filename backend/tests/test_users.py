@@ -128,7 +128,7 @@ async def test_change_password_success(
         },
     )
     assert login_response.status_code == 200
-    assert "access_token" in login_response.json()
+    assert "access_token" in login_response.cookies
 
 
 async def test_change_password_wrong_current(client: AsyncClient, auth_headers: dict):
@@ -212,8 +212,8 @@ async def test_change_password_revokes_sessions(
             "password": registered_user["password"],
         },
     )
-    access_token = login_response.json()["access_token"]
-    refresh_token = login_response.json()["refresh_token"]
+    access_token = login_response.cookies["access_token"]
+    refresh_token = login_response.cookies["refresh_token"]
     headers = {"Authorization": f"Bearer {access_token}"}
 
     change_response = await client.patch(

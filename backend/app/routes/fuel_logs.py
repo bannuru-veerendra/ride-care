@@ -114,7 +114,8 @@ async def recalculate_vehicle_fuel_mileage(
             )
 
         fuel_log.mileage = round(
-            (fuel_log.odometer - previous_odometer) / fuel_log.liters
+            (fuel_log.odometer - previous_odometer) / fuel_log.liters,
+            1,
         )
         previous_odometer = fuel_log.odometer
         previous_label = f"the previous fill-up ({fuel_log.odometer})"
@@ -133,7 +134,7 @@ async def create_fuel_log(
     db_fuel_log = FuelLog(
         **fuel_log.model_dump(),
         vehicle_id=vehicle_id,
-        liters=fuel_log.total_cost / fuel_log.price_per_liter,
+        liters=round(fuel_log.total_cost / fuel_log.price_per_liter, 2),
     )
     db.add(db_fuel_log)
     await db.flush()
@@ -206,8 +207,9 @@ async def update_fuel_log(
         setattr(db_fuel_log, key, value)
 
     if "total_cost" in updates or "price_per_liter" in updates:
-        db_fuel_log.liters = (
-            db_fuel_log.total_cost / db_fuel_log.price_per_liter
+        db_fuel_log.liters = round(
+            db_fuel_log.total_cost / db_fuel_log.price_per_liter,
+            2,
         )
 
     if {"date", "odometer", "total_cost", "price_per_liter"} & updates.keys():

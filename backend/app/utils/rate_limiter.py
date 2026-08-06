@@ -59,20 +59,28 @@ def get_client_ip(request: Request) -> str:
 
 def get_user_id_from_request(request: Request) -> str | None:
     """
-    Extract user_id from JWT in the Authorization header
+    Extract user_id from JWT in the Authorization header or access cookie
     without going through the full FastAPI dependency chain.
     Returns None if token is missing or invalid.
     """
+    from app.utils.auth_cookies import ACCESS_COOKIE
+
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+    token = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header.removeprefix("Bearer ").strip()
+    else:
+        token = request.cookies.get(ACCESS_COOKIE)
+
+    if not token:
         return None
 
-    token = auth_header.removeprefix("Bearer ").strip()
     try:
         payload = decode_access_token(token)
         return payload.get("sub")
     except (JWTError, ValueError, Exception):
         return None
+
 
 
 async def auth_rate_limit(request: Request, redis: Redis) -> None:

@@ -40,17 +40,23 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Response body for login / refresh"""
+    """OAuth2 token body for Swagger `/auth/token` (Bearer authorize)."""
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
 
 
+class SessionResponse(BaseModel):
+    """SPA login/refresh ack — credentials are only in httpOnly cookies."""
+    token_type: str = "bearer"
+
+
 class RefreshRequest(BaseModel):
-    """Request body for POST /auth/refresh"""
-    refresh_token: str
+    """Request body for POST /auth/refresh (optional when httpOnly cookie is set)."""
+    refresh_token: str | None = None
 
 
 class LogoutRequest(BaseModel):
-    """Request body for POST /auth/logout"""
-    refresh_token: str
+    """Request body for POST /auth/logout (optional when httpOnly cookie is set)."""
+    refresh_token: str | None = None
+

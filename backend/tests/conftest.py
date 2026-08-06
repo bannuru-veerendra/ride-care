@@ -215,7 +215,7 @@ async def registered_user(client: AsyncClient):
 
 @pytest_asyncio.fixture
 async def auth_headers(client: AsyncClient, registered_user: dict):
-    """Authenticate the client with the registered user"""
+    """Authenticate and return Bearer headers (cookies cleared so unauth tests stay clean)."""
     response = await client.post(
         "/auth/login",
         json={
@@ -223,8 +223,9 @@ async def auth_headers(client: AsyncClient, registered_user: dict):
             "password": registered_user["password"],
         },
     )
-    tokens = response.json()["access_token"]
-    return {"Authorization": f"Bearer {tokens}"}
+    access = response.cookies["access_token"]
+    client.cookies.clear()
+    return {"Authorization": f"Bearer {access}"}
 
 
 @pytest_asyncio.fixture
@@ -246,7 +247,9 @@ async def other_user_headers(client: AsyncClient):
         },
     )
 
-    return {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    access = login_response.cookies["access_token"]
+    client.cookies.clear()
+    return {"Authorization": f"Bearer {access}"}
 
 
 @pytest_asyncio.fixture

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy import select
@@ -8,23 +8,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
+from app.utils.auth_cookies import ACCESS_COOKIE
 from app.utils.jwt import decode_access_token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+# auto_error=False so we can fall back to the httpOnly access cookie
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Dependency to get the current user"""
+    """Resolve the current user from Bearer token or access cookie."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
     )
 
+    access = token or request.cookies.get(ACCESS_COOKIE)
+    if not access:
+        raise credentials_exception
+
     try:
-        payload = decode_access_token(token)
+        payload = decode_access_token(access)
         user_id = payload.get("sub")
         if user_id is None:
             raise credentials_exception

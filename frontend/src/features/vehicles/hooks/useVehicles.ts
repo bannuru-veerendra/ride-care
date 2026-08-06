@@ -9,9 +9,9 @@ import type { CreateVehiclePayload, UpdateVehiclePayload } from "@/api/vehicles.
  */
 export const vehicleKeys = {
     all: ["vehicles"] as const,
-    details: (id: string) => ["vehicle", id] as const,
+    details: (id: string) => ["vehicle-detail", id] as const,
     analytics: (id: string) => ["vehicle-analytics", id] as const,
-    summary: (id: string) => ["vehicle", id, "summary"] as const,
+    summary: (id: string) => ["vehicle-summary", id] as const,
 }
 
 /** Fetch all vehicles for the current user */

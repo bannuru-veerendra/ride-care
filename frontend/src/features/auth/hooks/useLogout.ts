@@ -8,25 +8,22 @@ import useAuthStore from "@/store/auth.store";
 
 /**
  * Clears the local session and returns the user to login.
- * Best-effort revoke of the refresh token on the backend.
+ * Best-effort revoke of the refresh token cookie on the backend.
  */
 export const useLogout = () => {
     const navigate = useNavigate();
-    const clearToken = useAuthStore((state) => state.clearToken);
+    const clearSession = useAuthStore((state) => state.clearSession);
     const queryClient = useQueryClient();
 
     return useCallback(async () => {
-        const refreshToken = localStorage.getItem("refresh_token");
-        if (refreshToken) {
-            try {
-                await authApi.logout(refreshToken);
-            } catch {
-                // Still clear local session if revoke fails
-            }
+        try {
+            await authApi.logout();
+        } catch {
+            // Still clear local session if revoke fails
         }
         queryClient.clear();
-        clearToken();
+        clearSession();
         toast.success("Logged out successfully");
         navigate("/login");
-    }, [clearToken, navigate, queryClient]);
+    }, [clearSession, navigate, queryClient]);
 };

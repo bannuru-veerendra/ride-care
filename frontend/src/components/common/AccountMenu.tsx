@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Wrench } from "lucide-react";
 
 import { useLogout } from "@/features/auth/hooks/useLogout";
 import { useCurrentUser } from "@/features/users/hooks/useUsers";
@@ -14,7 +14,7 @@ function getInitials(fullName: string): string {
 }
 
 /**
- * Account menu — Settings and Logout in one place (standard product pattern).
+ * Account menu — Settings, Maintenance guide, and Logout.
  */
 export default function AccountMenu() {
     const navigate = useNavigate();
@@ -115,6 +115,23 @@ export default function AccountMenu() {
                     >
                         <Settings className="size-4" />
                         Settings
+                    </button>
+
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            setOpen(false);
+                            navigate("/maintenance");
+                        }}
+                        className={cn(
+                            "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm",
+                            "text-muted-foreground transition-colors",
+                            "hover:bg-white/5 hover:text-foreground"
+                        )}
+                    >
+                        <Wrench className="size-4" />
+                        Maintenance guide
                     </button>
 
                     <div className="my-1 h-px bg-white/10" />

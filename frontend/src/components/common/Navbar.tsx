@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LogOut, Menu, Settings } from "lucide-react";
+import { LogOut, Menu, Settings, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -10,7 +10,7 @@ import RideCareLogo from "./RideCareLogo";
 import { cn } from "@/lib/utils";
 
 /**
- * Navigation bar — product links + account menu (Settings / Log out).
+ * Navigation bar — primary product links + account menu.
  */
 export default function Navbar() {
     const location = useLocation();
@@ -20,7 +20,6 @@ export default function Navbar() {
     const links = [
         { to: "/dashboard", label: "Dashboard" },
         { to: "/vehicles", label: "Garage" },
-        { to: "/maintenance", label: "Maintenance" },
     ];
 
     const renderLinks = (onNavigate?: () => void) =>
@@ -47,6 +46,7 @@ export default function Navbar() {
         });
 
     const settingsActive = location.pathname.startsWith("/settings");
+    const maintenanceActive = location.pathname.startsWith("/maintenance");
 
     return (
         <header className="sticky top-0 z-50 border-b border-white/10 bg-background/70 backdrop-blur-xl">
@@ -92,6 +92,19 @@ export default function Navbar() {
                                         >
                                             <Settings className="h-4 w-4" />
                                             Settings
+                                        </Link>
+                                        <Link
+                                            to="/maintenance"
+                                            onClick={() => setMobileOpen(false)}
+                                            className={cn(
+                                                "inline-flex cursor-pointer items-center gap-2 text-sm font-medium transition-colors",
+                                                maintenanceActive
+                                                    ? "text-foreground"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            <Wrench className="h-4 w-4" />
+                                            Maintenance guide
                                         </Link>
                                         <button
                                             type="button"

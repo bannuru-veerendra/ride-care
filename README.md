@@ -5,20 +5,28 @@
 <h1 align="center">RideCare</h1>
 
 <p align="center">
-  <strong>Fuel. Service. Documents. Maintenance. Analytics. One garage for every rider.</strong>
+  <strong>Fuel. Service. Documents. Guides. Analytics.<br/>One garage for every rider.</strong>
 </p>
 
 <p align="center">
-  A backend-first vehicle companion — FastAPI + PostgreSQL power the logic;<br/>
-  a dark, rider-focused React UI puts mileage, spend, paperwork, and charts in one place.
+  <a href="https://ride-care-jade.vercel.app"><strong>Live app</strong></a>
+  ·
+  <a href="https://ride-care.onrender.com/docs">API docs</a>
 </p>
 
 <p align="center">
+  A backend-first vehicle companion — domain logic lives in FastAPI + PostgreSQL;<br/>
+  a dark React UI surfaces mileage, spend, paperwork, and charts you can trust.
+</p>
+
+<p align="center">
+  <a href="https://ride-care-jade.vercel.app"><img alt="Live" src="https://img.shields.io/badge/Live-App-black?style=flat-square&logo=vercel&logoColor=white" /></a>
+  <a href="https://ride-care.onrender.com/docs"><img alt="API" src="https://img.shields.io/badge/API-OpenAPI-009688?style=flat-square&logo=fastapi&logoColor=white" /></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" />
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Async-009688?style=flat-square&logo=fastapi&logoColor=white" />
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?style=flat-square&logo=postgresql&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat-square&logo=typescript&logoColor=white" />
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?style=flat-square&logo=postgresql&logoColor=white" />
+  <img alt="Redis" src="https://img.shields.io/badge/Redis-Upstash-DC382D?style=flat-square&logo=redis&logoColor=white" />
   <img alt="CI" src="https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white" />
 </p>
 
@@ -26,61 +34,69 @@
 
 ## Why RideCare
 
-Most “garage apps” are thin CRUD wrappers. RideCare puts **domain logic on the server**:
+Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 
-| On the API | Why it matters |
-|------------|----------------|
-| Auto liters + km/L from cost, price/L, and odometer deltas | Mileage is computed, not guessed in the UI |
-| Timeline-aware odometer validation + full recalculation on edit/delete | History stays consistent when riders fix past fill-ups |
-| Live odometer = max(baseline, fuel, service) | Dashboard always shows the real highest reading |
-| `GET /vehicles/{id}/summary` — spend, avg mileage, recent logs, next service | Dashboard aggregates scan **all** logs, not one UI page |
-| `GET /vehicles/{id}/analytics` — totals, trend, monthly spend series | Charts are chart-ready from SQL, not client math |
-| Cursor pagination (`items`, `next_cursor`, `has_more`, `total`) | List endpoints stay bounded as logs grow |
-| JSON maintenance guidelines (file-backed, in-memory cache) | Interval advice without a DB table for static content |
-| JWT + refresh tokens in Redis, rate limiting | Auth is production-shaped, not demo-only |
-| Redis caching with write-through invalidation | Read-heavy endpoints stay fast without stale data |
-| Document vault with typed uploads + signed URLs | RC / licence / insurance never live as public blobs |
+| Capability | What the API owns |
+|------------|-------------------|
+| Mileage math | Liters + km/L from cost, price/L, and odometer deltas — recalculated on every edit/delete |
+| Live odometer | `max(baseline, fuel, service)` so the dashboard never lies |
+| Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs, not one UI page |
+| Charts | `GET /vehicles/{id}/analytics` returns SQL-ready trend + monthly spend series |
+| Scale | Cursor pagination (`items`, `next_cursor`, `has_more`, `total`) |
+| Speed | Redis cache with write-through invalidation on summary, analytics, list, detail, next-service |
+| Auth | httpOnly cookie JWT + refresh rotation in Redis, rate limiting, session revoke on password change |
+| Docs | Typed vault uploads with signed URLs — never public blobs |
+| Guidelines | File-backed maintenance catalog (in-memory), filterable without a DB table |
 
-The frontend stays a thin client: forms, sheets, charts, and dashboards that consume a well-designed REST API.
+The frontend stays thin: forms, sheets, charts, and dashboards over a clear REST API.
 
 ---
 
 ## Product tour
 
-### Dashboard — ride status at a glance
-Multi-bike picker, odometer, average mileage, next-service countdown, monthly spend, and mileage trend — powered by the vehicle summary API, with deep links into Log fill-up / Log service.
+### Dashboard — status at a glance
+Multi-bike picker, odometer, average mileage, next-service countdown, monthly spend, and mileage trend — all from the summary API.
 
 ![RideCare dashboard](docs/screenshots/01-dashboard.png)
 
 ### Garage — every machine in one place
-Add, edit, and open bikes. Registration badge, year, and live kilometers on each card.
+Add, edit, and open bikes. Registration, year, and live kilometers on each card.
 
 ![Garage](docs/screenshots/02-garage.png)
 
-### Fuel — mileage as the headline metric
-Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side after each save. Cursor pagination with **Load more** on the detail tab.
+### Fuel — mileage as the headline
+Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side. **Load more** via cursor pages.
 
 ![Fuel logs](docs/screenshots/03-fuel-logs.png)
 
 ![Log fuel sheet](docs/screenshots/04-log-fuel.png)
 
 ### Service — history + next due
-Cost, odometer, tagged jobs (oil, filters, brakes…), and next service date / km reminders.
+Cost, odometer, tagged jobs, and next service date / km reminders.
 
 ![Service logs](docs/screenshots/05-service-logs.png)
 
 ### Docs — digital vault
-Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, with signed download URLs.
-
-![Upload document](docs/screenshots/06-upload-document.png)
+Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, signed downloads.
 
 ![Documents vault](docs/screenshots/07-documents.png)
 
-### Maintenance — interval guidelines
-Static rider guidelines (oil, chain, brakes, tyres, CVT…) from a JSON file, filterable by component and severity. Auth-protected read API; no DB query for the catalog.
+![Upload document](docs/screenshots/06-upload-document.png)
 
 ### Analytics — spend and mileage charts
-Per-vehicle Analytics tab: summary cards, mileage trend (last 10 fill-ups), and monthly fuel spend (last 6 months). Data from `GET /vehicles/{id}/analytics`.
+Per-vehicle Analytics tab (Recharts): summary cards, last-10 mileage trend, last-6 months fuel spend — from `GET /vehicles/{id}/analytics`.
+
+![Analytics](docs/screenshots/08-analytics.png)
+
+### Maintenance guide — interval tips
+Oil, chain, brakes, tyres, CVT… filterable by component and severity from a static JSON catalog.
+
+![Maintenance guide](docs/screenshots/09-maintenance-guide.png)
+
+### Settings — profile and password
+Update name/email or change password (revokes all sessions).
+
+![Settings](docs/screenshots/10-settings.png)
 
 ---
 
@@ -100,14 +116,9 @@ Per-vehicle Analytics tab: summary cards, mileage trend (last 10 fill-ups), and 
              users · vehicles      refresh tokens     document files
              fuel · service        rate limits
              documents             response cache
-                                   (list/detail/
-                                   summary/analytics/
-                                   next-service)
 ```
 
-**Ownership model:** every fuel / service / document row is scoped by `vehicle_id`, and vehicles are scoped by `owner_id`. Routes verify ownership before any mutation.
-
-Static maintenance guidelines live in `backend/data/maintenance_guidelines.json` and load once into memory (`lru_cache`).
+Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owner_id`. Routes verify ownership before mutations.
 
 ---
 
@@ -118,79 +129,60 @@ Static maintenance guidelines live in `backend/data/maintenance_guidelines.json`
 | API | FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic |
 | Data | PostgreSQL (Supabase), Redis (Upstash) |
 | Files | Supabase Storage + signed URLs |
-| Auth | bcrypt passwords, JWT access + refresh rotation |
+| Auth | bcrypt, JWT access + refresh rotation |
 | UI | React 19, TypeScript, Vite 8, Tailwind CSS v4, shadcn/ui, Recharts |
-| Client data | TanStack Query, Zustand, Axios, Zod + React Hook Form |
+| Client | TanStack Query, Zustand, Axios, Zod + React Hook Form |
 | Quality | pytest (async API suite), oxlint, GitHub Actions CI |
-
----
-
-## Explore the codebase
-
-| Start here | What you’ll see |
-|------------|-----------------|
-| [`backend/app/routes/`](backend/app/routes/) | Auth, users, vehicles, fuel, service, documents, maintenance guidelines |
-| [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Live odometer, summary, analytics, Redis-cached reads |
-| [`backend/app/data/guidelines.py`](backend/app/data/guidelines.py) | JSON guidelines loader |
-| [`backend/data/maintenance_guidelines.json`](backend/data/maintenance_guidelines.json) | Guideline catalog |
-| [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Shared cursor paginator |
-| [`backend/app/routes/fuel_logs.py`](backend/app/routes/fuel_logs.py) | Mileage recalculation + odometer rules |
-| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache get/set/invalidate helpers + key builders |
-| [`backend/tests/`](backend/tests/) | Auth, CRUD, pagination, caching, summary, analytics, guidelines |
-| [`frontend/src/features/`](frontend/src/features/) | auth · vehicles · fuel · service · documents · users · maintenance · analytics |
-| [`frontend/src/pages/`](frontend/src/pages/) | Dashboard, garage, vehicle detail, settings, maintenance |
-| [`ROADMAP.md`](ROADMAP.md) | Shipped work and what’s next |
-
-```
-RideCare/
-├── backend/
-│   ├── app/
-│   │   ├── data/            # Guidelines loader (JSON → memory)
-│   │   ├── models/          # SQLAlchemy entities + mixins
-│   │   ├── routes/          # HTTP surface
-│   │   ├── schemas/         # Pydantic request/response (incl. CursorPage)
-│   │   └── utils/           # JWT, Redis, storage, pagination, rate limits, cache
-│   ├── data/                # maintenance_guidelines.json
-│   ├── migrations/          # Alembic
-│   ├── tests/               # Isolated .env.test + fixtures
-│   └── main.py
-├── frontend/
-│   ├── src/
-│   │   ├── api/             # Axios clients per domain
-│   │   ├── features/        # Domain modules (hooks · forms · cards · charts)
-│   │   ├── pages/           # Route-level screens
-│   │   ├── store/           # Zustand auth
-│   │   └── lib/             # axios interceptors, query client, dates
-│   └── public/
-├── docs/screenshots/        # Product captures used in this README
-└── .github/workflows/       # CI
-```
 
 ---
 
 ## API map
 
-Interactive docs when the API is running: **[http://localhost:8000/docs](http://localhost:8000/docs)**
+Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.com/docs)** · local: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-| Module | Surface | Backend highlights |
-|--------|---------|--------------------|
-| **Auth** | `POST /auth/register` · `login` · `token` · `refresh` · `logout` | Password policy, refresh in Redis, Swagger OAuth2 form |
-| **Users** | `GET/PATCH /users/me` · `PATCH /users/me/password` | Profile + password change; session revoke on password change |
-| **Vehicles** | CRUD `/vehicles/` · `GET …/summary` · `GET …/analytics` | Cursor page; live odometer; Redis-cached list/detail/summary/analytics |
-| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; invalidates summary/analytics caches |
-| **Service** | CRUD `/service_logs/` · `GET …/next` | Next-due helper; cached; invalidates summary |
-| **Documents** | Multipart CRUD `/documents/` | Type enum, 10 MB cap, signed URLs |
-| **Guidelines** | `GET /maintenance-guidelines/` · `/components` · `/severity-levels` | JSON file + in-memory cache; filter by severity/component |
+| Module | Surface | Highlights |
+|--------|---------|------------|
+| **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; Swagger OAuth2 form still returns bearer body |
+| **Users** | `GET/PATCH /users/me` · password change | Session revoke on password change |
+| **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads |
+| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; cache invalidation |
+| **Service** | CRUD · `GET …/next` | Next-due helper; cached |
+| **Documents** | Multipart CRUD | Type enum, 10 MB, signed URLs |
+| **Guidelines** | `/maintenance-guidelines/` + filters | JSON file + in-memory cache |
 
-Vehicle-scoped routes require `Authorization: Bearer <access_token>` and `vehicle_id` where noted. List endpoints for vehicles, fuel, and service return:
+List responses use a shared cursor page:
 
 ```json
 {
-  "items": [ /* … */ ],
-  "next_cursor": "… or null",
+  "items": [],
+  "next_cursor": null,
   "has_more": false,
   "total": 36
 }
+```
+
+---
+
+## Explore the code
+
+| Start here | What you’ll see |
+|------------|-----------------|
+| [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Summary, analytics, live odometer, Redis-cached reads |
+| [`backend/app/routes/fuel_logs.py`](backend/app/routes/fuel_logs.py) | Mileage recalculation + odometer rules |
+| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers + key builders |
+| [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Shared cursor paginator |
+| [`backend/data/maintenance_guidelines.json`](backend/data/maintenance_guidelines.json) | Guideline catalog |
+| [`backend/tests/`](backend/tests/) | Auth, CRUD, pagination, cache, summary, analytics, guidelines |
+| [`frontend/src/features/`](frontend/src/features/) | Domain modules (hooks · forms · charts) |
+| [`frontend/src/pages/`](frontend/src/pages/) | Dashboard, garage, detail, settings, maintenance |
+| [`ROADMAP.md`](ROADMAP.md) | Shipped vs next |
+
+```
+RideCare/
+├── backend/          # FastAPI · models · routes · Redis · tests
+├── frontend/         # React app (api · features · pages)
+├── docs/screenshots/ # Product captures
+└── .github/workflows/
 ```
 
 ---
@@ -217,8 +209,6 @@ uvicorn main:app --reload
 - Health: [http://localhost:8000/health](http://localhost:8000/health)
 - OpenAPI: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-**Swagger auth:** register/login with JSON, or use **Authorize** via `POST /auth/token` (username = email).
-
 ### Frontend
 
 ```bash
@@ -230,26 +220,13 @@ npm run dev
 
 App: [http://localhost:5173](http://localhost:5173)
 
-```bash
-npm run build    # production bundle
-npm run lint     # oxlint
-```
-
 ### Tests
 
-Tests hit a **separate** Supabase project via `backend/.env.test` (never commit it).
+Tests use a **separate** Supabase project via `backend/.env.test` (never commit it).
 
 ```bash
-# Apply migrations to the test DB once (swap env files carefully)
-cp .env .env.backup && cp .env.test .env
-alembic upgrade head
-cp .env.backup .env
-
-# Prefer the project venv
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
-
-CI runs the same suite with repository secrets (see `.github/workflows/`).
 
 ---
 
@@ -261,25 +238,15 @@ CI runs the same suite with repository secrets (see `.github/workflows/`).
 | `backend/.env.test` | Pytest isolation | No |
 | `backend/.env.example` | Required keys template | Yes |
 | `frontend/.env` | Local `VITE_API_URL` | No |
-| `frontend/.env.example` / `.env.production` | API URL templates | Yes (no secrets) |
+| `frontend/.env.example` / `.env.production` | API URL templates | Yes |
 
 ---
 
-## What “done” looks like
+## Shipped today
 
-- Auth (register, login, refresh, logout) + profile settings  
-- Multi-vehicle garage with ownership checks  
-- Fuel logging with server-side mileage math and validation  
-- Service history + next-service API for reminders  
-- Document vault (upload / replace / signed view / delete)  
-- Dashboard via vehicle **summary** API (spend, trend, service soon/overdue)  
-- Vehicle **analytics** API + Analytics tab (Recharts)  
-- Maintenance guidelines (JSON catalog + filterable `/maintenance` page)  
-- Cursor pagination on list APIs; fuel tab **Load more**  
-- Redis caching on vehicle list/detail, summary, analytics, and next-service with write-through invalidation  
-- Automated backend tests + GitHub Actions  
+Auth · multi-vehicle garage · server-side mileage · service reminders · document vault · summary dashboard · analytics charts · maintenance guide · cursor pagination · Redis caching · CI + production deploy
 
-See [ROADMAP.md](ROADMAP.md) for planned follow-ups. Merged history through **PR #39** is on `main`; analytics / extended cache / fuel Load more ship with the analytics branch.
+What’s next → [ROADMAP.md](ROADMAP.md)
 
 ---
 

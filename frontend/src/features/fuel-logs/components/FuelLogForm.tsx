@@ -74,7 +74,11 @@ export default function FuelLogForm({
     const inputClass = "border-white/15 bg-white/5";
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-6"
+            noValidate
+        >
             {apiError && (
                 <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {apiError}
@@ -139,6 +143,9 @@ export default function FuelLogForm({
                     <Input
                         id="odometer"
                         type="number"
+                        inputMode="numeric"
+                        step={1}
+                        min={1}
                         placeholder="12500"
                         className={inputClass}
                         {...register("odometer", { valueAsNumber: true })}
@@ -147,7 +154,7 @@ export default function FuelLogForm({
                         <p className="text-xs text-destructive">{errors.odometer.message}</p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                        Used with your last fill to calculate km/l
+                        Whole kilometers — used with your last fill to calculate km/l
                     </p>
                 </div>
 
@@ -157,7 +164,10 @@ export default function FuelLogForm({
                         <Input
                             id="total_cost"
                             type="number"
-                            placeholder="500"
+                            inputMode="decimal"
+                            step="0.01"
+                            min={0.01}
+                            placeholder="500.00"
                             className={inputClass}
                             {...register("total_cost", { valueAsNumber: true })}
                         />
@@ -173,7 +183,10 @@ export default function FuelLogForm({
                         <Input
                             id="price_per_liter"
                             type="number"
-                            placeholder="105"
+                            inputMode="decimal"
+                            step="0.01"
+                            min={0.01}
+                            placeholder="105.00"
                             className={inputClass}
                             {...register("price_per_liter", { valueAsNumber: true })}
                         />

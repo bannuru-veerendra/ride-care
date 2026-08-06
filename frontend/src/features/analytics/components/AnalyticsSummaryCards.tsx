@@ -1,10 +1,9 @@
-import { Fuel, TrendingUp, TrendingDown, Award, Hash } from "lucide-react";
+import { Fuel, TrendingDown, Award, Hash } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Props {
   totalSpend: number;
   totalLiters: number;
-  avgMileage: number | null;
   bestMileage: number | null;
   worstMileage: number | null;
   totalFillUps: number;
@@ -12,12 +11,11 @@ interface Props {
 
 /**
  * Summary stat cards shown at the top of the analytics tab.
- * All-time stats derived from complete fuel log history.
+ * Avg mileage lives on the dashboard + trend chart baseline — not repeated here.
  */
 export default function AnalyticsSummaryCards({
   totalSpend,
   totalLiters,
-  avgMileage,
   bestMileage,
   worstMileage,
   totalFillUps,
@@ -28,12 +26,6 @@ export default function AnalyticsSummaryCards({
       value: `₹${totalSpend.toLocaleString("en-IN")}`,
       icon: Fuel,
       sub: `${totalLiters}L total`,
-    },
-    {
-      label: "Avg mileage",
-      value: avgMileage ? `${avgMileage} km/l` : "—",
-      icon: TrendingUp,
-      sub: "all time",
     },
     {
       label: "Best fill-up",
@@ -56,7 +48,7 @@ export default function AnalyticsSummaryCards({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {stats.map((stat) => (
         <Card key={stat.label} className="surface-panel border-0">
           <CardContent className="px-4 py-4">

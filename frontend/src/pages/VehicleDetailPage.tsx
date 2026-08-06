@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Plus, ArrowLeft, Gauge, Calendar, Hash, Fuel, Wrench, FileText, BarChart2 } from "lucide-react";
+import { Plus, ArrowLeft, Gauge, Calendar, Fuel, Wrench, FileText, BarChart2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -344,10 +344,6 @@ export default function VehicleDetailPage() {
                     <div className="flex items-center gap-1.5">
                         <Gauge className="h-3.5 w-3.5 text-brand" />
                         <span>{vehicle.current_odometer.toLocaleString("en-IN")} km</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <Hash className="h-3.5 w-3.5 text-brand" />
-                        <span>{vehicle.registration_number}</span>
                     </div>
                 </div>
             </div>

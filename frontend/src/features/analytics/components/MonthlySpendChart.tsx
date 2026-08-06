@@ -36,7 +36,7 @@ export default function MonthlySpendChart({ data }: Props) {
     <ResponsiveContainer width="100%" height={220}>
       <BarChart
         data={data}
-        margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+        margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
       >
         <CartesianGrid
           strokeDasharray="3 3"

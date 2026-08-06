@@ -18,8 +18,8 @@ export default function AnalyticsTab({ vehicleId }: Props) {
   if (isLoading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {[1, 2, 3, 4, 5].map((i) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-24 rounded-xl bg-white/5" />
           ))}
         </div>
@@ -53,7 +53,6 @@ export default function AnalyticsTab({ vehicleId }: Props) {
       <AnalyticsSummaryCards
         totalSpend={data.total_spend}
         totalLiters={data.total_liters}
-        avgMileage={data.avg_mileage}
         bestMileage={data.best_mileage}
         worstMileage={data.worst_mileage}
         totalFillUps={data.total_fill_ups}

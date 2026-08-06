@@ -35,7 +35,7 @@ async def test_register_duplicate_email(client: AsyncClient):
 
 
 async def test_login_success(client: AsyncClient, registered_user: dict):
-    """Test the login user endpoint"""
+    """Login sets httpOnly cookies; JSON body does not expose tokens."""
     response = await client.post(
         "/auth/login",
         json={
@@ -45,13 +45,15 @@ async def test_login_success(client: AsyncClient, registered_user: dict):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
     assert data["token_type"] == "bearer"
+    assert "access_token" not in data
+    assert "refresh_token" not in data
+    assert "access_token" in response.cookies
+    assert "refresh_token" in response.cookies
 
 
-async def test_refresh_token_rotation(client: AsyncClient, registered_user: dict):
-    """Refresh returns new tokens and invalidates the old refresh token."""
+async def test_cookie_auth_protects_routes(client: AsyncClient, registered_user: dict):
+    """After login, access cookie alone authorizes API calls (no Authorization header)."""
     login_response = await client.post(
         "/auth/login",
         json={
@@ -59,17 +61,66 @@ async def test_refresh_token_rotation(client: AsyncClient, registered_user: dict
             "password": registered_user["password"],
         },
     )
-    old_refresh = login_response.json()["refresh_token"]
+    assert login_response.status_code == 200
+
+    response = await client.get("/vehicles/")
+    assert response.status_code == 200
+
+
+async def test_refresh_via_cookie(client: AsyncClient, registered_user: dict):
+    """Refresh works with the httpOnly refresh cookie and no body token."""
+    await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+
+    refresh_response = await client.post("/auth/refresh", json={})
+    assert refresh_response.status_code == 200
+    data = refresh_response.json()
+    assert data["token_type"] == "bearer"
+    assert "access_token" not in data
+    assert "access_token" in refresh_response.cookies
+    assert "refresh_token" in refresh_response.cookies
+
+
+async def test_logout_clears_cookies(client: AsyncClient, registered_user: dict):
+    """Logout revokes the session and clears auth cookies."""
+    await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+
+    logout_response = await client.post("/auth/logout", json={})
+    assert logout_response.status_code == 204
+
+    refresh_response = await client.post("/auth/refresh", json={})
+    assert refresh_response.status_code == 401
+
+
+async def test_refresh_token_rotation(client: AsyncClient, registered_user: dict):
+    """Refresh rotates cookies and invalidates the old refresh token."""
+    login_response = await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+    old_refresh = login_response.cookies["refresh_token"]
 
     refresh_response = await client.post(
         "/auth/refresh",
         json={"refresh_token": old_refresh},
     )
     assert refresh_response.status_code == 200
-    data = refresh_response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["refresh_token"] != old_refresh
+    new_refresh = refresh_response.cookies["refresh_token"]
+    assert new_refresh != old_refresh
 
     reuse_response = await client.post(
         "/auth/refresh",
@@ -87,7 +138,7 @@ async def test_logout_revokes_refresh_token(client: AsyncClient, registered_user
             "password": registered_user["password"],
         },
     )
-    refresh_token = login_response.json()["refresh_token"]
+    refresh_token = login_response.cookies["refresh_token"]
 
     logout_response = await client.post(
         "/auth/logout",
@@ -100,6 +151,23 @@ async def test_logout_revokes_refresh_token(client: AsyncClient, registered_user
         json={"refresh_token": refresh_token},
     )
     assert refresh_response.status_code == 401
+
+
+async def test_oauth_token_returns_bearer_body(client: AsyncClient, registered_user: dict):
+    """Swagger `/auth/token` still returns tokens in the JSON body."""
+    response = await client.post(
+        "/auth/token",
+        data={
+            "username": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert "refresh_token" in data
+    assert data["token_type"] == "bearer"
+    assert "access_token" in response.cookies
 
 
 async def test_login_wrong_password(client: AsyncClient, registered_user: dict):
