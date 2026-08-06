@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from redis.asyncio import Redis
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -60,6 +60,47 @@ def _round_mileage(value: float | None) -> float | None:
     if value is None:
         return None
     return round(float(value), 1)
+
+
+async def _last_two_filled_month_mileages(
+    db: AsyncSession,
+    vehicle_id: uuid.UUID,
+) -> list[tuple[str, float]]:
+    """
+    Return up to two (month_label, avg_mileage) pairs for the most recent
+    calendar months that have fuel logs with mileage.
+    Example: Aug empty, Jul+Jun filled → [("Jul", 47.1), ("Jun", 45.0)]
+    """
+    month_start = func.date_trunc("month", FuelLog.date)
+    result = await db.execute(
+        select(
+            month_start.label("month_start"),
+            func.avg(FuelLog.mileage).label("avg_mileage"),
+        )
+        .where(
+            FuelLog.vehicle_id == vehicle_id,
+            FuelLog.mileage.isnot(None),
+        )
+        .group_by(month_start)
+        .order_by(month_start.desc())
+        .limit(2)
+    )
+    rows = result.all()
+    filled: list[tuple[str, float]] = []
+    for row in rows:
+        month_value = row.month_start
+        if month_value is None or row.avg_mileage is None:
+            continue
+        # date_trunc may return datetime
+        if hasattr(month_value, "date"):
+            month_date = month_value.date()
+        else:
+            month_date = month_value
+        label = month_date.strftime("%b")
+        mileage = _round_mileage(row.avg_mileage)
+        if mileage is not None:
+            filled.append((label, mileage))
+    return filled
 
 
 async def get_live_odometer(
@@ -319,12 +360,19 @@ async def get_vehicle_summary(
         select(ServiceLog)
         .where(
             ServiceLog.vehicle_id == vehicle_id,
-            ServiceLog.next_service_date.isnot(None),
+            or_(
+                ServiceLog.next_service_date.isnot(None),
+                ServiceLog.next_service_odometer.isnot(None),
+            ),
         )
         .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
         .limit(1)
     )
     next_service = next_service_result.scalar_one_or_none()
+
+    filled_months = await _last_two_filled_month_mileages(db, vehicle_id)
+    recent_filled = filled_months[0] if len(filled_months) >= 1 else None
+    prior_filled = filled_months[1] if len(filled_months) >= 2 else None
 
     payload = VehicleSummaryResponse(
         vehicle_id=vehicle_id,
@@ -334,6 +382,10 @@ async def get_vehicle_summary(
         last_month_spend=await month_spend(last_start, last_end),
         this_month_mileage=await month_mileage(this_start, this_end),
         last_month_mileage=await month_mileage(last_start, last_end),
+        recent_filled_month_mileage=recent_filled[1] if recent_filled else None,
+        prior_filled_month_mileage=prior_filled[1] if prior_filled else None,
+        recent_filled_month_label=recent_filled[0] if recent_filled else None,
+        prior_filled_month_label=prior_filled[0] if prior_filled else None,
         recent_fuel_logs=recent_fuel_logs,
         next_service=next_service,
     )

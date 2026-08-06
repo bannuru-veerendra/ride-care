@@ -30,8 +30,68 @@ async def test_vehicle_summary_empty(
     assert data["last_month_spend"] == 0
     assert data["this_month_mileage"] is None
     assert data["last_month_mileage"] is None
+    assert data["recent_filled_month_mileage"] is None
+    assert data["prior_filled_month_mileage"] is None
+    assert data["recent_filled_month_label"] is None
+    assert data["prior_filled_month_label"] is None
     assert data["recent_fuel_logs"] == []
     assert data["next_service"] is None
+
+
+async def test_vehicle_summary_mileage_trend_skips_empty_current_month(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Mileage trend uses the last two months that have fill-ups, not calendar months."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+    last_month = _shift_month(today, -1)
+    two_months_ago = _shift_month(today, -2)
+
+    last_month_day = min(12, monthrange(last_month.year, last_month.month)[1])
+    prior_day = min(12, monthrange(two_months_ago.year, two_months_ago.month)[1])
+
+    # First fill establishes mileage baseline chain
+    first = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date(two_months_ago.year, two_months_ago.month, prior_day)),
+            "odometer": 10500,
+            "total_cost": 400,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert first.status_code == 201
+
+    second = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date(last_month.year, last_month.month, last_month_day)),
+            "odometer": 11000,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert second.status_code == 201
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Current calendar month has no logs
+    assert data["this_month_spend"] == 0
+    assert data["this_month_mileage"] is None
+    # Trend still compares the two filled months
+    assert data["recent_filled_month_mileage"] is not None
+    assert data["prior_filled_month_mileage"] is not None
+    assert data["recent_filled_month_label"] == last_month.strftime("%b")
+    assert data["prior_filled_month_label"] == two_months_ago.strftime("%b")
 
 
 async def test_vehicle_summary_aggregates_across_all_logs(
@@ -115,6 +175,10 @@ async def test_vehicle_summary_aggregates_across_all_logs(
     assert data["average_mileage"] is not None
     assert data["this_month_mileage"] is not None
     assert data["last_month_mileage"] is not None
+    assert data["recent_filled_month_mileage"] is not None
+    assert data["prior_filled_month_mileage"] is not None
+    assert data["recent_filled_month_label"] is not None
+    assert data["prior_filled_month_label"] is not None
     assert len(data["recent_fuel_logs"]) == 3
     assert data["recent_fuel_logs"][0]["odometer"] == 11600
     assert data["next_service"] is not None

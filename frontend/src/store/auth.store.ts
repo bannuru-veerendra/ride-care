@@ -1,40 +1,41 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 /**
- * Global authentication state.
- * Persisted to localStorage so the user stays logged in
- * across page refreshes.
+ * Auth UI state. Real credentials live in httpOnly cookies set by the API.
+ * `ridecare_session` is only a client hint for routing (cleared on 401/logout).
  */
+const SESSION_KEY = "ridecare_session";
+
 interface AuthState {
-    token: string | null;
     isAuthenticated: boolean;
-    setTokens: (accessToken: string, refreshToken: string) => void;
-    clearToken: () => void;
+    setAuthenticated: () => void;
+    clearSession: () => void;
 }
 
-const useAuthStore = create<AuthState>()(
-    persist(
-        (set) => ({
-            token: null,
-            isAuthenticated: false,
+function hasSessionHint(): boolean {
+    return localStorage.getItem(SESSION_KEY) === "1";
+}
 
-            setTokens: (accessToken: string, refreshToken: string) => {
-                localStorage.setItem("access_token", accessToken);
-                localStorage.setItem("refresh_token", refreshToken);
-                set({ token: accessToken, isAuthenticated: true });
-            },
+function clearLegacyTokenKeys() {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("ridecare-auth");
+}
 
-            clearToken: () => {
-                localStorage.removeItem("access_token");
-                localStorage.removeItem("refresh_token");
-                set({ token: null, isAuthenticated: false });
-            },
-        }),
-        {
-            name: "ridecare-auth", // localStorage key
-        }
-    )
-);
+const useAuthStore = create<AuthState>((set) => ({
+    isAuthenticated: hasSessionHint(),
+
+    setAuthenticated: () => {
+        clearLegacyTokenKeys();
+        localStorage.setItem(SESSION_KEY, "1");
+        set({ isAuthenticated: true });
+    },
+
+    clearSession: () => {
+        clearLegacyTokenKeys();
+        localStorage.removeItem(SESSION_KEY);
+        set({ isAuthenticated: false });
+    },
+}));
 
 export default useAuthStore;

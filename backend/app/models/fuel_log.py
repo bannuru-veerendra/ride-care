@@ -19,7 +19,7 @@ class FuelLog(Base, TimestampMixin):
     liters = Column(Float, nullable=False)
     price_per_liter = Column(Float, nullable=False)
     total_cost = Column(Float, nullable=False)
-    mileage = Column(Integer, nullable=True)
+    mileage = Column(Float, nullable=True)
     notes = Column(String, nullable=True)
 
     vehicle = relationship("Vehicle", back_populates="fuel_logs")

@@ -27,6 +27,10 @@ export interface VehicleSummary {
     last_month_spend: number;
     this_month_mileage: number | null;
     last_month_mileage: number | null;
+    recent_filled_month_mileage: number | null;
+    prior_filled_month_mileage: number | null;
+    recent_filled_month_label: string | null;
+    prior_filled_month_label: string | null;
     recent_fuel_logs: FuelLog[];
     next_service: ServiceLog | null;
 }

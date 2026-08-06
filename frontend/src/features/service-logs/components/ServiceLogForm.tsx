@@ -124,17 +124,23 @@ export default function ServiceLogForm({
                     <Wrench className="h-3.5 w-3.5" />
                     Services selected
                 </p>
-                <p className="font-heading mt-1 text-4xl font-extrabold tracking-wide text-brand">
-                    {selectedServices.length || "—"}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {selectedServices.length > 0
-                        ? selectedServices.slice(0, 3).join(", ") +
-                          (selectedServices.length > 3
-                              ? ` +${selectedServices.length - 3} more`
-                              : "")
-                        : "Pick services below"}
-                </p>
+                {selectedServices.length > 0 ? (
+                    <>
+                        <p className="font-heading mt-1 text-4xl font-extrabold tracking-wide text-brand">
+                            {selectedServices.length}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {selectedServices.slice(0, 3).join(", ") +
+                                (selectedServices.length > 3
+                                    ? ` +${selectedServices.length - 3} more`
+                                    : "")}
+                        </p>
+                    </>
+                ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Tap the chips below to add what was done
+                    </p>
+                )}
             </div>
 
             <div className="space-y-4">

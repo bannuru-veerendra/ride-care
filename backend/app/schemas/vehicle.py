@@ -76,6 +76,11 @@ class VehicleSummaryResponse(BaseModel):
     last_month_spend: float
     this_month_mileage: float | None
     last_month_mileage: float | None
+    # Last two calendar months that have fill-ups with mileage (may skip empty months)
+    recent_filled_month_mileage: float | None = None
+    prior_filled_month_mileage: float | None = None
+    recent_filled_month_label: str | None = None
+    prior_filled_month_label: str | None = None
     recent_fuel_logs: list[FuelLogResponse]
     next_service: ServiceLogResponse | None = None
 

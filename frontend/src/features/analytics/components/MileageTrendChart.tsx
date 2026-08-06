@@ -32,7 +32,7 @@ export default function MileageTrendChart({ data, avgMileage }: Props) {
     <ResponsiveContainer width="100%" height={220}>
       <LineChart
         data={data}
-        margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+        margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
       >
         <CartesianGrid
           strokeDasharray="3 3"
@@ -49,8 +49,8 @@ export default function MileageTrendChart({ data, avgMileage }: Props) {
           tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
           axisLine={false}
           tickLine={false}
-          unit=" km/l"
-          width={60}
+          width={40}
+          tickFormatter={(value: number) => `${value}`}
         />
         <Tooltip
           contentStyle={{

@@ -40,7 +40,7 @@ export const useUpdateProfile = () => {
  */
 export const useUpdatePassword = () => {
     const navigate = useNavigate();
-    const clearToken = useAuthStore((state) => state.clearToken);
+    const clearSession = useAuthStore((state) => state.clearSession);
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -48,7 +48,7 @@ export const useUpdatePassword = () => {
             usersApi.updatePassword(payload),
         onSuccess: () => {
             queryClient.clear();
-            clearToken();
+            clearSession();
             navigate("/login");
         },
         onError: (error) => {

@@ -50,13 +50,6 @@ export const serviceLogsApi = {
         return data;
     },
 
-    getNext: async (vehicleId: string): Promise<ServiceLog | null> => {
-        const { data } = await apiClient.get("/service_logs/next", {
-            params: { vehicle_id: vehicleId },
-        });
-        return data;
-    },
-
     getById: async (vehicleId: string, logId: string): Promise<ServiceLog> => {
         const { data } = await apiClient.get(`/service_logs/${logId}`, {
             params: { vehicle_id: vehicleId },

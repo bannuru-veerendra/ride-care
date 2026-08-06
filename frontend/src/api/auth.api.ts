@@ -3,6 +3,7 @@ import apiClient from "@/lib/axios";
 /**
  * Auth API calls.
  * All endpoints map to the backend /auth routes.
+ * Tokens are set as httpOnly cookies by the server — not returned in JSON for SPA login/refresh.
  */
 export interface RegisterPayload {
     email: string;
@@ -15,9 +16,7 @@ export interface LoginPayload {
     password: string;
 }
 
-export interface AuthResponse {
-    access_token: string;
-    refresh_token: string;
+export interface SessionResponse {
     token_type: string;
 }
 
@@ -36,24 +35,20 @@ export const authApi = {
         return response.data;
     },
 
-    login: async (payload: LoginPayload): Promise<AuthResponse> => {
-        const response = await apiClient.post<AuthResponse>(
+    login: async (payload: LoginPayload): Promise<SessionResponse> => {
+        const response = await apiClient.post<SessionResponse>(
             "/auth/login",
             payload
         );
         return response.data;
     },
 
-    refresh: async (refreshToken: string): Promise<AuthResponse> => {
-        const response = await apiClient.post<AuthResponse>("/auth/refresh", {
-            refresh_token: refreshToken,
-        });
+    refresh: async (): Promise<SessionResponse> => {
+        const response = await apiClient.post<SessionResponse>("/auth/refresh", {});
         return response.data;
     },
 
-    logout: async (refreshToken: string): Promise<void> => {
-        await apiClient.post("/auth/logout", {
-            refresh_token: refreshToken,
-        });
+    logout: async (): Promise<void> => {
+        await apiClient.post("/auth/logout", {});
     },
 };

@@ -88,8 +88,10 @@ export default function SettingsPage() {
                     <Skeleton className="mt-3 h-12 w-48" />
                     <Skeleton className="mt-3 h-4 w-64" />
                 </div>
-                <Skeleton className="h-64 w-full max-w-xl" />
-                <Skeleton className="h-80 w-full max-w-xl" />
+                <div className="mx-auto w-full max-w-xl space-y-8">
+                    <Skeleton className="h-64 w-full" />
+                    <Skeleton className="h-80 w-full" />
+                </div>
             </div>
         );
     }
@@ -121,146 +123,153 @@ export default function SettingsPage() {
                 </p>
             </div>
 
-            <div className="surface-panel max-w-xl px-6 py-6 sm:px-8">
-                <h2 className="font-heading text-xl font-bold uppercase tracking-wide">
-                    Profile
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Name and email used across RideCare
-                </p>
+            <div className="mx-auto w-full max-w-xl space-y-8">
+                <div className="surface-panel px-6 py-6 sm:px-8">
+                    <h2 className="font-heading text-xl font-bold uppercase tracking-wide">
+                        Profile
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Name and email used across RideCare
+                    </p>
 
-                <form
-                    onSubmit={profileForm.handleSubmit(onProfileSubmit)}
-                    className="mt-6 space-y-5"
-                >
-                    <div className="space-y-1.5">
-                        <Label htmlFor="full_name">Full Name</Label>
-                        <Input
-                            id="full_name"
-                            type="text"
-                            autoComplete="name"
-                            className="border-white/15 bg-white/5"
-                            {...profileForm.register("full_name")}
-                        />
-                        {profileForm.formState.errors.full_name && (
-                            <p className="text-sm text-destructive">
-                                {profileForm.formState.errors.full_name.message}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            autoComplete="email"
-                            autoCapitalize="none"
-                            autoCorrect="off"
-                            spellCheck={false}
-                            className="border-white/15 bg-white/5 lowercase"
-                            {...profileForm.register("email")}
-                        />
-                        {profileForm.formState.errors.email && (
-                            <p className="text-sm text-destructive">
-                                {profileForm.formState.errors.email.message}
-                            </p>
-                        )}
-                    </div>
-
-                    <Button
-                        type="submit"
-                        className="bg-brand text-brand-foreground hover:bg-brand/90"
-                        disabled={updateProfile.isPending}
+                    <form
+                        onSubmit={profileForm.handleSubmit(onProfileSubmit)}
+                        className="mt-6 space-y-5"
                     >
-                        {updateProfile.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            "Save profile"
-                        )}
-                    </Button>
-                </form>
-            </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="full_name">Full Name</Label>
+                            <Input
+                                id="full_name"
+                                type="text"
+                                autoComplete="name"
+                                className="border-white/15 bg-white/5"
+                                {...profileForm.register("full_name")}
+                            />
+                            {profileForm.formState.errors.full_name && (
+                                <p className="text-sm text-destructive">
+                                    {profileForm.formState.errors.full_name.message}
+                                </p>
+                            )}
+                        </div>
 
-            <div className="surface-panel max-w-xl px-6 py-6 sm:px-8">
-                <h2 className="font-heading text-xl font-bold uppercase tracking-wide">
-                    Password
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Changing your password signs you out on all devices
-                </p>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                autoComplete="email"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                className="border-white/15 bg-white/5 lowercase"
+                                {...profileForm.register("email")}
+                            />
+                            {profileForm.formState.errors.email && (
+                                <p className="text-sm text-destructive">
+                                    {profileForm.formState.errors.email.message}
+                                </p>
+                            )}
+                        </div>
 
-                <form
-                    onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
-                    className="mt-6 space-y-5"
-                >
-                    <div className="space-y-1.5">
-                        <Label htmlFor="current_password">Current password</Label>
-                        <PasswordInput
-                            id="current_password"
-                            autoComplete="current-password"
-                            className="border-white/15 bg-white/5"
-                            {...passwordForm.register("current_password")}
-                        />
-                        {passwordForm.formState.errors.current_password && (
-                            <p className="text-sm text-destructive">
-                                {
-                                    passwordForm.formState.errors.current_password
-                                        .message
-                                }
-                            </p>
-                        )}
-                    </div>
+                        <Button
+                            type="submit"
+                            className="bg-brand text-brand-foreground hover:bg-brand/90"
+                            disabled={updateProfile.isPending}
+                        >
+                            {updateProfile.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                "Save profile"
+                            )}
+                        </Button>
+                    </form>
+                </div>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="new_password">New password</Label>
-                        <PasswordInput
-                            id="new_password"
-                            autoComplete="new-password"
-                            className="border-white/15 bg-white/5"
-                            {...passwordForm.register("new_password")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            At least 8 characters, with one uppercase letter, one
-                            number, and one special character.
-                        </p>
-                        {passwordForm.formState.errors.new_password && (
-                            <p className="text-sm text-destructive">
-                                {passwordForm.formState.errors.new_password.message}
-                            </p>
-                        )}
-                    </div>
+                <div className="surface-panel px-6 py-6 sm:px-8">
+                    <h2 className="font-heading text-xl font-bold uppercase tracking-wide">
+                        Password
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Changing your password signs you out on all devices
+                    </p>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="confirm_password">Confirm new password</Label>
-                        <PasswordInput
-                            id="confirm_password"
-                            autoComplete="new-password"
-                            className="border-white/15 bg-white/5"
-                            {...passwordForm.register("confirm_password")}
-                        />
-                        {passwordForm.formState.errors.confirm_password && (
-                            <p className="text-sm text-destructive">
-                                {
-                                    passwordForm.formState.errors.confirm_password
-                                        .message
-                                }
-                            </p>
-                        )}
-                    </div>
-
-                    <Button
-                        type="submit"
-                        className="bg-brand text-brand-foreground hover:bg-brand/90"
-                        disabled={updatePassword.isPending}
+                    <form
+                        onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+                        className="mt-6 space-y-5"
                     >
-                        {updatePassword.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            "Change password"
-                        )}
-                    </Button>
-                </form>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="current_password">Current password</Label>
+                            <PasswordInput
+                                id="current_password"
+                                autoComplete="current-password"
+                                className="border-white/15 bg-white/5"
+                                {...passwordForm.register("current_password")}
+                            />
+                            {passwordForm.formState.errors.current_password && (
+                                <p className="text-sm text-destructive">
+                                    {
+                                        passwordForm.formState.errors.current_password
+                                            .message
+                                    }
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="new_password">New password</Label>
+                            <PasswordInput
+                                id="new_password"
+                                autoComplete="new-password"
+                                className="border-white/15 bg-white/5"
+                                {...passwordForm.register("new_password")}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                At least 8 characters, with one uppercase letter, one
+                                number, and one special character.
+                            </p>
+                            {passwordForm.formState.errors.new_password && (
+                                <p className="text-sm text-destructive">
+                                    {
+                                        passwordForm.formState.errors.new_password
+                                            .message
+                                    }
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="confirm_password">
+                                Confirm new password
+                            </Label>
+                            <PasswordInput
+                                id="confirm_password"
+                                autoComplete="new-password"
+                                className="border-white/15 bg-white/5"
+                                {...passwordForm.register("confirm_password")}
+                            />
+                            {passwordForm.formState.errors.confirm_password && (
+                                <p className="text-sm text-destructive">
+                                    {
+                                        passwordForm.formState.errors.confirm_password
+                                            .message
+                                    }
+                                </p>
+                            )}
+                        </div>
+
+                        <Button
+                            type="submit"
+                            className="bg-brand text-brand-foreground hover:bg-brand/90"
+                            disabled={updatePassword.isPending}
+                        >
+                            {updatePassword.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                "Change password"
+                            )}
+                        </Button>
+                    </form>
+                </div>
             </div>
         </div>
     );

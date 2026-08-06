@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -141,7 +141,10 @@ async def get_next_service_log(
         select(ServiceLog)
         .where(
             ServiceLog.vehicle_id == vehicle_id,
-            ServiceLog.next_service_date.isnot(None),
+            or_(
+                ServiceLog.next_service_date.isnot(None),
+                ServiceLog.next_service_odometer.isnot(None),
+            ),
         )
         .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
         .limit(1)

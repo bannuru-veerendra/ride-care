@@ -79,23 +79,40 @@ export default function DashboardPage() {
     const averageMileage = summary?.average_mileage ?? null;
     const thisMonthSpend = summary?.this_month_spend ?? 0;
     const lastMonthSpend = summary?.last_month_spend ?? 0;
-    const thisMonthMileage = summary?.this_month_mileage ?? null;
-    const lastMonthMileage = summary?.last_month_mileage ?? null;
+    const recentFilledMileage = summary?.recent_filled_month_mileage ?? null;
+    const priorFilledMileage = summary?.prior_filled_month_mileage ?? null;
+    const recentFilledLabel = summary?.recent_filled_month_label ?? null;
+    const priorFilledLabel = summary?.prior_filled_month_label ?? null;
     const nextService = summary?.next_service ?? null;
     const mileageDelta =
-        thisMonthMileage !== null && lastMonthMileage !== null
-            ? Math.round((thisMonthMileage - lastMonthMileage) * 10) / 10
+        recentFilledMileage !== null && priorFilledMileage !== null
+            ? Math.round((recentFilledMileage - priorFilledMileage) * 10) / 10
             : null;
+
+    const hasNextService =
+        !!nextService?.next_service_date ||
+        nextService?.next_service_odometer != null;
 
     const daysUntilNextService = nextService?.next_service_date
         ? differenceInDays(new Date(nextService.next_service_date), new Date())
         : null;
+    const kmUntilNextService =
+        nextService?.next_service_odometer != null && selectedVehicle
+            ? nextService.next_service_odometer -
+              selectedVehicle.current_odometer
+            : null;
+
     const serviceOverdue =
-        daysUntilNextService !== null && daysUntilNextService < 0;
+        (daysUntilNextService !== null && daysUntilNextService < 0) ||
+        (kmUntilNextService !== null && kmUntilNextService < 0);
     const serviceSoon =
-        daysUntilNextService !== null &&
-        daysUntilNextService >= 0 &&
-        daysUntilNextService <= 14;
+        !serviceOverdue &&
+        ((daysUntilNextService !== null &&
+            daysUntilNextService >= 0 &&
+            daysUntilNextService <= 14) ||
+            (kmUntilNextService !== null &&
+                kmUntilNextService >= 0 &&
+                kmUntilNextService <= 500));
 
     const fuelHref = selectedVehicle
         ? `/vehicles/${selectedVehicle.id}?action=fuel`
@@ -111,8 +128,10 @@ export default function DashboardPage() {
     if (selectedVehicle) {
         if (serviceOverdue) {
             statusLine = "Service overdue — book it soon.";
-        } else if (serviceSoon) {
+        } else if (serviceSoon && daysUntilNextService !== null && daysUntilNextService <= 14) {
             statusLine = `Service in ${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"}.`;
+        } else if (serviceSoon && kmUntilNextService !== null) {
+            statusLine = `Service in ${kmUntilNextService.toLocaleString("en-IN")} km.`;
         } else if (!hasFuelLogs) {
             statusLine = "Add a fill-up to unlock mileage insights.";
         } else {
@@ -213,10 +232,10 @@ export default function DashboardPage() {
                 />
                 <div className="rider-hero-mask absolute inset-0" />
 
-                <div className="relative z-10 flex flex-col justify-end gap-4 px-6 py-8 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:py-10">
-                    <div className="animate-speed-in max-w-lg space-y-2">
+                <div className="relative z-10 flex flex-col justify-end gap-3 px-6 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:py-6">
+                    <div className="animate-speed-in max-w-lg space-y-1.5">
                         <RideCareLogo to="/dashboard" compact={false} inverted />
-                        <p className="text-base text-white/80 sm:text-lg">{statusLine}</p>
+                        <p className="text-sm text-white/80 sm:text-base">{statusLine}</p>
                     </div>
                     <Link
                         to="/vehicles"
@@ -267,7 +286,7 @@ export default function DashboardPage() {
                             <p className="truncate text-xs text-muted-foreground">
                                 {serviceOverdue
                                     ? "Overdue — add now"
-                                    : "Track next due date"}
+                                    : "Track next due date & km"}
                             </p>
                         </div>
                     </Link>
@@ -314,119 +333,134 @@ export default function DashboardPage() {
                     )}
 
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        <Link to={vehicleHref} className="block">
-                            <Card className="surface-panel h-full border-0 transition-colors hover:border-brand/40">
-                                <CardContent className="px-5 py-5">
-                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                                        <Gauge className="h-3.5 w-3.5 text-brand" />
-                                        Odometer
-                                    </div>
-                                    <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
-                                        {selectedVehicle.current_odometer.toLocaleString(
-                                            "en-IN"
-                                        )}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">km</p>
-                                </CardContent>
-                            </Card>
-                        </Link>
-
-                        <Link to={fuelHref} className="block">
-                            <Card className="surface-panel h-full border-0 transition-colors hover:border-brand/40">
-                                <CardContent className="px-5 py-5">
-                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                                        <Fuel className="h-3.5 w-3.5 text-brand" />
-                                        Avg mileage
-                                    </div>
-                                    {summaryLoading ? (
-                                        <Skeleton className="mt-2 h-9 w-20" />
-                                    ) : (
-                                        <>
-                                            <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
-                                                {averageMileage ?? "—"}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                km / litre
-                                            </p>
-                                        </>
+                        <Card className="surface-panel h-full border-0">
+                            <CardContent className="px-5 py-5">
+                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                    <Gauge className="h-3.5 w-3.5 text-brand" />
+                                    Odometer
+                                </div>
+                                <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
+                                    {selectedVehicle.current_odometer.toLocaleString(
+                                        "en-IN"
                                     )}
-                                </CardContent>
-                            </Card>
-                        </Link>
+                                </p>
+                                <p className="text-xs text-muted-foreground">km</p>
+                            </CardContent>
+                        </Card>
 
-                        <Link
-                            to={serviceHref}
-                            className="col-span-2 block sm:col-span-1"
-                        >
-                            <Card className="surface-panel h-full border-0 transition-colors hover:border-brand/40">
-                                <CardContent className="px-5 py-5">
-                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                                        <Wrench className="h-3.5 w-3.5 text-brand" />
-                                        Next service
-                                    </div>
-                                    {summaryLoading ? (
-                                        <Skeleton className="mt-2 h-9 w-32" />
-                                    ) : nextService?.next_service_date ? (
-                                        <>
-                                            <p
-                                                className={cn(
-                                                    "font-heading mt-2 font-extrabold tracking-wide",
+                        <Card className="surface-panel h-full border-0">
+                            <CardContent className="px-5 py-5">
+                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                    <Fuel className="h-3.5 w-3.5 text-brand" />
+                                    Avg mileage
+                                </div>
+                                {summaryLoading ? (
+                                    <Skeleton className="mt-2 h-9 w-20" />
+                                ) : (
+                                    <>
+                                        <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
+                                            {averageMileage ?? "—"}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            km / litre
+                                        </p>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="surface-panel col-span-2 h-full border-0 sm:col-span-1">
+                            <CardContent className="px-5 py-5">
+                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                    <Wrench className="h-3.5 w-3.5 text-brand" />
+                                    Next service
+                                </div>
+                                {summaryLoading ? (
+                                    <Skeleton className="mt-2 h-9 w-32" />
+                                ) : hasNextService ? (
+                                    <>
+                                        <p
+                                            className={cn(
+                                                "font-heading mt-2 font-extrabold tracking-wide",
+                                                daysUntilNextService !== null &&
+                                                    daysUntilNextService > 30
+                                                    ? "text-xl leading-snug"
+                                                    : "text-3xl"
+                                            )}
+                                        >
+                                            {serviceOverdue
+                                                ? "Overdue"
+                                                : daysUntilNextService !== null &&
+                                                    daysUntilNextService >= 0
+                                                  ? formatServiceCountdown(
+                                                        daysUntilNextService
+                                                    )
+                                                  : kmUntilNextService !== null
+                                                    ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                                    : "—"}
+                                        </p>
+                                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                            <p className="text-xs text-muted-foreground">
+                                                {[
+                                                    nextService?.next_service_date
+                                                        ? format(
+                                                              new Date(
+                                                                  nextService.next_service_date
+                                                              ),
+                                                              "dd MMM yyyy"
+                                                          )
+                                                        : null,
+                                                    // Show remaining km in the subtitle when the
+                                                    // headline is already the date countdown.
+                                                    kmUntilNextService != null &&
+                                                    !serviceOverdue &&
                                                     daysUntilNextService !== null &&
-                                                        daysUntilNextService > 30
-                                                        ? "text-xl leading-snug"
-                                                        : "text-3xl"
-                                                )}
-                                            >
-                                                {daysUntilNextService !== null &&
-                                                daysUntilNextService >= 0
-                                                    ? formatServiceCountdown(
-                                                          daysUntilNextService
-                                                      )
-                                                    : "Overdue"}
+                                                    daysUntilNextService >= 0
+                                                        ? kmUntilNextService > 0
+                                                            ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                                            : "due now"
+                                                        : serviceOverdue &&
+                                                            kmUntilNextService != null &&
+                                                            kmUntilNextService < 0
+                                                          ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past`
+                                                          : null,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(" · ")}
                                             </p>
-                                            <div className="mt-1 flex items-center gap-1.5">
-                                                <p className="text-xs text-muted-foreground">
-                                                    {format(
-                                                        new Date(
-                                                            nextService.next_service_date
-                                                        ),
-                                                        "dd MMM yyyy"
-                                                    )}
-                                                </p>
-                                                {(serviceSoon || serviceOverdue) && (
-                                                    <Badge
-                                                        variant={
-                                                            serviceOverdue
-                                                                ? "destructive"
-                                                                : "outline"
-                                                        }
-                                                        className={
-                                                            !serviceOverdue
-                                                                ? "border-0 bg-brand/15 text-xs text-brand"
-                                                                : "text-xs"
-                                                        }
-                                                    >
-                                                        <AlertTriangle className="mr-1 h-3 w-3" />
-                                                        {serviceOverdue
-                                                            ? "Overdue"
-                                                            : "Soon"}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
-                                                —
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Tap to schedule
-                                            </p>
-                                        </>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </Link>
+                                            {(serviceSoon || serviceOverdue) && (
+                                                <Badge
+                                                    variant={
+                                                        serviceOverdue
+                                                            ? "destructive"
+                                                            : "outline"
+                                                    }
+                                                    className={
+                                                        !serviceOverdue
+                                                            ? "border-0 bg-brand/15 text-xs text-brand"
+                                                            : "text-xs"
+                                                    }
+                                                >
+                                                    <AlertTriangle className="mr-1 h-3 w-3" />
+                                                    {serviceOverdue
+                                                        ? "Overdue"
+                                                        : "Soon"}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
+                                            —
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Not set
+                                        </p>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
                 </section>
             )}
@@ -443,7 +477,7 @@ export default function DashboardPage() {
                         </p>
                         {summaryLoading ? (
                             <Skeleton className="mt-2 h-9 w-24" />
-                        ) : (
+                        ) : thisMonthSpend > 0 ? (
                             <>
                                 <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
                                     ₹{thisMonthSpend.toLocaleString("en-IN")}
@@ -451,7 +485,18 @@ export default function DashboardPage() {
                                 <p className="text-xs text-muted-foreground">
                                     {lastMonthSpend > 0
                                         ? `vs ₹${lastMonthSpend.toLocaleString("en-IN")} last month`
-                                        : "Fuel spend"}
+                                        : "Fuel spend so far"}
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
+                                    ₹0
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {lastMonthSpend > 0
+                                        ? `No fill-ups yet · ₹${lastMonthSpend.toLocaleString("en-IN")} last month`
+                                        : "No fill-ups logged this month"}
                                 </p>
                             </>
                         )}
@@ -475,20 +520,20 @@ export default function DashboardPage() {
                                     {mileageDelta}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                    km/l vs last month
-                                    {thisMonthMileage !== null &&
-                                        ` · ${thisMonthMileage} now`}
+                                    km/l {recentFilledLabel} vs {priorFilledLabel}
+                                    {recentFilledMileage !== null &&
+                                        ` · ${recentFilledMileage} now`}
                                 </p>
                             </>
                         ) : (
                             <>
-                                <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
-                                    {thisMonthMileage ?? averageMileage ?? "—"}
+                                <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide text-muted-foreground">
+                                    —
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                    {thisMonthMileage !== null
-                                        ? "km/l this month"
-                                        : "Need more months of data"}
+                                    {recentFilledMileage !== null && recentFilledLabel
+                                        ? `${recentFilledMileage} km/l in ${recentFilledLabel} · need another month to compare`
+                                        : "Log fill-ups across 2 months to compare"}
                                 </p>
                             </>
                         )}
@@ -526,7 +571,7 @@ export default function DashboardPage() {
             {/* Empty service state */}
             {selectedVehicle &&
                 !summaryLoading &&
-                !nextService?.next_service_date && (
+                !hasNextService && (
                     <section
                         className="animate-fade-up surface-panel flex flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8"
                         style={{ animationDelay: "240ms" }}
@@ -536,11 +581,11 @@ export default function DashboardPage() {
                                 Service
                             </p>
                             <p className="font-heading mt-1 text-xl font-bold uppercase tracking-wide">
-                                No service date set
+                                No next service set
                             </p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Log a service so we can remind you before it&apos;s
-                                due.
+                                Log a service with a due date or odometer so we can
+                                remind you before it&apos;s due.
                             </p>
                         </div>
                         <Link

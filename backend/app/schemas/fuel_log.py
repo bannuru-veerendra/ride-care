@@ -1,9 +1,13 @@
 import uuid
 from datetime import date as dt_date
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.utils.dates import app_today
+
+
+def _round_money(value: float) -> float:
+    return round(float(value), 2)
 
 
 class FuelLogCreate(BaseModel):
@@ -13,6 +17,15 @@ class FuelLogCreate(BaseModel):
     total_cost: float
     price_per_liter: float
     notes: str | None = None
+
+    @field_validator("total_cost", "price_per_liter", mode="before")
+    @classmethod
+    def normalize_money(cls, value: object) -> object:
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float, str)):
+            return _round_money(float(value))
+        return value
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -34,6 +47,15 @@ class FuelLogUpdate(BaseModel):
     total_cost: float | None = None
     price_per_liter: float | None = None
     notes: str | None = None
+
+    @field_validator("total_cost", "price_per_liter", mode="before")
+    @classmethod
+    def normalize_money(cls, value: object) -> object:
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float, str)):
+            return _round_money(float(value))
+        return value
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -57,7 +79,7 @@ class FuelLogResponse(BaseModel):
     total_cost: float
     price_per_liter: float
     liters: float
-    mileage: int | None = None
+    mileage: float | None = None
     notes: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

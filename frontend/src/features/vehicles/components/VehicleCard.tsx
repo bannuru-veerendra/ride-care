@@ -1,4 +1,4 @@
-import { Bike, Gauge, Calendar, Trash2, Pencil, ChevronRight } from "lucide-react";
+import { Gauge, Calendar, Trash2, Pencil, ChevronRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,11 +83,7 @@ export default function VehicleCard({ vehicle, onDelete, onEdit }: VehicleCardPr
                         <Gauge className="h-3.5 w-3.5 shrink-0 text-brand" />
                         <span>{vehicle.current_odometer.toLocaleString("en-IN")} km</span>
                     </div>
-                    <div className="col-span-2 flex items-center justify-between gap-2 text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                            <Bike className="h-3.5 w-3.5 shrink-0 text-brand" />
-                            <span>{vehicle.brand}</span>
-                        </div>
+                    <div className="col-span-2 flex justify-end">
                         <span className="inline-flex items-center gap-0.5 text-xs font-bold uppercase tracking-wider text-brand opacity-0 transition-opacity group-hover:opacity-100">
                             Ride log
                             <ChevronRight className="h-3.5 w-3.5" />
