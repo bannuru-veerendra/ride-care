@@ -23,6 +23,8 @@ def _cookie_flags() -> dict:
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     flags = _cookie_flags()
+    # path="/" so cookies work both for direct API hosts and same-origin
+    # proxies (e.g. Vercel /api → Render). Refresh is only *used* on /auth/*.
     response.set_cookie(
         key=ACCESS_COOKIE,
         value=access_token,
@@ -34,7 +36,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
         key=REFRESH_COOKIE,
         value=refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/auth",
+        path="/",
         **flags,
     )
 
@@ -42,4 +44,6 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
 def clear_auth_cookies(response: Response) -> None:
     flags = _cookie_flags()
     response.delete_cookie(key=ACCESS_COOKIE, path="/", **flags)
+    response.delete_cookie(key=REFRESH_COOKIE, path="/", **flags)
+    # Also clear any legacy refresh cookies scoped to /auth
     response.delete_cookie(key=REFRESH_COOKIE, path="/auth", **flags)
