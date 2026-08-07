@@ -29,11 +29,14 @@ async def lifespan(_app: FastAPI):
 
 
 # Create FastAPI app
+# redirect_slashes=False: behind the Vercel /api proxy, slash redirects would
+# point at onrender.com and escape the same-origin cookie jar.
 app = FastAPI(
     title="RideCare",
     description="A personal vehicle companion app for riders",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 # Add CORS middleware

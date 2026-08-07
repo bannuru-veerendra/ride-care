@@ -20,6 +20,21 @@ const apiClient = axios.create({
     },
 });
 
+// Guard against SPA HTML leaking through a broken /api rewrite
+apiClient.interceptors.response.use((response) => {
+    const contentType = String(response.headers["content-type"] ?? "");
+    if (
+        contentType.includes("text/html") ||
+        (typeof response.data === "string" &&
+            response.data.trimStart().startsWith("<!doctype"))
+    ) {
+        return Promise.reject(
+            new Error("API returned HTML instead of JSON — check /api proxy")
+        );
+    }
+    return response;
+});
+
 type QueueItem = {
     resolve: () => void;
     reject: (error: unknown) => void;
