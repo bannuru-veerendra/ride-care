@@ -40,13 +40,15 @@ export default function MaintenanceGuidelinesPage() {
   >(undefined);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
-  const { data: guidelines, isLoading } = useMaintenanceGuidelines(
+  const { data: guidelinesData, isLoading } = useMaintenanceGuidelines(
     selectedSeverity,
     selectedComponent
   );
   const { data: components } = useGuidelineComponents();
 
-  const grouped = guidelines?.reduce(
+  const guidelines = Array.isArray(guidelinesData) ? guidelinesData : [];
+
+  const grouped = guidelines.reduce(
     (acc, guideline) => {
       const key = guideline.component;
       if (!acc[key]) acc[key] = [];
