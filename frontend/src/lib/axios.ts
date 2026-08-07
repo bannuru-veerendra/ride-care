@@ -3,9 +3,17 @@ import axios from "axios";
 /**
  * Axios instance for the RideCare API.
  * Auth uses httpOnly cookies (`withCredentials`); no tokens in localStorage.
+ *
+ * Production always uses same-origin `/api` (Vercel rewrite → Render) so
+ * cookies are first-party. A dashboard VITE_API_URL pointing at onrender.com
+ * would break cookie auth — ignore it in production builds.
  */
+const API_BASE = import.meta.env.DEV
+    ? import.meta.env.VITE_API_URL
+    : "/api";
+
 const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
+    baseURL: API_BASE,
     withCredentials: true,
     headers: {
         "Content-Type": "application/json",
@@ -82,7 +90,7 @@ apiClient.interceptors.response.use(
 
         try {
             await axios.post(
-                `${import.meta.env.VITE_API_URL}/auth/refresh`,
+                `${API_BASE}/auth/refresh`,
                 {},
                 {
                     withCredentials: true,
