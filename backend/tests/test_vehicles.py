@@ -243,6 +243,44 @@ async def test_update_baseline_rejects_value_at_or_above_logs(
     assert "baseline odometer" in response.json()["detail"].lower()
 
 
+async def test_update_baseline_recalculates_fuel_mileage(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Lowering baseline recalculates stored fuel mileage against the new baseline."""
+    vehicle_id = created_vehicle["id"]
+    create_resp = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 10500,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+    fuel_log_id = create_resp.json()["id"]
+    liters = create_resp.json()["liters"]
+    old_mileage = create_resp.json()["mileage"]
+    assert old_mileage == round((10500 - created_vehicle["baseline_odometer"]) / liters, 1)
+
+    patch_resp = await client.patch(
+        f"/vehicles/{vehicle_id}",
+        json={"baseline_odometer": 9000},
+        headers=auth_headers,
+    )
+    assert patch_resp.status_code == 200
+
+    fuel_resp = await client.get(
+        f"/fuel_logs/{fuel_log_id}",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert fuel_resp.status_code == 200
+    assert fuel_resp.json()["mileage"] == round((10500 - 9000) / liters, 1)
+
+
 async def test_delete_vehicle(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
     """Test the delete vehicle endpoint"""
     vehicle_id = created_vehicle["id"]

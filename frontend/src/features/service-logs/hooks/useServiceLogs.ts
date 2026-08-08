@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { serviceLogsApi } from "@/api/service-logs.api";
 import type {
     CreateServiceLogPayload,
@@ -12,6 +12,7 @@ import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
  */
 export const serviceLogKeys = {
     all: (vehicleId: string) => ["service-logs", vehicleId] as const,
+    infinite: (vehicleId: string) => ["service-logs", vehicleId, "infinite"] as const,
 };
 
 function invalidateServiceDerivedQueries(
@@ -24,11 +25,18 @@ function invalidateServiceDerivedQueries(
     queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
 }
 
-/** Fetch all service logs for a vehicle */
-export const useServiceLogs = (vehicleId: string) => {
-    return useQuery({
-        queryKey: serviceLogKeys.all(vehicleId),
-        queryFn: () => serviceLogsApi.getAll(vehicleId),
+/** Paginated service logs with Load more support */
+export const useInfiniteServiceLogs = (vehicleId: string) => {
+    return useInfiniteQuery({
+        queryKey: serviceLogKeys.infinite(vehicleId),
+        queryFn: ({ pageParam }) =>
+            serviceLogsApi.getAll(vehicleId, {
+                cursor: pageParam,
+                size: 20,
+            }),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (lastPage) =>
+            lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
         enabled: !!vehicleId,
     });
 };

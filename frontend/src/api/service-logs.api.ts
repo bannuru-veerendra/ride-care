@@ -43,9 +43,12 @@ export interface UpdateServiceLogPayload {
 }
 
 export const serviceLogsApi = {
-    getAll: async (vehicleId: string): Promise<CursorPage<ServiceLog>> => {
+    getAll: async (
+        vehicleId: string,
+        params?: { cursor?: string; size?: number }
+    ): Promise<CursorPage<ServiceLog>> => {
         const { data } = await apiClient.get("/service_logs/", {
-            params: { vehicle_id: vehicleId },
+            params: { vehicle_id: vehicleId, ...params },
         });
         return data;
     },

@@ -223,6 +223,8 @@ async def update_document(
     document_type: DocumentType | None = Form(None),
     expiry_date: dt_date | None = Form(None),
     notes: str | None = Form(None),
+    clear_expiry_date: bool = Form(False),
+    clear_notes: bool = Form(False),
     file: UploadFile | None = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -231,9 +233,20 @@ async def update_document(
     db_document = await get_owned_document(document_id, vehicle_id, current_user, db)
 
     has_file = file is not None and bool(file.filename)
-    has_expiry = expiry_date is not None
-    has_notes = notes is not None
+    has_expiry = expiry_date is not None or clear_expiry_date
+    has_notes = notes is not None or clear_notes
     has_type = document_type is not None and document_type != db_document.document_type
+
+    if clear_expiry_date and expiry_date is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either expiry_date or clear_expiry_date, not both",
+        )
+    if clear_notes and notes is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either notes or clear_notes, not both",
+        )
 
     if not has_file and not has_expiry and not has_notes and not has_type:
         raise HTTPException(
@@ -273,10 +286,14 @@ async def update_document(
         if has_type:
             db_document.document_type = target_document_type
 
-        if has_expiry:
+        if clear_expiry_date:
+            db_document.expiry_date = None
+        elif expiry_date is not None:
             db_document.expiry_date = expiry_date
 
-        if has_notes:
+        if clear_notes:
+            db_document.notes = None
+        elif notes is not None:
             db_document.notes = notes
 
         await db.commit()

@@ -224,6 +224,26 @@ async def test_update_document_notes(
     assert response.json()["notes"] == "Updated notes for the document"
 
 
+async def test_update_document_clear_expiry_and_notes(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict, created_document: dict
+):
+    """Clear flags remove expiry_date and notes."""
+    vehicle_id = created_vehicle["id"]
+    document_id = created_document["id"]
+    assert created_document["expiry_date"] is not None
+
+    response = await client.patch(
+        f"/documents/{document_id}",
+        params={"vehicle_id": vehicle_id},
+        data={"clear_expiry_date": "true", "clear_notes": "true"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["expiry_date"] is None
+    assert data["notes"] is None
+
+
 async def test_update_document_replace_file(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict, created_document: dict
 ):

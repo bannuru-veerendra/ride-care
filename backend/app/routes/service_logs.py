@@ -13,11 +13,14 @@ from app.schemas.pagination import CursorPage
 from app.schemas.service_log import ServiceLogCreate, ServiceLogResponse, ServiceLogUpdate
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import (
+    CACHE_MISS,
     NEXT_SERVICE_CACHE_TTL,
     cache_delete,
+    cache_delete_pattern,
     cache_get,
     cache_set,
     next_service_key,
+    vehicle_detail_key,
     vehicle_summary_key,
 )
 from app.utils.pagination import paginate
@@ -25,6 +28,21 @@ from app.utils.redis_client import get_redis
 
 
 router = APIRouter(prefix="/service_logs", tags=["service_logs"])
+
+
+async def _invalidate_service_derived_caches(
+    redis: Redis,
+    vehicle_id: uuid.UUID,
+    owner_id: uuid.UUID,
+) -> None:
+    """Drop caches that depend on service logs / live odometer."""
+    await cache_delete(
+        redis,
+        next_service_key(str(vehicle_id)),
+        vehicle_summary_key(str(vehicle_id)),
+        vehicle_detail_key(str(vehicle_id)),
+    )
+    await cache_delete_pattern(redis, f"cache:vehicles:user:{owner_id}*")
 
 
 async def verify_vehicle_ownership(
@@ -71,6 +89,17 @@ async def get_owned_service_log(
     return db_service_log
 
 
+def _validate_next_service_odometer(
+    odometer: int,
+    next_service_odometer: int | None,
+) -> None:
+    if next_service_odometer is not None and next_service_odometer <= odometer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Next service odometer must be greater than the current odometer",
+        )
+
+
 @router.post("/", response_model=ServiceLogResponse, status_code=status.HTTP_201_CREATED)
 async def create_service_log(
     service_log: ServiceLogCreate,
@@ -80,7 +109,7 @@ async def create_service_log(
     redis: Redis = Depends(get_redis),
 ) -> ServiceLogResponse:
     """Create a new service log"""
-    await verify_vehicle_ownership(vehicle_id, current_user, db)
+    db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
     db_service_log = ServiceLog(
         **service_log.model_dump(),
         vehicle_id=vehicle_id,
@@ -88,11 +117,7 @@ async def create_service_log(
     db.add(db_service_log)
     await db.commit()
     await db.refresh(db_service_log)
-    await cache_delete(
-        redis,
-        next_service_key(str(vehicle_id)),
-        vehicle_summary_key(str(vehicle_id)),
-    )
+    await _invalidate_service_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
     return db_service_log
 
 
@@ -107,16 +132,23 @@ async def get_service_logs(
     """Get paginated service logs for a vehicle"""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
 
-    return await paginate(
-        db,
-        ServiceLog,
-        filter_clause=ServiceLog.vehicle_id == vehicle_id,
-        order_by_column=ServiceLog.date,
-        cursor_column=ServiceLog.date,
-        cursor=cursor,
-        size=size,
-        descending=True,
-    )
+    try:
+        return await paginate(
+            db,
+            ServiceLog,
+            filter_clause=ServiceLog.vehicle_id == vehicle_id,
+            order_by_column=ServiceLog.date,
+            cursor_column=ServiceLog.date,
+            tiebreaker_column=ServiceLog.id,
+            cursor=cursor,
+            size=size,
+            descending=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/next", response_model=ServiceLogResponse | None)
@@ -134,7 +166,7 @@ async def get_next_service_log(
 
     cache_key = next_service_key(str(vehicle_id))
     cached = await cache_get(redis, cache_key)
-    if cached is not None:
+    if cached is not CACHE_MISS:
         return cached
 
     result = await db.execute(
@@ -186,6 +218,7 @@ async def update_service_log(
     redis: Redis = Depends(get_redis),
 ) -> ServiceLogResponse:
     """Update a service log by ID"""
+    db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
     db_service_log = await get_owned_service_log(
         service_log_id,
         vehicle_id,
@@ -194,15 +227,19 @@ async def update_service_log(
     )
 
     updates = service_log.model_dump(exclude_unset=True)
+    merged_odometer = updates.get("odometer", db_service_log.odometer)
+    merged_next = (
+        updates["next_service_odometer"]
+        if "next_service_odometer" in updates
+        else db_service_log.next_service_odometer
+    )
+    _validate_next_service_odometer(merged_odometer, merged_next)
+
     for key, value in updates.items():
         setattr(db_service_log, key, value)
     await db.commit()
     await db.refresh(db_service_log)
-    await cache_delete(
-        redis,
-        next_service_key(str(vehicle_id)),
-        vehicle_summary_key(str(vehicle_id)),
-    )
+    await _invalidate_service_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
     return db_service_log
 
 
@@ -215,6 +252,7 @@ async def delete_service_log(
     redis: Redis = Depends(get_redis),
 ) -> None:
     """Delete a service log by ID"""
+    db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
     db_service_log = await get_owned_service_log(
         service_log_id,
         vehicle_id,
@@ -223,9 +261,5 @@ async def delete_service_log(
     )
     await db.delete(db_service_log)
     await db.commit()
-    await cache_delete(
-        redis,
-        next_service_key(str(vehicle_id)),
-        vehicle_summary_key(str(vehicle_id)),
-    )
+    await _invalidate_service_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
     return None

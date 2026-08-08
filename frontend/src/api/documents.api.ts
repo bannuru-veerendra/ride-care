@@ -77,10 +77,14 @@ export const documentsApi = {
         if (payload.document_type) {
             formData.append("document_type", payload.document_type);
         }
-        if (payload.expiry_date !== undefined && payload.expiry_date !== null) {
+        if (payload.expiry_date === null) {
+            formData.append("clear_expiry_date", "true");
+        } else if (payload.expiry_date !== undefined) {
             formData.append("expiry_date", payload.expiry_date);
         }
-        if (payload.notes !== undefined && payload.notes !== null) {
+        if (payload.notes === null) {
+            formData.append("clear_notes", "true");
+        } else if (payload.notes !== undefined) {
             formData.append("notes", payload.notes);
         }
         if (payload.file) formData.append("file", payload.file);

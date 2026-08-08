@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserProfileUpdate, UserResponse
+from app.utils.auth_cookies import clear_auth_cookies
 from app.utils.auth_dependency import get_current_user
 from app.utils.redis_client import get_redis
 from app.utils.refresh_token_service import revoke_all_user_tokens
@@ -71,6 +72,7 @@ async def update_profile(
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
     password_update: PasswordUpdate,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
@@ -98,6 +100,7 @@ async def change_password(
         raise _REDIS_UNAVAILABLE
 
     await db.commit()
+    clear_auth_cookies(response)
 
     logger.info(
         "User %s changed password — all sessions revoked",

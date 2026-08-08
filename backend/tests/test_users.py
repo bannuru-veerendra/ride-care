@@ -227,6 +227,10 @@ async def test_change_password_revokes_sessions(
     )
     assert change_response.status_code == 204
 
+    cookie_headers = change_response.headers.get_list("set-cookie")
+    assert any("access_token" in header for header in cookie_headers)
+    assert any("refresh_token" in header for header in cookie_headers)
+
     refresh_response = await client.post(
         "/auth/refresh",
         json={"refresh_token": refresh_token},

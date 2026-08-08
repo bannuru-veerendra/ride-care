@@ -29,7 +29,7 @@ import type { FuelLogSchema } from "@/features/fuel-logs/schemas";
 import ServiceLogCard from "@/features/service-logs/components/ServiceLogCard";
 import ServiceLogForm from "@/features/service-logs/components/ServiceLogForm";
 import {
-    useServiceLogs,
+    useInfiniteServiceLogs,
     useCreateServiceLog,
     useUpdateServiceLog,
     useDeleteServiceLog,
@@ -102,14 +102,19 @@ export default function VehicleDetailPage() {
         isFetchingNextPage: fuelFetchingNextPage,
         fetchNextPage: fetchNextFuelPage,
     } = useInfiniteFuelLogs(id!);
-    const { data: serviceLogsPage, isLoading: serviceLogsLoading } =
-        useServiceLogs(id!);
+    const {
+        data: serviceLogsData,
+        isLoading: serviceLogsLoading,
+        hasNextPage: serviceHasNextPage,
+        isFetchingNextPage: serviceFetchingNextPage,
+        fetchNextPage: fetchNextServicePage,
+    } = useInfiniteServiceLogs(id!);
     const { data: documents, isLoading: documentsLoading } = useDocuments(id!);
 
     const fuelLogs = fuelLogsData?.pages.flatMap((page) => page.items) ?? [];
     const fuelTotal = fuelLogsData?.pages[0]?.total ?? 0;
-    const serviceLogs = serviceLogsPage?.items ?? [];
-    const serviceTotal = serviceLogsPage?.total ?? 0;
+    const serviceLogs = serviceLogsData?.pages.flatMap((page) => page.items) ?? [];
+    const serviceTotal = serviceLogsData?.pages[0]?.total ?? 0;
 
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
@@ -230,8 +235,10 @@ export default function VehicleDetailPage() {
                         values.document_type !== editingDocument.document_type
                             ? values.document_type
                             : undefined,
-                    expiry_date: values.expiry_date || undefined,
-                    notes: values.notes || undefined,
+                    // Empty string clears; omit only when unchanged would need
+                    // a sentinel — always send explicit value on edit.
+                    expiry_date: values.expiry_date || null,
+                    notes: values.notes || null,
                     file: values.file,
                 },
                 {
@@ -553,6 +560,18 @@ export default function VehicleDetailPage() {
                                     onEdit={handleServiceEdit}
                                 />
                             ))}
+                            {serviceHasNextPage && (
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    disabled={serviceFetchingNextPage}
+                                    onClick={() => void fetchNextServicePage()}
+                                >
+                                    {serviceFetchingNextPage
+                                        ? "Loading..."
+                                        : `Load more (${serviceLogs.length} of ${serviceTotal})`}
+                                </Button>
+                            )}
                         </div>
                     )}
                 </TabsContent>

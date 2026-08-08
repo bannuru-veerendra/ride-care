@@ -79,8 +79,11 @@ export interface VehicleAnalytics {
 }
 
 export const vehiclesApi = {
-    getAll: async (): Promise<CursorPage<Vehicle>> => {
-        const { data } = await apiClient.get("/vehicles/");
+    getAll: async (params?: {
+        cursor?: string;
+        size?: number;
+    }): Promise<CursorPage<Vehicle>> => {
+        const { data } = await apiClient.get("/vehicles/", { params });
         return data;
     },
     getById: async (id: string): Promise<Vehicle> => {

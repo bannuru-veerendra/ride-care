@@ -277,3 +277,84 @@ async def test_vehicle_summary_cache_invalidated_on_fuel_create(
     )
     assert refreshed.status_code == 200
     assert refreshed.json()["fuel_log_count"] == 1
+
+
+async def test_vehicle_detail_cache_invalidated_on_service_create(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Creating a service log invalidates vehicle detail live odometer cache."""
+    from app.utils.dates import app_today
+
+    vehicle_id = created_vehicle["id"]
+
+    warm = await client.get(f"/vehicles/{vehicle_id}", headers=auth_headers)
+    assert warm.json()["current_odometer"] == created_vehicle["current_odometer"]
+
+    create_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today()),
+            "odometer": 12500,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+
+    refreshed = await client.get(f"/vehicles/{vehicle_id}", headers=auth_headers)
+    assert refreshed.status_code == 200
+    assert refreshed.json()["current_odometer"] == 12500
+
+
+async def test_vehicle_list_cache_invalidated_on_fuel_create(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Creating a fuel log invalidates vehicle list live odometer cache."""
+    from app.utils.dates import app_today
+
+    vehicle_id = created_vehicle["id"]
+
+    warm = await client.get("/vehicles/", headers=auth_headers)
+    listed = next(v for v in warm.json()["items"] if v["id"] == vehicle_id)
+    assert listed["current_odometer"] == created_vehicle["current_odometer"]
+
+    create_resp = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today()),
+            "odometer": 10800,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+
+    refreshed = await client.get("/vehicles/", headers=auth_headers)
+    listed = next(v for v in refreshed.json()["items"] if v["id"] == vehicle_id)
+    assert listed["current_odometer"] == 10800
+
+
+async def test_next_service_null_is_cached(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Cached null for next service is treated as a hit, not a miss."""
+    vehicle_id = created_vehicle["id"]
+
+    response1 = await client.get(
+        "/service_logs/next",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    response2 = await client.get(
+        "/service_logs/next",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+
+    assert response1.status_code == 200
+    assert response1.json() is None
+    assert response2.json() is None
