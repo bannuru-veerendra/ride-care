@@ -88,6 +88,36 @@ async def test_create_service_log_invalid_next_odometer(
     assert response.status_code == 422
 
 
+async def test_update_service_log_rejects_next_odometer_below_existing(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Partial PATCH cannot set next_service_odometer below the existing odometer."""
+    vehicle_id = created_vehicle["id"]
+    create_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+            "next_service_odometer": 15000,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+    log_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/service_logs/{log_id}",
+        params={"vehicle_id": vehicle_id},
+        json={"next_service_odometer": 11000},
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "next service odometer" in response.json()["detail"].lower()
+
+
 async def test_create_service_log_negative_total_cost(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):

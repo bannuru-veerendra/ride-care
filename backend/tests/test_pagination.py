@@ -150,3 +150,53 @@ async def test_newest_first_ordering(
     returned_dates = [item["date"] for item in items]
 
     assert returned_dates == sorted(returned_dates, reverse=True)
+
+
+async def test_fuel_logs_same_date_cursor_pagination(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Same-date fuel logs are not dropped across page boundaries."""
+    vehicle_id = created_vehicle["id"]
+    same_day = str(date.today())
+
+    for i in range(3):
+        resp = await client.post(
+            "/fuel_logs/",
+            params={"vehicle_id": vehicle_id},
+            json={
+                "date": same_day,
+                "odometer": 10100 + (i * 100),
+                "total_cost": 500,
+                "price_per_liter": 100,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+
+    page1 = await client.get(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id, "size": 2},
+        headers=auth_headers,
+    )
+    data1 = page1.json()
+    assert len(data1["items"]) == 2
+    assert data1["has_more"] is True
+    assert data1["total"] == 3
+
+    page2 = await client.get(
+        "/fuel_logs/",
+        params={
+            "vehicle_id": vehicle_id,
+            "size": 2,
+            "cursor": data1["next_cursor"],
+        },
+        headers=auth_headers,
+    )
+    data2 = page2.json()
+    assert len(data2["items"]) == 1
+    assert data2["has_more"] is False
+
+    all_ids = {item["id"] for item in data1["items"]} | {
+        item["id"] for item in data2["items"]
+    }
+    assert len(all_ids) == 3

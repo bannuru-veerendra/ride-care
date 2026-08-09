@@ -12,11 +12,13 @@
   <a href="https://ride-care-jade.vercel.app"><strong>Live app</strong></a>
   ·
   <a href="https://ride-care.onrender.com/docs">API docs</a>
+  ·
+  <a href="ROADMAP.md">Roadmap</a>
 </p>
 
 <p align="center">
-  A backend-first vehicle companion — domain logic lives in FastAPI + PostgreSQL;<br/>
-  a dark React UI surfaces mileage, spend, paperwork, and charts you can trust.
+  A backend-first vehicle companion — FastAPI owns the mileage math,<br/>
+  PostgreSQL holds the truth, and a dark React UI makes every kilometer count.
 </p>
 
 <p align="center">
@@ -38,33 +40,36 @@ Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 
 | Capability | What the API owns |
 |------------|-------------------|
-| Mileage math | Liters + km/L from cost, price/L, and odometer deltas — recalculated on every edit/delete |
-| Live odometer | `max(baseline, fuel, service)` so the dashboard never lies |
+| Mileage math | Liters + km/L from cost, price/L, and odometer deltas — recalculated on every fill-up edit/delete **and** baseline change |
+| Live odometer | `max(baseline, fuel, service)` so garage and dashboard never lie |
 | Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs, not one UI page |
-| Charts | `GET /vehicles/{id}/analytics` returns SQL-ready trend + monthly spend series |
-| Scale | Cursor pagination (`items`, `next_cursor`, `has_more`, `total`) |
-| Speed | Redis cache with write-through invalidation on summary, analytics, list, detail, next-service |
-| Auth | httpOnly cookie JWT + refresh rotation in Redis, rate limiting, session revoke on password change |
-| Docs | Typed vault uploads with signed URLs — never public blobs |
+| Charts | `GET /vehicles/{id}/analytics` — trend series + monthly spend from SQL |
+| Scale | Stable cursor pagination (`date`/`created_at` + `id`) — same-day rows never skip |
+| Speed | Redis cache with write-through invalidation on fuel, service, and vehicle writes |
+| Auth | httpOnly cookie JWT + refresh rotation, rate limits, session revoke + cookie clear on password change |
+| Docs | Typed vault uploads with signed URLs — never public blobs; vehicle delete cleans storage |
 | Guidelines | File-backed maintenance catalog (in-memory), filterable without a DB table |
 
-The frontend stays thin: forms, sheets, charts, and dashboards over a clear REST API.
+The frontend stays thin: sheets, charts, and **Load more** lists over a clear REST API.
 
 ---
 
 ## Product tour
 
 ### Dashboard — status at a glance
-Multi-bike picker, odometer, average mileage, next-service countdown, monthly spend, and mileage trend — all from the summary API.
+
+Multi-bike picker, live odometer, average mileage, next-service countdown, monthly spend, and mileage trend — all from the summary API.
 
 ![RideCare dashboard](docs/screenshots/01-dashboard.png)
 
 ### Garage — every machine in one place
-Add, edit, and open bikes. Registration, year, and live kilometers on each card.
+
+Add, edit, and open bikes. Registration, year, and live kilometers on each card. **Load more** when the fleet grows.
 
 ![Garage](docs/screenshots/02-garage.png)
 
 ### Fuel — mileage as the headline
+
 Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side. **Load more** via cursor pages.
 
 ![Fuel logs](docs/screenshots/03-fuel-logs.png)
@@ -72,29 +77,34 @@ Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated
 ![Log fuel sheet](docs/screenshots/04-log-fuel.png)
 
 ### Service — history + next due
-Cost, odometer, tagged jobs, and next service date / km reminders.
+
+Cost, odometer, tagged jobs, and next service date / km reminders. Cursor-paginated list with **Load more**.
 
 ![Service logs](docs/screenshots/05-service-logs.png)
 
 ### Docs — digital vault
-Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, signed downloads.
+
+Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, signed downloads. Expiry and notes can be cleared on edit.
 
 ![Documents vault](docs/screenshots/07-documents.png)
 
 ![Upload document](docs/screenshots/06-upload-document.png)
 
 ### Analytics — spend and mileage charts
+
 Per-vehicle Analytics tab (Recharts): summary cards, last-10 mileage trend, last-6 months fuel spend — from `GET /vehicles/{id}/analytics`.
 
 ![Analytics](docs/screenshots/08-analytics.png)
 
 ### Maintenance guide — interval tips
+
 Oil, chain, brakes, tyres, CVT… filterable by component and severity from a static JSON catalog.
 
 ![Maintenance guide](docs/screenshots/09-maintenance-guide.png)
 
 ### Settings — profile and password
-Update name/email or change password (revokes all sessions).
+
+Update name/email or change password (revokes all sessions and clears auth cookies).
 
 ![Settings](docs/screenshots/10-settings.png)
 
@@ -103,22 +113,23 @@ Update name/email or change password (revokes all sessions).
 ## Architecture
 
 ```
-┌─────────────────┐     JWT + refresh      ┌──────────────────────────────┐
-│  React + Vite   │ ◄────────────────────► │  FastAPI (async)             │
-│  TanStack Query │      REST / JSON       │  routes · schemas · services │
-│  Zustand auth   │                        └──────────────┬───────────────┘
-└─────────────────┘                                       │
-                    ┌─────────────────────────────────────┼─────────────────┐
-                    │                     │               │                 │
-                    ▼                     ▼               ▼                 ▼
-             PostgreSQL              Redis            Supabase         Alembic
-             (Supabase)            (Upstash)          Storage         migrations
-             users · vehicles      refresh tokens     document files
+┌─────────────────┐   httpOnly JWT + refresh   ┌─────────────────────────────┐
+│  React + Vite   │ ◄────────────────────────► │  FastAPI (async)            │
+│  TanStack Query │        REST / JSON         │  routes · schemas · utils   │
+│  Zustand hint   │                            └──────────────┬──────────────┘
+└─────────────────┘                                           │
+         same-origin /api (Vercel) → Render                   │
+                    ┌─────────────────────────────────────────┼─────────────────┐
+                    │                     │                   │                 │
+                    ▼                     ▼                   ▼                 ▼
+             PostgreSQL              Redis               Supabase          Alembic
+             (Supabase)            (Upstash)             Storage          migrations
+             users · vehicles      refresh tokens        document files
              fuel · service        rate limits
              documents             response cache
 ```
 
-Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owner_id`. Routes verify ownership before mutations.
+Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owner_id`. Routes verify ownership before mutations (missing or foreign → **404**).
 
 ---
 
@@ -129,9 +140,10 @@ Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owne
 | API | FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic |
 | Data | PostgreSQL (Supabase), Redis (Upstash) |
 | Files | Supabase Storage + signed URLs |
-| Auth | bcrypt, JWT access + refresh rotation |
+| Auth | bcrypt, JWT access + refresh rotation (httpOnly cookies) |
 | UI | React 19, TypeScript, Vite 8, Tailwind CSS v4, shadcn/ui, Recharts |
 | Client | TanStack Query, Zustand, Axios, Zod + React Hook Form |
+| Hosting | Frontend on **Vercel** (`/api` proxy) · API on **Render** |
 | Quality | pytest (async API suite), oxlint, GitHub Actions CI |
 
 ---
@@ -143,14 +155,14 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 | Module | Surface | Highlights |
 |--------|---------|------------|
 | **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; Swagger OAuth2 form still returns bearer body |
-| **Users** | `GET/PATCH /users/me` · password change | Session revoke on password change |
-| **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads |
-| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; cache invalidation |
-| **Service** | CRUD · `GET …/next` | Next-due helper; cached |
-| **Documents** | Multipart CRUD | Type enum, 10 MB, signed URLs |
+| **Users** | `GET/PATCH /users/me` · password change | Session revoke + cookie clear |
+| **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads; baseline → mileage recalc |
+| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; list/detail cache invalidation |
+| **Service** | CRUD · `GET …/next` | Next-due helper; cached nulls correctly; Load more on UI |
+| **Documents** | Multipart CRUD | Type enum, 10 MB, signed URLs; clear expiry/notes |
 | **Guidelines** | `/maintenance-guidelines/` + filters | JSON file + in-memory cache |
 
-List responses use a shared cursor page:
+List responses use a shared cursor page (stable across same-day rows):
 
 ```json
 {
@@ -169,8 +181,9 @@ List responses use a shared cursor page:
 |------------|-----------------|
 | [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Summary, analytics, live odometer, Redis-cached reads |
 | [`backend/app/routes/fuel_logs.py`](backend/app/routes/fuel_logs.py) | Mileage recalculation + odometer rules |
-| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers + key builders |
-| [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Shared cursor paginator |
+| [`backend/app/utils/fuel_mileage.py`](backend/app/utils/fuel_mileage.py) | Shared timeline recalc (fuel writes + baseline updates) |
+| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers, `CACHE_MISS` sentinel, key builders |
+| [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Composite cursor paginator |
 | [`backend/data/maintenance_guidelines.json`](backend/data/maintenance_guidelines.json) | Guideline catalog |
 | [`backend/tests/`](backend/tests/) | Auth, CRUD, pagination, cache, summary, analytics, guidelines |
 | [`frontend/src/features/`](frontend/src/features/) | Domain modules (hooks · forms · charts) |
@@ -220,11 +233,14 @@ npm run dev
 
 App: [http://localhost:5173](http://localhost:5173)
 
+Production builds always call **`/api`** (same origin). Vercel rewrites `/api/*` to the Render API so auth cookies stay first-party.
+
 ### Tests
 
 Tests use a **separate** Supabase project via `backend/.env.test` (never commit it).
 
 ```bash
+cd backend
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
@@ -244,7 +260,7 @@ Tests use a **separate** Supabase project via `backend/.env.test` (never commit 
 
 ## Shipped today
 
-Auth · multi-vehicle garage · server-side mileage · service reminders · document vault · summary dashboard · analytics charts · maintenance guide · cursor pagination · Redis caching · CI + production deploy
+Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault · summary dashboard · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

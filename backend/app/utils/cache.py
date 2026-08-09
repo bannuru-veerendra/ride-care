@@ -14,6 +14,18 @@ NEXT_SERVICE_CACHE_TTL = 60 * 5  # 5 minutes
 GUIDELINES_CACHE_TTL = 60 * 60 * 24  # 24 hours
 
 
+class _CacheMissType:
+    """Sentinel so cached JSON null is distinct from a Redis miss."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "CACHE_MISS"
+
+
+CACHE_MISS = _CacheMissType()
+
+
 # ── Key builders ──────────────────────────────────────────────
 
 def vehicle_list_key(user_id: str) -> str:
@@ -48,20 +60,21 @@ def guidelines_key() -> str:
 
 # ── Core get/set helpers ──────────────────────────────────────
 
-async def cache_get(redis: Redis, key: str) -> Any | None:
+async def cache_get(redis: Redis, key: str) -> Any | _CacheMissType:
     """
     Get a value from cache.
-    Returns None on cache miss or Redis errors.
+    Returns CACHE_MISS on miss or Redis errors.
+    Cached JSON null is returned as None (a hit).
     Never raises — cache failures are non-fatal.
     """
     try:
         value = await redis.get(key)
         if value is None:
-            return None
+            return CACHE_MISS
         return json.loads(value)
     except Exception as e:
         logger.warning("Cache GET failed key=%s error=%s", key, e)
-        return None
+        return CACHE_MISS
 
 
 async def cache_set(

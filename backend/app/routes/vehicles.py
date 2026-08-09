@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.document import Document
 from app.models.fuel_log import FuelLog
 from app.models.service_log import ServiceLog
 from app.models.user import User
@@ -24,6 +25,7 @@ from app.schemas.vehicle import (
 )
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import (
+    CACHE_MISS,
     VEHICLE_CACHE_TTL,
     cache_delete,
     cache_delete_pattern,
@@ -36,8 +38,10 @@ from app.utils.cache import (
     vehicle_summary_key,
 )
 from app.utils.dates import app_today
+from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
+from app.utils.storage import cleanup_document
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
@@ -255,19 +259,26 @@ async def get_vehicles(
         cache_key = f"{cache_key}:{cursor}:{size}"
 
     cached = await cache_get(redis, cache_key)
-    if cached is not None:
+    if cached is not CACHE_MISS:
         return cached
 
-    page = await paginate(
-        db,
-        Vehicle,
-        filter_clause=Vehicle.owner_id == current_user.id,
-        order_by_column=Vehicle.created_at,
-        cursor_column=Vehicle.created_at,
-        cursor=cursor,
-        size=size,
-        descending=True,
-    )
+    try:
+        page = await paginate(
+            db,
+            Vehicle,
+            filter_clause=Vehicle.owner_id == current_user.id,
+            order_by_column=Vehicle.created_at,
+            cursor_column=Vehicle.created_at,
+            tiebreaker_column=Vehicle.id,
+            cursor=cursor,
+            size=size,
+            descending=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     live_odometers = await get_live_odometers_map(db, page.items)
     result = CursorPage(
         items=[
@@ -305,7 +316,7 @@ async def get_vehicle_summary(
 
     cache_key = vehicle_summary_key(str(vehicle_id))
     cached = await cache_get(redis, cache_key)
-    if cached is not None:
+    if cached is not CACHE_MISS:
         return cached
 
     today = app_today()
@@ -420,7 +431,7 @@ async def get_vehicle_analytics(
 
     cache_key = vehicle_analytics_key(str(vehicle_id))
     cached = await cache_get(redis, cache_key)
-    if cached is not None:
+    if cached is not CACHE_MISS:
         return cached
 
     totals_result = await db.execute(
@@ -522,7 +533,7 @@ async def get_vehicle(
     """
     cache_key = vehicle_detail_key(str(vehicle_id))
     cached = await cache_get(redis, cache_key)
-    if cached is not None:
+    if cached is not CACHE_MISS:
         # Verify ownership even on cache hit
         if cached.get("owner_id") != str(current_user.id):
             raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -587,6 +598,7 @@ async def update_vehicle(
                 detail="Vehicle with this registration number already exists",
             )
 
+    baseline_changed = False
     if "baseline_odometer" in updates:
         baseline_odometer = updates.pop("baseline_odometer")
         min_log_odometer = await get_min_log_odometer(db, vehicle_id)
@@ -599,9 +611,14 @@ async def update_vehicle(
                 ),
             )
         db_vehicle.current_odometer = baseline_odometer
+        baseline_changed = True
 
     for key, value in updates.items():
         setattr(db_vehicle, key, value)
+
+    if baseline_changed:
+        await db.flush()
+        await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
 
     await db.commit()
     await db.refresh(db_vehicle)
@@ -640,8 +657,16 @@ async def delete_vehicle(
             detail="Vehicle not found",
         )
 
+    storage_paths_result = await db.execute(
+        select(Document.storage_path).where(Document.vehicle_id == vehicle_id)
+    )
+    storage_paths = list(storage_paths_result.scalars().all())
+
     await db.delete(db_vehicle)
     await db.commit()
+
+    for storage_path in storage_paths:
+        await cleanup_document(storage_path)
 
     # Invalidate caches
     await cache_delete(redis, vehicle_detail_key(str(vehicle_id)))

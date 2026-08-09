@@ -7,32 +7,36 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 ## Shipped
 
 ### Auth & security
-- Register / login with JWT access tokens
+- Register / login with JWT access tokens (httpOnly cookies)
 - Refresh-token rotation in Redis; logout revokes sessions
-- Password strength policy; profile + password change with session revoke
+- Password strength policy; profile + password change with session revoke **and cookie clear**
 - IP- and user-based rate limiting
 
 ### Vehicles & odometer
 - Multi-vehicle CRUD with ownership checks
-- Live odometer = max(baseline, fuel max, service max)
-- Cursor-paginated vehicle list
+- Live odometer = `max(baseline, fuel max, service max)`
+- Cursor-paginated vehicle list + garage **Load more**
+- Baseline change recalculates stored fuel mileage
 - `GET /vehicles/{id}/summary` — spend, mileage, recent fill-ups, next service
 - `GET /vehicles/{id}/analytics` — totals, trend series, monthly spend (SQL over all logs)
 
 ### Fuel & mileage
 - Fill-up logging with server-side liters and km/L
 - Timeline-aware odometer validation
-- Full mileage recalculation on create / update / delete
-- Cursor pagination + fuel tab **Load more**
+- Full mileage recalculation on create / update / delete / baseline change
+- Stable cursor pagination (date + id) + fuel tab **Load more**
 
 ### Service history
 - Service visits with tags, cost, and next-due fields
-- `GET /service_logs/next` for reminders
-- Cursor-paginated list
+- `GET /service_logs/next` for reminders (cached nulls are real hits)
+- Cursor-paginated list + service tab **Load more**
+- Partial PATCH validates next-service odometer against existing reading
 
 ### Documents
 - Insurance / licence / RC vault via Supabase Storage
 - Typed uploads (PDF / JPEG / PNG, 10 MB), signed download URLs
+- Clear expiry date / notes on update
+- Vehicle delete removes linked storage objects
 
 ### Maintenance guide
 - Static JSON catalog (24 tasks) with in-memory cache
@@ -40,9 +44,9 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 
 ### Caching & platform
 - Redis cache for vehicle list/detail, summary, analytics, and next-service
-- Write-through invalidation on fuel / service / vehicle writes
+- Write-through invalidation on fuel / service / vehicle writes (list + detail + derived)
 - Alembic migrations, async SQLAlchemy, GitHub Actions CI
-- Deployed API (Render) + frontend (Vercel)
+- Deployed API (Render) + frontend (Vercel) with same-origin `/api` proxy for cookies
 
 ### Frontend product surface
 - Dark rider UI: auth, garage, vehicle detail (Fuel · Service · Docs · Analytics)
@@ -67,7 +71,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Expiry and renewal tracking
 
 ### List & export polish
-- Load more for service (and documents) lists
+- Load more for documents lists
 - Cursor pagination for documents API
 - CSV / PDF export for fill-ups and service history
 

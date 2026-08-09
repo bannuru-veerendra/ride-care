@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import VehicleCard from "@/features/vehicles/components/VehicleCard";
 import VehicleForm from "@/features/vehicles/components/VehicleForm";
 import {
-    useVehicles,
+    useInfiniteVehicles,
     useCreateVehicle,
     useUpdateVehicle,
     useDeleteVehicle,
@@ -30,8 +30,15 @@ export default function VehiclesPage() {
     const [sheetOpen, setSheetOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
-    const { data, isLoading } = useVehicles();
-    const vehicles = data?.items ?? [];
+    const {
+        data,
+        isLoading,
+        hasNextPage,
+        isFetchingNextPage,
+        fetchNextPage,
+    } = useInfiniteVehicles();
+    const vehicles = data?.pages.flatMap((page) => page.items) ?? [];
+    const total = data?.pages[0]?.total ?? 0;
     const createVehicle = useCreateVehicle();
     const updateVehicle = useUpdateVehicle(editingVehicle?.id ?? "");
     const deleteVehicle = useDeleteVehicle();
@@ -136,20 +143,34 @@ export default function VehiclesPage() {
             )}
 
             {!isLoading && vehicles.length > 0 && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {vehicles.map((vehicle, index) => (
-                        <div
-                            key={vehicle.id}
-                            className="animate-fade-up"
-                            style={{ animationDelay: `${index * 70}ms` }}
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {vehicles.map((vehicle, index) => (
+                            <div
+                                key={vehicle.id}
+                                className="animate-fade-up"
+                                style={{ animationDelay: `${index * 70}ms` }}
+                            >
+                                <VehicleCard
+                                    vehicle={vehicle}
+                                    onEdit={handleEdit}
+                                    onDelete={handleDelete}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    {hasNextPage && (
+                        <Button
+                            variant="outline"
+                            className="w-full"
+                            disabled={isFetchingNextPage}
+                            onClick={() => void fetchNextPage()}
                         >
-                            <VehicleCard
-                                vehicle={vehicle}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-                        </div>
-                    ))}
+                            {isFetchingNextPage
+                                ? "Loading..."
+                                : `Load more (${vehicles.length} of ${total})`}
+                        </Button>
+                    )}
                 </div>
             )}
         </div>

@@ -18,10 +18,12 @@ from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import (
     cache_delete,
+    cache_delete_pattern,
     vehicle_analytics_key,
     vehicle_detail_key,
     vehicle_summary_key,
 )
+from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
 
@@ -29,14 +31,19 @@ from app.utils.redis_client import get_redis
 router = APIRouter(prefix="/fuel_logs", tags=["fuel_logs"])
 
 
-async def _invalidate_fuel_derived_caches(redis: Redis, vehicle_id: uuid.UUID) -> None:
-    """Drop caches that depend on fuel log aggregates."""
+async def _invalidate_fuel_derived_caches(
+    redis: Redis,
+    vehicle_id: uuid.UUID,
+    owner_id: uuid.UUID,
+) -> None:
+    """Drop caches that depend on fuel log aggregates / live odometer."""
     await cache_delete(
         redis,
         vehicle_detail_key(str(vehicle_id)),
         vehicle_summary_key(str(vehicle_id)),
         vehicle_analytics_key(str(vehicle_id)),
     )
+    await cache_delete_pattern(redis, f"cache:vehicles:user:{owner_id}*")
 
 
 async def verify_vehicle_ownership(
@@ -85,42 +92,6 @@ async def get_owned_fuel_log(
     return db_fuel_log
 
 
-async def recalculate_vehicle_fuel_mileage(
-    db: AsyncSession,
-    vehicle_id: uuid.UUID,
-    vehicle: Vehicle,
-) -> None:
-    """Validate timeline and recalculate mileage for all fill-ups"""
-    result = await db.execute(
-        select(FuelLog)
-        .where(FuelLog.vehicle_id == vehicle_id)
-        .order_by(FuelLog.date.asc(), FuelLog.odometer.asc())
-    )
-    fuel_logs = list(result.scalars().all())
-
-    previous_odometer = vehicle.current_odometer
-    previous_label = (
-        f"the vehicle's baseline odometer ({vehicle.current_odometer})"
-    )
-
-    for fuel_log in fuel_logs:
-        if fuel_log.odometer <= previous_odometer:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Odometer reading ({fuel_log.odometer}) must be greater than "
-                    f"{previous_label}"
-                ),
-            )
-
-        fuel_log.mileage = round(
-            (fuel_log.odometer - previous_odometer) / fuel_log.liters,
-            1,
-        )
-        previous_odometer = fuel_log.odometer
-        previous_label = f"the previous fill-up ({fuel_log.odometer})"
-
-
 @router.post("/", response_model=FuelLogResponse, status_code=status.HTTP_201_CREATED)
 async def create_fuel_log(
     fuel_log: FuelLogCreate,
@@ -141,7 +112,7 @@ async def create_fuel_log(
     await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
     await db.commit()
     await db.refresh(db_fuel_log)
-    await _invalidate_fuel_derived_caches(redis, vehicle_id)
+    await _invalidate_fuel_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
     return db_fuel_log
 
 
@@ -156,16 +127,23 @@ async def get_fuel_logs(
     """Get paginated fuel logs for a vehicle"""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
 
-    return await paginate(
-        db,
-        FuelLog,
-        filter_clause=FuelLog.vehicle_id == vehicle_id,
-        order_by_column=FuelLog.date,
-        cursor_column=FuelLog.date,
-        cursor=cursor,
-        size=size,
-        descending=True,
-    )
+    try:
+        return await paginate(
+            db,
+            FuelLog,
+            filter_clause=FuelLog.vehicle_id == vehicle_id,
+            order_by_column=FuelLog.date,
+            cursor_column=FuelLog.date,
+            tiebreaker_column=FuelLog.id,
+            cursor=cursor,
+            size=size,
+            descending=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/{fuel_log_id}", response_model=FuelLogResponse)
@@ -218,7 +196,7 @@ async def update_fuel_log(
 
     await db.commit()
     await db.refresh(db_fuel_log)
-    await _invalidate_fuel_derived_caches(redis, vehicle_id)
+    await _invalidate_fuel_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
     return db_fuel_log
 
 
@@ -242,5 +220,5 @@ async def delete_fuel_log(
     await db.flush()
     await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
     await db.commit()
-    await _invalidate_fuel_derived_caches(redis, vehicle_id)
+    await _invalidate_fuel_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
     return None
