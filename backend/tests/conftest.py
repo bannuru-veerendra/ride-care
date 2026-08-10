@@ -41,6 +41,10 @@ class FakeRedis:
         """Get a value without deleting it."""
         return self._store.get(name)
 
+    async def exists(self, *names: str) -> int:
+        """Return how many of the given keys exist."""
+        return sum(1 for name in names if name in self._store)
+
     async def getdel(self, name: str) -> bytes | None:
         return self._store.pop(name, None)
 
