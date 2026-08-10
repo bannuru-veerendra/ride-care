@@ -19,7 +19,13 @@ from app.schemas.auth import (
     UserCreate,
 )
 from app.schemas.user import UserResponse
-from app.utils.auth_cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
+from app.utils.access_token_service import blocklist_access_token
+from app.utils.auth_cookies import (
+    ACCESS_COOKIE,
+    REFRESH_COOKIE,
+    clear_auth_cookies,
+    set_auth_cookies,
+)
 from app.utils.jwt import create_access_token
 from app.utils.rate_limiter import auth_rate_limit
 from app.utils.redis_client import get_redis
@@ -91,6 +97,16 @@ async def _authenticate_user(
 
 def _refresh_token_from(request: Request, body: RefreshRequest | LogoutRequest) -> str | None:
     return body.refresh_token or request.cookies.get(REFRESH_COOKIE)
+
+
+def _access_token_from(request: Request) -> str | None:
+    """Prefer Bearer header, fall back to access cookie."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        bearer = auth_header.removeprefix("Bearer ").strip()
+        if bearer:
+            return bearer
+    return request.cookies.get(ACCESS_COOKIE)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -188,6 +204,18 @@ async def refresh(
         )
 
     new_refresh_token, user_id = result
+
+    # Prefer to kill the previous access JWT immediately; if Redis blips here the
+    # refresh already rotated — still issue new cookies (old access dies by TTL).
+    old_access = _access_token_from(request)
+    if old_access:
+        try:
+            await blocklist_access_token(redis, old_access)
+        except RedisError:
+            logger.exception(
+                "Redis unavailable while blocklisting access token on refresh"
+            )
+
     access_token = create_access_token(user_id)
     set_auth_cookies(response, access_token, new_refresh_token)
     return SessionResponse()
@@ -200,14 +228,17 @@ async def logout(
     body: LogoutRequest = LogoutRequest(),
     redis: Redis = Depends(get_redis),
 ) -> Response:
-    """Revoke the refresh token (body or cookie) and clear auth cookies."""
+    """Revoke refresh + blocklist access token, then clear auth cookies."""
     refresh_token = _refresh_token_from(request, body)
-    if refresh_token:
-        try:
+    access_token = _access_token_from(request)
+    try:
+        if refresh_token:
             await revoke_refresh_token(redis, refresh_token)
-        except RedisError:
-            logger.exception("Redis unavailable during logout")
-            raise _REDIS_UNAVAILABLE
+        if access_token:
+            await blocklist_access_token(redis, access_token)
+    except RedisError:
+        logger.exception("Redis unavailable during logout")
+        raise _REDIS_UNAVAILABLE
     clear_auth_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

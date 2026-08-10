@@ -236,3 +236,7 @@ async def test_change_password_revokes_sessions(
         json={"refresh_token": refresh_token},
     )
     assert refresh_response.status_code == 401
+
+    # Old access JWT is also dead via revoke-epoch
+    me_response = await client.get("/users/me", headers=headers)
+    assert me_response.status_code == 401

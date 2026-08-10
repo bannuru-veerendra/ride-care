@@ -46,7 +46,7 @@ Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 | Charts | `GET /vehicles/{id}/analytics` — trend series + monthly spend from SQL |
 | Scale | Stable cursor pagination (`date`/`created_at` + `id`) — same-day rows never skip |
 | Speed | Redis cache with write-through invalidation on fuel, service, and vehicle writes |
-| Auth | httpOnly cookie JWT + refresh rotation, rate limits, session revoke + cookie clear on password change |
+| Auth | httpOnly cookie JWT + refresh rotation, access-token blocklist (`jti`) + revoke-epoch on password change, rate limits |
 | Docs | Typed vault uploads with signed URLs — never public blobs; vehicle delete cleans storage |
 | Guidelines | File-backed maintenance catalog (in-memory), filterable without a DB table |
 
@@ -125,8 +125,10 @@ Update name/email or change password (revokes all sessions and clears auth cooki
              PostgreSQL              Redis               Supabase          Alembic
              (Supabase)            (Upstash)             Storage          migrations
              users · vehicles      refresh tokens        document files
-             fuel · service        rate limits
-             documents             response cache
+             fuel · service        access blocklist
+             documents             revoke-epoch
+                                   rate limits
+                                   response cache
 ```
 
 Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owner_id`. Routes verify ownership before mutations (missing or foreign → **404**).
@@ -154,8 +156,8 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 
 | Module | Surface | Highlights |
 |--------|---------|------------|
-| **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; Swagger OAuth2 form still returns bearer body |
-| **Users** | `GET/PATCH /users/me` · password change | Session revoke + cookie clear |
+| **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; access JWT blocklist on logout/refresh; Swagger OAuth2 form still returns bearer body |
+| **Users** | `GET/PATCH /users/me` · password change | Session revoke + access revoke-epoch + cookie clear |
 | **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads; baseline → mileage recalc |
 | **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; list/detail cache invalidation |
 | **Service** | CRUD · `GET …/next` | Next-due helper; cached nulls correctly; Load more on UI |
@@ -260,7 +262,7 @@ cd backend
 
 ## Shipped today
 
-Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault · summary dashboard · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · CI + production deploy
+Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault · summary dashboard · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · access-token blocklisting · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

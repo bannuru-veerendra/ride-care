@@ -10,6 +10,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Register / login with JWT access tokens (httpOnly cookies)
 - Refresh-token rotation in Redis; logout revokes sessions
 - Password strength policy; profile + password change with session revoke **and cookie clear**
+- Access-token blocklisting in Redis (`jti`) on logout / refresh; per-user revoke epoch on password change
 - IP- and user-based rate limiting
 
 ### Vehicles & odometer
