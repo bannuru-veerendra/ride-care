@@ -4,13 +4,14 @@ import {
     AlertTriangle,
     ArrowRight,
     ChevronRight,
+    FileText,
     Fuel,
     Gauge,
     TrendingDown,
     TrendingUp,
     Wrench,
 } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 
 import { buttonVariants } from "@/components/ui/button";
 import RideCareLogo from "@/components/common/RideCareLogo";
@@ -18,6 +19,7 @@ import {
     useVehicles,
     useVehicleSummary,
 } from "@/features/vehicles/hooks/useVehicles";
+import { DOCUMENT_LABELS } from "@/features/documents/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -83,42 +85,41 @@ export default function DashboardPage() {
     const priorFilledMileage = summary?.prior_filled_month_mileage ?? null;
     const recentFilledLabel = summary?.recent_filled_month_label ?? null;
     const priorFilledLabel = summary?.prior_filled_month_label ?? null;
-    const nextService = summary?.next_service ?? null;
+    // Urgency comes from the API — do not re-derive thresholds on the client.
+    const serviceReminder = summary?.service_reminder;
+    const documentReminders = summary?.document_reminders ?? [];
     const mileageDelta =
         recentFilledMileage !== null && priorFilledMileage !== null
             ? Math.round((recentFilledMileage - priorFilledMileage) * 10) / 10
             : null;
 
     const hasNextService =
-        !!nextService?.next_service_date ||
-        nextService?.next_service_odometer != null;
+        serviceReminder != null &&
+        serviceReminder.status !== "none" &&
+        (serviceReminder.next_service_date != null ||
+            serviceReminder.next_service_odometer != null);
 
-    const daysUntilNextService = nextService?.next_service_date
-        ? differenceInDays(new Date(nextService.next_service_date), new Date())
-        : null;
-    const kmUntilNextService =
-        nextService?.next_service_odometer != null && selectedVehicle
-            ? nextService.next_service_odometer -
-              selectedVehicle.current_odometer
-            : null;
+    const daysUntilNextService = serviceReminder?.days_until ?? null;
+    const kmUntilNextService = serviceReminder?.km_until ?? null;
+    const nextServiceDate = serviceReminder?.next_service_date ?? null;
+    const serviceOverdue = serviceReminder?.status === "overdue";
+    const serviceSoon = serviceReminder?.status === "soon";
 
-    const serviceOverdue =
-        (daysUntilNextService !== null && daysUntilNextService < 0) ||
-        (kmUntilNextService !== null && kmUntilNextService < 0);
-    const serviceSoon =
-        !serviceOverdue &&
-        ((daysUntilNextService !== null &&
-            daysUntilNextService >= 0 &&
-            daysUntilNextService <= 14) ||
-            (kmUntilNextService !== null &&
-                kmUntilNextService >= 0 &&
-                kmUntilNextService <= 500));
+    const showReminders =
+        !!selectedVehicle &&
+        (serviceOverdue || serviceSoon || documentReminders.length > 0);
 
     const fuelHref = selectedVehicle
         ? `/vehicles/${selectedVehicle.id}?action=fuel`
         : "/vehicles";
     const serviceHref = selectedVehicle
         ? `/vehicles/${selectedVehicle.id}?action=service`
+        : "/vehicles";
+    const serviceTabHref = selectedVehicle
+        ? `/vehicles/${selectedVehicle.id}?tab=service`
+        : "/vehicles";
+    const documentsTabHref = selectedVehicle
+        ? `/vehicles/${selectedVehicle.id}?tab=documents`
         : "/vehicles";
     const vehicleHref = selectedVehicle
         ? `/vehicles/${selectedVehicle.id}`
@@ -128,10 +129,14 @@ export default function DashboardPage() {
     if (selectedVehicle) {
         if (serviceOverdue) {
             statusLine = "Service overdue — book it soon.";
-        } else if (serviceSoon && daysUntilNextService !== null && daysUntilNextService <= 14) {
+        } else if (serviceSoon && daysUntilNextService !== null && daysUntilNextService >= 0) {
             statusLine = `Service in ${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"}.`;
         } else if (serviceSoon && kmUntilNextService !== null) {
             statusLine = `Service in ${kmUntilNextService.toLocaleString("en-IN")} km.`;
+        } else if (documentReminders.some((doc) => doc.status === "expired")) {
+            statusLine = "A document has expired — renew it.";
+        } else if (documentReminders.some((doc) => doc.status === "soon")) {
+            statusLine = "A document expires soon.";
         } else if (!hasFuelLogs) {
             statusLine = "Add a fill-up to unlock mileage insights.";
         } else {
@@ -249,6 +254,101 @@ export default function DashboardPage() {
                     </Link>
                 </div>
             </section>
+
+            {/* In-app reminders — service due + document expiry */}
+            {showReminders && selectedVehicle && (
+                <section
+                    className="animate-fade-up space-y-2"
+                    style={{ animationDelay: "40ms" }}
+                >
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                        Reminders
+                    </p>
+                    <div className="space-y-2">
+                        {(serviceOverdue || serviceSoon) && (
+                            <Link
+                                to={serviceTabHref}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors",
+                                    serviceOverdue
+                                        ? "border-destructive/40 bg-destructive/10 hover:border-destructive/60"
+                                        : "border-brand/30 bg-brand/10 hover:border-brand/50"
+                                )}
+                            >
+                                <AlertTriangle
+                                    className={cn(
+                                        "h-4 w-4 shrink-0",
+                                        serviceOverdue
+                                            ? "text-destructive"
+                                            : "text-brand"
+                                    )}
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium">
+                                        {serviceOverdue
+                                            ? "Service overdue"
+                                            : "Service due soon"}
+                                    </p>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                        {daysUntilNextService !== null
+                                            ? serviceOverdue
+                                                ? `${Math.abs(daysUntilNextService)} day${Math.abs(daysUntilNextService) === 1 ? "" : "s"} past due`
+                                                : `${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"} left`
+                                            : kmUntilNextService !== null
+                                              ? serviceOverdue
+                                                  ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past due`
+                                                  : `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                              : "Check service schedule"}
+                                    </p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            </Link>
+                        )}
+                        {documentReminders.map((doc) => (
+                            <Link
+                                key={doc.id}
+                                to={documentsTabHref}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors",
+                                    doc.status === "expired"
+                                        ? "border-destructive/40 bg-destructive/10 hover:border-destructive/60"
+                                        : "border-brand/30 bg-brand/10 hover:border-brand/50"
+                                )}
+                            >
+                                <FileText
+                                    className={cn(
+                                        "h-4 w-4 shrink-0",
+                                        doc.status === "expired"
+                                            ? "text-destructive"
+                                            : "text-brand"
+                                    )}
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium">
+                                        {(DOCUMENT_LABELS as Record<string, string>)[
+                                            doc.document_type
+                                        ] ?? doc.document_type}
+                                        {doc.status === "expired"
+                                            ? " expired"
+                                            : " expires soon"}
+                                    </p>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                        {doc.status === "expired"
+                                            ? `${Math.abs(doc.days_until)} day${Math.abs(doc.days_until) === 1 ? "" : "s"} ago`
+                                            : `${doc.days_until} day${doc.days_until === 1 ? "" : "s"} left`}
+                                        {" · "}
+                                        {format(
+                                            new Date(doc.expiry_date),
+                                            "dd MMM yyyy"
+                                        )}
+                                    </p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* Quick actions */}
             {selectedVehicle && (
@@ -402,11 +502,9 @@ export default function DashboardPage() {
                                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                             <p className="text-xs text-muted-foreground">
                                                 {[
-                                                    nextService?.next_service_date
+                                                    nextServiceDate
                                                         ? format(
-                                                              new Date(
-                                                                  nextService.next_service_date
-                                                              ),
+                                                              new Date(nextServiceDate),
                                                               "dd MMM yyyy"
                                                           )
                                                         : null,

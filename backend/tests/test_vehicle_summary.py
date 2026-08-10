@@ -36,6 +36,14 @@ async def test_vehicle_summary_empty(
     assert data["prior_filled_month_label"] is None
     assert data["recent_fuel_logs"] == []
     assert data["next_service"] is None
+    assert data["service_reminder"] == {
+        "status": "none",
+        "days_until": None,
+        "km_until": None,
+        "next_service_date": None,
+        "next_service_odometer": None,
+    }
+    assert data["document_reminders"] == []
 
 
 async def test_vehicle_summary_mileage_trend_skips_empty_current_month(
@@ -183,6 +191,175 @@ async def test_vehicle_summary_aggregates_across_all_logs(
     assert data["recent_fuel_logs"][0]["odometer"] == 11600
     assert data["next_service"] is not None
     assert data["next_service"]["next_service_date"] == next_date
+    assert data["service_reminder"]["status"] == "ok"
+    assert data["service_reminder"]["days_until"] == 45
+    assert data["service_reminder"]["km_until"] == 14000 - 11700
+    assert data["document_reminders"] == []
+
+
+async def test_vehicle_summary_service_reminder_soon(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Service due within 14 days is marked soon."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+    next_date = str(today + timedelta(days=7))
+
+    service_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today),
+            "odometer": 11000,
+            "total_cost": 1500,
+            "services_done": ["Oil change"],
+            "next_service_date": next_date,
+        },
+        headers=auth_headers,
+    )
+    assert service_resp.status_code == 201
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    reminder = response.json()["service_reminder"]
+    assert reminder["status"] == "soon"
+    assert reminder["days_until"] == 7
+    assert reminder["next_service_date"] == next_date
+
+
+async def test_vehicle_summary_service_reminder_overdue(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Past next_service_date is marked overdue."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+    next_date = str(today - timedelta(days=3))
+
+    service_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today - timedelta(days=30)),
+            "odometer": 11000,
+            "total_cost": 1500,
+            "services_done": ["Oil change"],
+            "next_service_date": next_date,
+        },
+        headers=auth_headers,
+    )
+    assert service_resp.status_code == 201
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    reminder = response.json()["service_reminder"]
+    assert reminder["status"] == "overdue"
+    assert reminder["days_until"] == -3
+
+
+async def test_vehicle_summary_document_reminders(
+    client: AsyncClient,
+    auth_headers: dict,
+    created_vehicle: dict,
+    created_document: dict,
+):
+    """Soon and expired document expiry dates appear in document_reminders."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+
+    # created_document fixture typically has a far-future expiry — update to soon
+    soon_date = str(today + timedelta(days=10))
+    patch_resp = await client.patch(
+        f"/documents/{created_document['id']}",
+        params={"vehicle_id": vehicle_id},
+        data={"expiry_date": soon_date},
+        headers=auth_headers,
+    )
+    assert patch_resp.status_code == 200
+
+    expired_upload = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data={
+            "document_type": "driving_license",
+            "expiry_date": str(today - timedelta(days=5)),
+        },
+        files={
+            "file": ("licence.pdf", b"%PDF-1.4 fake", "application/pdf"),
+        },
+        headers=auth_headers,
+    )
+    assert expired_upload.status_code == 201
+
+    far_upload = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data={
+            "document_type": "registration_certificate",
+            "expiry_date": str(today + timedelta(days=120)),
+        },
+        files={
+            "file": ("rc.pdf", b"%PDF-1.4 fake", "application/pdf"),
+        },
+        headers=auth_headers,
+    )
+    assert far_upload.status_code == 201
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    reminders = response.json()["document_reminders"]
+    assert len(reminders) == 2
+    statuses = {item["status"] for item in reminders}
+    assert statuses == {"soon", "expired"}
+    types = {item["document_type"] for item in reminders}
+    assert "insurance" in types or "driving_license" in types
+    assert all(item["document_type"] != "registration_certificate" for item in reminders)
+
+
+async def test_document_write_invalidates_summary_document_reminders(
+    client: AsyncClient,
+    auth_headers: dict,
+    created_vehicle: dict,
+    created_document: dict,
+):
+    """Updating document expiry refreshes cached summary reminders."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+
+    warm = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert warm.status_code == 200
+
+    soon_date = str(today + timedelta(days=5))
+    patch_resp = await client.patch(
+        f"/documents/{created_document['id']}",
+        params={"vehicle_id": vehicle_id},
+        data={"expiry_date": soon_date},
+        headers=auth_headers,
+    )
+    assert patch_resp.status_code == 200
+
+    refreshed = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert refreshed.status_code == 200
+    reminders = refreshed.json()["document_reminders"]
+    assert len(reminders) >= 1
+    assert any(
+        item["id"] == created_document["id"] and item["status"] == "soon"
+        for item in reminders
+    )
 
 
 async def test_vehicle_summary_recent_logs_capped_at_three(

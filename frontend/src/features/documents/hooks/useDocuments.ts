@@ -4,6 +4,7 @@ import type {
     UploadDocumentPayload,
     UpdateDocumentPayload,
 } from "@/api/documents.api";
+import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
 
 /**
  * Query keys for document queries.
@@ -14,6 +15,14 @@ export const documentKeys = {
     details: (vehicleId: string, documentId: string) =>
         ["documents", vehicleId, documentId] as const,
 };
+
+function invalidateDocumentDerivedQueries(
+    queryClient: ReturnType<typeof useQueryClient>,
+    vehicleId: string
+) {
+    queryClient.invalidateQueries({ queryKey: documentKeys.all(vehicleId) });
+    queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
+}
 
 /** Fetch all documents for a vehicle */
 export const useDocuments = (vehicleId: string) => {
@@ -31,9 +40,7 @@ export const useUploadDocument = (vehicleId: string) => {
     return useMutation({
         mutationFn: (payload: UploadDocumentPayload) =>
             documentsApi.upload(vehicleId, payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: documentKeys.all(vehicleId) });
-        },
+        onSuccess: () => invalidateDocumentDerivedQueries(queryClient, vehicleId),
     });
 };
 
@@ -44,9 +51,7 @@ export const useUpdateDocument = (vehicleId: string, documentId: string) => {
     return useMutation({
         mutationFn: (payload: UpdateDocumentPayload) =>
             documentsApi.update(vehicleId, documentId, payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: documentKeys.all(vehicleId) });
-        },
+        onSuccess: () => invalidateDocumentDerivedQueries(queryClient, vehicleId),
     });
 };
 
@@ -57,8 +62,6 @@ export const useDeleteDocument = (vehicleId: string) => {
     return useMutation({
         mutationFn: (documentId: string) =>
             documentsApi.delete(vehicleId, documentId),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: documentKeys.all(vehicleId) });
-        },
+        onSuccess: () => invalidateDocumentDerivedQueries(queryClient, vehicleId),
     });
 };

@@ -19,6 +19,22 @@ export interface Vehicle {
     current_odometer: number;
 }
 
+export interface ServiceReminder {
+    status: "ok" | "soon" | "overdue" | "none";
+    days_until: number | null;
+    km_until: number | null;
+    next_service_date: string | null;
+    next_service_odometer: number | null;
+}
+
+export interface DocumentReminder {
+    id: string;
+    document_type: string;
+    expiry_date: string;
+    days_until: number;
+    status: "ok" | "soon" | "expired";
+}
+
 export interface VehicleSummary {
     vehicle_id: string;
     fuel_log_count: number;
@@ -33,6 +49,8 @@ export interface VehicleSummary {
     prior_filled_month_label: string | null;
     recent_fuel_logs: FuelLog[];
     next_service: ServiceLog | null;
+    service_reminder: ServiceReminder;
+    document_reminders: DocumentReminder[];
 }
 
 

@@ -42,7 +42,7 @@ Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 |------------|-------------------|
 | Mileage math | Liters + km/L from cost, price/L, and odometer deltas — recalculated on every fill-up edit/delete **and** baseline change |
 | Live odometer | `max(baseline, fuel, service)` so garage and dashboard never lie |
-| Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs, not one UI page |
+| Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs — plus `service_reminder` and `document_reminders` for in-app alerts |
 | Charts | `GET /vehicles/{id}/analytics` — trend series + monthly spend from SQL |
 | Scale | Stable cursor pagination (`date`/`created_at` + `id`) — same-day rows never skip |
 | Speed | Redis cache with write-through invalidation on fuel, service, and vehicle writes |
@@ -58,7 +58,7 @@ The frontend stays thin: sheets, charts, and **Load more** lists over a clear RE
 
 ### Dashboard — status at a glance
 
-Multi-bike picker, live odometer, average mileage, next-service countdown, monthly spend, and mileage trend — all from the summary API.
+Multi-bike picker, live odometer, average mileage, next-service countdown, **in-app reminders** (service due + document expiry), monthly spend, and mileage trend — all from the summary API.
 
 ![RideCare dashboard](docs/screenshots/01-dashboard.png)
 
@@ -156,7 +156,7 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 |--------|---------|------------|
 | **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; Swagger OAuth2 form still returns bearer body |
 | **Users** | `GET/PATCH /users/me` · password change | Session revoke + cookie clear |
-| **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads; baseline → mileage recalc |
+| **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads; baseline → mileage recalc; in-app reminder fields |
 | **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; list/detail cache invalidation |
 | **Service** | CRUD · `GET …/next` | Next-due helper; cached nulls correctly; Load more on UI |
 | **Documents** | Multipart CRUD | Type enum, 10 MB, signed URLs; clear expiry/notes |
@@ -260,7 +260,7 @@ cd backend
 
 ## Shipped today
 
-Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault · summary dashboard · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · CI + production deploy
+Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault · summary dashboard with **in-app reminders** · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

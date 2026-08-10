@@ -20,6 +20,8 @@ export interface Document {
     expiry_date: string | null;
     notes: string | null;
     signed_url: string;
+    days_until: number | null;
+    expiry_status: "ok" | "soon" | "expired" | null;
 }
 
 export interface UploadDocumentPayload {

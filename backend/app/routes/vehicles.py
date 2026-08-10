@@ -3,6 +3,7 @@ from calendar import monthrange
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,7 @@ from app.utils.dates import app_today
 from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
+from app.utils.reminders import build_document_reminders, build_service_reminder
 from app.utils.storage import cleanup_document
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
@@ -308,7 +310,8 @@ async def get_vehicle_summary(
             Vehicle.owner_id == current_user.id,
         )
     )
-    if result.scalar_one_or_none() is None:
+    db_vehicle = result.scalar_one_or_none()
+    if db_vehicle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehicle not found",
@@ -317,11 +320,16 @@ async def get_vehicle_summary(
     cache_key = vehicle_summary_key(str(vehicle_id))
     cached = await cache_get(redis, cache_key)
     if cached is not CACHE_MISS:
-        return cached
+        try:
+            return VehicleSummaryResponse.model_validate(cached)
+        except ValidationError:
+            # Schema evolved (e.g. reminder fields) — rebuild instead of 500.
+            await cache_delete(redis, cache_key)
 
     today = app_today()
     this_start, this_end = _month_bounds(today)
     last_start, last_end = _month_bounds(_shift_month(today, -1))
+    live_odometer = await get_live_odometer(db, db_vehicle)
 
     count_result = await db.execute(
         select(func.count())
@@ -381,6 +389,16 @@ async def get_vehicle_summary(
     )
     next_service = next_service_result.scalar_one_or_none()
 
+    documents_result = await db.execute(
+        select(Document)
+        .where(
+            Document.vehicle_id == vehicle_id,
+            Document.expiry_date.isnot(None),
+        )
+        .order_by(Document.expiry_date.asc())
+    )
+    documents = list(documents_result.scalars().all())
+
     filled_months = await _last_two_filled_month_mileages(db, vehicle_id)
     recent_filled = filled_months[0] if len(filled_months) >= 1 else None
     prior_filled = filled_months[1] if len(filled_months) >= 2 else None
@@ -399,6 +417,12 @@ async def get_vehicle_summary(
         prior_filled_month_label=prior_filled[0] if prior_filled else None,
         recent_fuel_logs=recent_fuel_logs,
         next_service=next_service,
+        service_reminder=build_service_reminder(
+            next_service,
+            today=today,
+            live_odometer=live_odometer,
+        ),
+        document_reminders=build_document_reminders(documents, today=today),
     )
     await cache_set(
         redis,
