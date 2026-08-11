@@ -247,6 +247,59 @@ async def test_register_invalid_email(client: AsyncClient):
     )
     assert response.status_code == 422
 
+
+async def test_logout_blocklists_access_token(
+    client: AsyncClient, registered_user: dict
+):
+    """Logout blocklists the access JWT so Bearer reuse is rejected."""
+    login_response = await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+    access_token = login_response.cookies["access_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    before = await client.get("/users/me", headers=headers)
+    assert before.status_code == 200
+
+    logout_response = await client.post("/auth/logout", json={})
+    assert logout_response.status_code == 204
+
+    after = await client.get("/users/me", headers=headers)
+    assert after.status_code == 401
+
+
+async def test_refresh_blocklists_old_access_token(
+    client: AsyncClient, registered_user: dict
+):
+    """Refresh rotation blocklists the previous access JWT."""
+    login_response = await client.post(
+        "/auth/login",
+        json={
+            "email": registered_user["email"],
+            "password": registered_user["password"],
+        },
+    )
+    old_access = login_response.cookies["access_token"]
+    headers = {"Authorization": f"Bearer {old_access}"}
+
+    refresh_response = await client.post("/auth/refresh", json={})
+    assert refresh_response.status_code == 200
+
+    after = await client.get("/users/me", headers=headers)
+    assert after.status_code == 401
+
+    new_access = refresh_response.cookies["access_token"]
+    ok = await client.get(
+        "/users/me",
+        headers={"Authorization": f"Bearer {new_access}"},
+    )
+    assert ok.status_code == 200
+
+
 async def test_create_vehicle_without_token(client: AsyncClient):
     """Test creating a vehicle without authentication"""
     response = await client.post(

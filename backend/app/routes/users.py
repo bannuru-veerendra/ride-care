@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserProfileUpdate, UserResponse
+from app.utils.access_token_service import revoke_all_user_access_tokens
 from app.utils.auth_cookies import clear_auth_cookies
 from app.utils.auth_dependency import get_current_user
 from app.utils.redis_client import get_redis
@@ -91,6 +92,7 @@ async def change_password(
 
     try:
         await revoke_all_user_tokens(redis, str(current_user.id))
+        await revoke_all_user_access_tokens(redis, str(current_user.id))
     except RedisError:
         logger.exception(
             "Redis unavailable while revoking sessions for user %s",

@@ -1,4 +1,7 @@
+"""Access JWT helpers with jti / iat claims."""
+
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from jose import jwt
 
@@ -8,16 +11,21 @@ ALGORITHM = "HS256"
 
 
 def create_access_token(user_id: str) -> str:
-    """Create an access token"""
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-    )
-    payload = {"sub": user_id, "exp": expire, "type": "access"}
+    """Create a signed access token with jti (blocklist) and iat (revoke-epoch)."""
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": user_id,
+        "exp": expire,
+        "iat": now,
+        "jti": str(uuid4()),
+        "type": "access",
+    }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict:
-    """Decode an access token"""
+    """Decode and validate an access token."""
     payload = jwt.decode(
         token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM]
     )
