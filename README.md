@@ -161,7 +161,7 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 | **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads; baseline → mileage recalc |
 | **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; list/detail cache invalidation |
 | **Service** | CRUD · `GET …/next` | Next-due helper; cached nulls correctly; Load more on UI |
-| **Documents** | Multipart CRUD | Type enum, 10 MB, signed URLs; clear expiry/notes |
+| **Documents** | Multipart CRUD · cursor list | Type enum, 10 MB, signed URLs; clear expiry/notes; expiry status from API |
 | **Guidelines** | `/maintenance-guidelines/` + filters | JSON file + in-memory cache |
 
 List responses use a shared cursor page (stable across same-day rows):
@@ -262,7 +262,7 @@ cd backend
 
 ## Shipped today
 
-Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault · summary dashboard · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · access-token blocklisting · CI + production deploy
+Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault with **Load more** · summary dashboard with **in-app reminders** · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · access-token blocklisting · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

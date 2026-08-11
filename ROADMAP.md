@@ -39,6 +39,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Clear expiry date / notes on update
 - Vehicle delete removes linked storage objects
 - Document writes invalidate vehicle summary cache (reminder freshness)
+- Cursor-paginated list + docs tab **Load more**; API returns `days_until` / `expiry_status`
 
 ### Maintenance guide
 - Static JSON catalog (24 tasks) with in-memory cache
@@ -74,8 +75,6 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Expiry and renewal tracking
 
 ### List & export polish
-- Load more for documents lists
-- Cursor pagination for documents API
 - CSV / PDF export for fill-ups and service history
 
 ### Deeper analytics

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { documentsApi } from "@/api/documents.api";
 import type {
     UploadDocumentPayload,
@@ -11,7 +11,7 @@ import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
  * Scoped under vehicle ID so invalidation is precise.
  */
 export const documentKeys = {
-    all: (vehicleId: string) => ["documents", vehicleId] as const,
+    infinite: (vehicleId: string) => ["documents-infinite", vehicleId] as const,
     details: (vehicleId: string, documentId: string) =>
         ["documents", vehicleId, documentId] as const,
 };
@@ -20,15 +20,22 @@ function invalidateDocumentDerivedQueries(
     queryClient: ReturnType<typeof useQueryClient>,
     vehicleId: string
 ) {
-    queryClient.invalidateQueries({ queryKey: documentKeys.all(vehicleId) });
+    queryClient.invalidateQueries({ queryKey: documentKeys.infinite(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
 }
 
-/** Fetch all documents for a vehicle */
-export const useDocuments = (vehicleId: string) => {
-    return useQuery({
-        queryKey: documentKeys.all(vehicleId),
-        queryFn: () => documentsApi.getAll(vehicleId),
+/** Paginated documents with Load more support for the vehicle detail Docs tab */
+export const useInfiniteDocuments = (vehicleId: string) => {
+    return useInfiniteQuery({
+        queryKey: documentKeys.infinite(vehicleId),
+        queryFn: ({ pageParam }) =>
+            documentsApi.getAll(vehicleId, {
+                cursor: pageParam,
+                size: 20,
+            }),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (lastPage) =>
+            lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
         enabled: !!vehicleId,
     });
 };
