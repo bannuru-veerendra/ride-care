@@ -3,6 +3,7 @@ import uuid
 from datetime import date as dt_date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,10 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.document import DocumentResponse, _DocumentDbFields
 from app.utils.auth_dependency import get_current_user
+from app.utils.cache import cache_delete, vehicle_summary_key
+from app.utils.dates import app_today
+from app.utils.redis_client import get_redis
+from app.utils.reminders import document_expiry_fields
 from app.utils.storage import (
     cleanup_document,
     delete_document as delete_storage_document,
@@ -129,10 +134,16 @@ async def abort_pending_update(
 
 
 async def to_document_response(db_document: Document) -> DocumentResponse:
-    """Build API response with a fresh signed URL for the stored file."""
+    """Build API response with a fresh signed URL and expiry urgency fields."""
+    days_until, expiry_status = document_expiry_fields(
+        db_document.expiry_date,
+        today=app_today(),
+    )
     return DocumentResponse(
         **_DocumentDbFields.model_validate(db_document).model_dump(),
         signed_url=await get_signed_url(db_document.storage_path),
+        days_until=days_until,
+        expiry_status=expiry_status,
     )
 
 
@@ -145,6 +156,7 @@ async def create_document(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> DocumentResponse:
     """Upload a new document."""
     storage_path: str | None = None
@@ -167,6 +179,7 @@ async def create_document(
         await db.commit()
         committed = True
         await db.refresh(db_document)
+        await cache_delete(redis, vehicle_summary_key(str(vehicle_id)))
 
         return await to_document_response(db_document)
     except Exception as exc:
@@ -228,6 +241,7 @@ async def update_document(
     file: UploadFile | None = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> DocumentResponse:
     """Update document metadata, type, and/or replace the stored file."""
     db_document = await get_owned_document(document_id, vehicle_id, current_user, db)
@@ -298,6 +312,7 @@ async def update_document(
 
         await db.commit()
         await db.refresh(db_document)
+        await cache_delete(redis, vehicle_summary_key(str(vehicle_id)))
 
         if replaced_storage_path:
             await cleanup_document(replaced_storage_path)
@@ -325,6 +340,7 @@ async def delete_document(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> None:
     """Delete a document by ID."""
     db_document = await get_owned_document(document_id, vehicle_id, current_user, db)
@@ -334,6 +350,7 @@ async def delete_document(
     try:
         await db.delete(db_document)
         await db.commit()
+        await cache_delete(redis, vehicle_summary_key(str(vehicle_id)))
     except Exception as exc:
         await db.rollback()
         logger.exception("Failed to delete document record %s", document_id)

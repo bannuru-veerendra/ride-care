@@ -9,7 +9,7 @@ import {
     AlertTriangle,
     MoreHorizontal,
 } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,13 +52,10 @@ export default function DocumentCard({
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const daysUntilExpiry = document.expiry_date
-        ? differenceInDays(new Date(document.expiry_date), new Date())
-        : null;
-
-    const isExpiringSoon =
-        daysUntilExpiry !== null && daysUntilExpiry <= 30 && daysUntilExpiry >= 0;
-    const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
+    // Urgency fields come from the API (DOCUMENT_SOON_DAYS lives on the backend).
+    const daysUntilExpiry = document.days_until;
+    const isExpired = document.expiry_status === "expired";
+    const isExpiringSoon = document.expiry_status === "soon";
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -205,10 +202,11 @@ export default function DocumentCard({
                                         Expired
                                     </Badge>
                                 )}
-                                {isExpiringSoon && !isExpired && (
+                                {isExpiringSoon && !isExpired && daysUntilExpiry != null && (
                                     <Badge className="gap-1 border-0 bg-brand/15 text-xs text-brand">
                                         <AlertTriangle className="h-3 w-3" />
-                                        Expires in {daysUntilExpiry} days
+                                        Expires in {daysUntilExpiry} day
+                                        {daysUntilExpiry === 1 ? "" : "s"}
                                     </Badge>
                                 )}
                             </div>

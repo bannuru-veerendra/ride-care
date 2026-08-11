@@ -42,7 +42,7 @@ Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 |------------|-------------------|
 | Mileage math | Liters + km/L from cost, price/L, and odometer deltas — recalculated on every fill-up edit/delete **and** baseline change |
 | Live odometer | `max(baseline, fuel, service)` so garage and dashboard never lie |
-| Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs, not one UI page |
+| Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs — plus `service_reminder` and `document_reminders` for in-app alerts |
 | Charts | `GET /vehicles/{id}/analytics` — trend series + monthly spend from SQL |
 | Scale | Stable cursor pagination (`date`/`created_at` + `id`) — same-day rows never skip |
 | Speed | Redis cache with write-through invalidation on fuel, service, and vehicle writes |
@@ -58,7 +58,7 @@ The frontend stays thin: sheets, charts, and **Load more** lists over a clear RE
 
 ### Dashboard — status at a glance
 
-Multi-bike picker, live odometer, average mileage, next-service countdown, monthly spend, and mileage trend — all from the summary API.
+Multi-bike picker, live odometer, average mileage, next-service countdown, **in-app reminders** (service due + document expiry), monthly spend, and mileage trend — all from the summary API.
 
 ![RideCare dashboard](docs/screenshots/01-dashboard.png)
 

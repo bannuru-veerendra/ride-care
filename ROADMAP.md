@@ -18,7 +18,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Live odometer = `max(baseline, fuel max, service max)`
 - Cursor-paginated vehicle list + garage **Load more**
 - Baseline change recalculates stored fuel mileage
-- `GET /vehicles/{id}/summary` — spend, mileage, recent fill-ups, next service
+- `GET /vehicles/{id}/summary` — spend, mileage, recent fill-ups, next service, **service_reminder**, **document_reminders**
 - `GET /vehicles/{id}/analytics` — totals, trend series, monthly spend (SQL over all logs)
 
 ### Fuel & mileage
@@ -38,6 +38,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Typed uploads (PDF / JPEG / PNG, 10 MB), signed download URLs
 - Clear expiry date / notes on update
 - Vehicle delete removes linked storage objects
+- Document writes invalidate vehicle summary cache (reminder freshness)
 
 ### Maintenance guide
 - Static JSON catalog (24 tasks) with in-memory cache
@@ -45,13 +46,14 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 
 ### Caching & platform
 - Redis cache for vehicle list/detail, summary, analytics, and next-service
-- Write-through invalidation on fuel / service / vehicle writes (list + detail + derived)
+- Write-through invalidation on fuel / service / vehicle / document writes
 - Alembic migrations, async SQLAlchemy, GitHub Actions CI
 - Deployed API (Render) + frontend (Vercel) with same-origin `/api` proxy for cookies
 
 ### Frontend product surface
 - Dark rider UI: auth, garage, vehicle detail (Fuel · Service · Docs · Analytics)
 - Dashboard driven by the summary API
+- **In-app reminders** on the dashboard — service soon/overdue + document expiry (no email/push yet)
 - Settings (profile / password), error boundary, 404 page
 - Recharts analytics: summary cards, mileage trend, monthly spend
 
@@ -59,8 +61,8 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 
 ## Next
 
-### Reminders that matter
-- Service-due and document-expiry notifications (email / push TBD)
+### Reminders beyond the app
+- Email / push for service-due and document-expiry
 - Prefer server-side scheduling; Redis is already in the stack
 
 ### Smarter maintenance

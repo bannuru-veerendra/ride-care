@@ -59,12 +59,18 @@ export default function VehicleDetailPage() {
     const [searchParams, setSearchParams] = useSearchParams();
 
     const actionParam = searchParams.get("action");
+    const tabParam = searchParams.get("tab");
     const initialTab =
-        actionParam === "service"
-            ? "service"
-            : actionParam === "documents"
-              ? "documents"
-              : "fuel";
+        tabParam === "service" ||
+        tabParam === "documents" ||
+        tabParam === "fuel" ||
+        tabParam === "analytics"
+            ? tabParam
+            : actionParam === "service"
+              ? "service"
+              : actionParam === "documents"
+                ? "documents"
+                : "fuel";
 
     const [activeTab, setActiveTab] = useState(initialTab);
     const [fuelSheetOpen, setFuelSheetOpen] = useState(false);
@@ -75,6 +81,23 @@ export default function VehicleDetailPage() {
 
     const [documentSheetOpen, setDocumentSheetOpen] = useState(false);
     const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+
+    // Deep-link to a tab without opening a sheet (?tab=service|documents|fuel|analytics)
+    useEffect(() => {
+        const tab = searchParams.get("tab");
+        if (
+            tab !== "service" &&
+            tab !== "documents" &&
+            tab !== "fuel" &&
+            tab !== "analytics"
+        ) {
+            return;
+        }
+        setActiveTab(tab);
+        const next = new URLSearchParams(searchParams);
+        next.delete("tab");
+        setSearchParams(next, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     // Open fuel/service sheet when linked from dashboard (?action=fuel|service)
     useEffect(() => {

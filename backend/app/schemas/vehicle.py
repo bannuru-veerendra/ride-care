@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
@@ -67,6 +68,28 @@ class VehicleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+ServiceReminderStatus = Literal["ok", "soon", "overdue", "none"]
+DocumentReminderStatus = Literal["ok", "soon", "expired"]
+
+
+class ServiceReminder(BaseModel):
+    """In-app next-service due signal for the dashboard."""
+    status: ServiceReminderStatus
+    days_until: int | None = None
+    km_until: int | None = None
+    next_service_date: date | None = None
+    next_service_odometer: int | None = None
+
+
+class DocumentReminder(BaseModel):
+    """In-app document expiry signal for the dashboard."""
+    id: uuid.UUID
+    document_type: str
+    expiry_date: date
+    days_until: int
+    status: DocumentReminderStatus
+
+
 class VehicleSummaryResponse(BaseModel):
     """Aggregated dashboard stats for a single vehicle"""
     vehicle_id: uuid.UUID
@@ -83,6 +106,8 @@ class VehicleSummaryResponse(BaseModel):
     prior_filled_month_label: str | None = None
     recent_fuel_logs: list[FuelLogResponse]
     next_service: ServiceLogResponse | None = None
+    service_reminder: ServiceReminder
+    document_reminders: list[DocumentReminder] = []
 
 
 class MileageTrendPoint(BaseModel):
