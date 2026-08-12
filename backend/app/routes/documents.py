@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import date as dt_date
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +12,11 @@ from app.models.document import Document, DocumentType
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.document import DocumentResponse, _DocumentDbFields
+from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import cache_delete, vehicle_summary_key
 from app.utils.dates import app_today
+from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
 from app.utils.reminders import document_expiry_fields
 from app.utils.storage import (
@@ -199,22 +201,42 @@ async def create_document(
         ) from exc
 
 
-@router.get("/", response_model=list[DocumentResponse])
+@router.get("/", response_model=CursorPage[DocumentResponse])
 async def get_documents(
     vehicle_id: uuid.UUID,
+    cursor: str | None = Query(None),
+    size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[DocumentResponse]:
-    """Get all documents for a vehicle."""
+) -> CursorPage[DocumentResponse]:
+    """Get paginated documents for a vehicle (newest first)."""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
-    result = await db.execute(
-        select(Document)
-        .where(Document.vehicle_id == vehicle_id)
-        .order_by(Document.created_at.desc())
-    )
-    db_documents = result.scalars().all()
 
-    return [await to_document_response(db_document) for db_document in db_documents]
+    try:
+        page = await paginate(
+            db,
+            Document,
+            filter_clause=Document.vehicle_id == vehicle_id,
+            order_by_column=Document.created_at,
+            cursor_column=Document.created_at,
+            tiebreaker_column=Document.id,
+            cursor=cursor,
+            size=size,
+            descending=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    items = [await to_document_response(db_document) for db_document in page.items]
+    return CursorPage(
+        items=items,
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+        total=page.total,
+    )
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)

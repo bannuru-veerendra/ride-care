@@ -156,10 +156,12 @@ async def test_get_documents(
     )
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["id"] == created_document["id"]
-    assert data[0]["signed_url"].startswith("https://")
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
+    assert data["has_more"] is False
+    assert data["next_cursor"] is None
+    assert data["items"][0]["id"] == created_document["id"]
+    assert data["items"][0]["signed_url"].startswith("https://")
 
 
 async def test_get_document_by_id(
@@ -419,6 +421,58 @@ async def test_upload_without_token(client: AsyncClient, created_vehicle: dict):
         files={"file": make_fake_pdf()},
     )
     assert response.status_code == 401
+
+
+async def test_get_documents_cursor_pagination(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Cursor-paginated document list returns non-overlapping pages."""
+    vehicle_id = created_vehicle["id"]
+    document_types = [
+        "insurance",
+        "driving_license",
+        "registration_certificate",
+        "insurance",
+        "driving_license",
+    ]
+
+    for index, document_type in enumerate(document_types):
+        response = await client.post(
+            "/documents/",
+            params={"vehicle_id": vehicle_id},
+            data={"document_type": document_type},
+            files={"file": make_fake_pdf(f"doc-{index}".encode())},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+    page1 = await client.get(
+        "/documents/",
+        params={"vehicle_id": vehicle_id, "size": 3},
+        headers=auth_headers,
+    )
+    data1 = page1.json()
+    assert len(data1["items"]) == 3
+    assert data1["has_more"] is True
+    assert data1["next_cursor"] is not None
+    assert data1["total"] == 5
+
+    page2 = await client.get(
+        "/documents/",
+        params={
+            "vehicle_id": vehicle_id,
+            "size": 3,
+            "cursor": data1["next_cursor"],
+        },
+        headers=auth_headers,
+    )
+    data2 = page2.json()
+    assert len(data2["items"]) == 2
+    assert data2["has_more"] is False
+
+    page1_ids = {item["id"] for item in data1["items"]}
+    page2_ids = {item["id"] for item in data2["items"]}
+    assert page1_ids.isdisjoint(page2_ids)
 
 
 async def test_get_documents_without_token(client: AsyncClient, created_vehicle: dict):
