@@ -52,7 +52,7 @@ import type { ServiceLogSchema } from "@/features/service-logs/schemas";
 import DocumentCard from "@/features/documents/components/DocumentCard";
 import DocumentForm from "@/features/documents/components/DocumentForm";
 import {
-    useDocuments,
+    useInfiniteDocuments,
     useUploadDocument,
     useUpdateDocument,
     useDeleteDocument,
@@ -147,12 +147,20 @@ export default function VehicleDetailPage() {
         isFetchingNextPage: serviceFetchingNextPage,
         fetchNextPage: fetchNextServicePage,
     } = useInfiniteServiceLogs(id!);
-    const { data: documents, isLoading: documentsLoading } = useDocuments(id!);
+    const {
+        data: documentsData,
+        isLoading: documentsLoading,
+        hasNextPage: documentsHasNextPage,
+        isFetchingNextPage: documentsFetchingNextPage,
+        fetchNextPage: fetchNextDocumentsPage,
+    } = useInfiniteDocuments(id!);
 
     const fuelLogs = fuelLogsData?.pages.flatMap((page) => page.items) ?? [];
     const fuelTotal = fuelLogsData?.pages[0]?.total ?? 0;
     const serviceLogs = serviceLogsData?.pages.flatMap((page) => page.items) ?? [];
     const serviceTotal = serviceLogsData?.pages[0]?.total ?? 0;
+    const documents = documentsData?.pages.flatMap((page) => page.items) ?? [];
+    const documentsTotal = documentsData?.pages[0]?.total ?? 0;
 
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
@@ -670,7 +678,7 @@ export default function VehicleDetailPage() {
                 <TabsContent value="documents" className="mt-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">
-                            {documents?.length ?? 0} documents
+                            {documentsTotal} document{documentsTotal === 1 ? "" : "s"}
                         </p>
 
                         <Sheet
@@ -726,7 +734,7 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {!documentsLoading && documents?.length === 0 && (
+                    {!documentsLoading && documents.length === 0 && (
                         <div className="surface-panel px-6 py-14 text-center">
                             <p className="font-heading text-2xl font-bold uppercase tracking-wide">
                                 No documents yet
@@ -737,7 +745,7 @@ export default function VehicleDetailPage() {
                         </div>
                     )}
 
-                    {!documentsLoading && documents && documents.length > 0 && (
+                    {!documentsLoading && documents.length > 0 && (
                         <div className="space-y-3">
                             {documents.map((document) => (
                                 <DocumentCard
@@ -747,6 +755,18 @@ export default function VehicleDetailPage() {
                                     onEdit={handleDocumentEdit}
                                 />
                             ))}
+                            {documentsHasNextPage && (
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    disabled={documentsFetchingNextPage}
+                                    onClick={() => void fetchNextDocumentsPage()}
+                                >
+                                    {documentsFetchingNextPage
+                                        ? "Loading..."
+                                        : `Load more (${documents.length} of ${documentsTotal})`}
+                                </Button>
+                            )}
                         </div>
                     )}
                 </TabsContent>

@@ -1,4 +1,5 @@
 import apiClient from "@/lib/axios";
+import type { CursorPage } from "@/types";
 
 /**
  * Document API calls.
@@ -39,9 +40,12 @@ export interface UpdateDocumentPayload {
 }
 
 export const documentsApi = {
-    getAll: async (vehicleId: string): Promise<Document[]> => {
+    getAll: async (
+        vehicleId: string,
+        params?: { cursor?: string; size?: number }
+    ): Promise<CursorPage<Document>> => {
         const { data } = await apiClient.get("/documents/", {
-            params: { vehicle_id: vehicleId },
+            params: { vehicle_id: vehicleId, ...params },
         });
         return data;
     },
