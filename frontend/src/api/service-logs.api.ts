@@ -86,6 +86,14 @@ export const serviceLogsApi = {
             params: { vehicle_id: vehicleId },
         });
     },
+
+    exportCsv: async (vehicleId: string): Promise<Blob> => {
+        const { data } = await apiClient.get("/service_logs/export", {
+            params: { vehicle_id: vehicleId },
+            responseType: "blob",
+        });
+        return data;
+    },
 };
 
 export default serviceLogsApi;

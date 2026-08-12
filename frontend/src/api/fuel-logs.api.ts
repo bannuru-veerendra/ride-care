@@ -72,7 +72,14 @@ export const fuelLogsApi = {
         await apiClient.delete(`/fuel_logs/${logId}`, {
             params: { vehicle_id: vehicleId },
         });
-    }
+    },
+    exportCsv: async (vehicleId: string): Promise<Blob> => {
+        const { data } = await apiClient.get("/fuel_logs/export", {
+            params: { vehicle_id: vehicleId },
+            responseType: "blob",
+        });
+        return data;
+    },
 }
 
 export default fuelLogsApi;

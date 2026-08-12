@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,7 @@ from app.utils.cache import (
     vehicle_detail_key,
     vehicle_summary_key,
 )
+from app.utils.export_csv import fuel_log_csv_rows
 from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
@@ -144,6 +146,31 @@ async def get_fuel_logs(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+@router.get("/export")
+async def export_fuel_logs_csv(
+    vehicle_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Download all fuel logs for a vehicle as CSV (newest first)."""
+    await verify_vehicle_ownership(vehicle_id, current_user, db)
+    result = await db.execute(
+        select(FuelLog)
+        .where(FuelLog.vehicle_id == vehicle_id)
+        .order_by(FuelLog.date.desc(), FuelLog.id.desc())
+    )
+    logs = list(result.scalars().all())
+    csv_body = fuel_log_csv_rows(logs)
+    filename = f"ridecare-fuel-{vehicle_id}.csv"
+    return Response(
+        content=csv_body,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @router.get("/{fuel_log_id}", response_model=FuelLogResponse)
