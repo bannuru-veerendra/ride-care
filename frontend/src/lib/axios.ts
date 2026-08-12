@@ -22,6 +22,17 @@ const apiClient = axios.create({
 
 // Guard against SPA HTML leaking through a broken /api rewrite
 apiClient.interceptors.response.use((response) => {
+    // Blob / ArrayBuffer downloads (CSV export) are not HTML JSON responses
+    if (
+        typeof Blob !== "undefined" &&
+        response.data instanceof Blob
+    ) {
+        return response;
+    }
+    if (response.data instanceof ArrayBuffer) {
+        return response;
+    }
+
     const contentType = String(response.headers["content-type"] ?? "");
     if (
         contentType.includes("text/html") ||

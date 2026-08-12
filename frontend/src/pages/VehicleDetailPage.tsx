@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Plus, ArrowLeft, Gauge, Calendar, Fuel, Wrench, FileText, BarChart2 } from "lucide-react";
+import {
+    Plus,
+    ArrowLeft,
+    Gauge,
+    Calendar,
+    Fuel,
+    Wrench,
+    FileText,
+    BarChart2,
+    Download,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +34,7 @@ import {
     useUpdateFuelLog,
     useDeleteFuelLog,
 } from "@/features/fuel-logs/hooks/useFuelLogs";
+import { fuelLogsApi } from "@/api/fuel-logs.api";
 import type { FuelLog } from "@/features/fuel-logs/types";
 import type { FuelLogSchema } from "@/features/fuel-logs/schemas";
 import ServiceLogCard from "@/features/service-logs/components/ServiceLogCard";
@@ -34,6 +45,8 @@ import {
     useUpdateServiceLog,
     useDeleteServiceLog,
 } from "@/features/service-logs/hooks/useServiceLogs";
+import { serviceLogsApi } from "@/api/service-logs.api";
+import { downloadBlob } from "@/lib/download";
 import type { ServiceLog } from "@/features/service-logs/types";
 import type { ServiceLogSchema } from "@/features/service-logs/schemas";
 import DocumentCard from "@/features/documents/components/DocumentCard";
@@ -81,6 +94,8 @@ export default function VehicleDetailPage() {
 
     const [documentSheetOpen, setDocumentSheetOpen] = useState(false);
     const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+    const [exportingFuel, setExportingFuel] = useState(false);
+    const [exportingService, setExportingService] = useState(false);
 
     // Deep-link to a tab without opening a sheet (?tab=service|documents|fuel|analytics)
     useEffect(() => {
@@ -150,6 +165,34 @@ export default function VehicleDetailPage() {
     const uploadDocument = useUploadDocument(id!);
     const updateDocument = useUpdateDocument(id!, editingDocument?.id ?? "");
     const deleteDocument = useDeleteDocument(id!);
+
+    const handleExportFuelCsv = async () => {
+        if (!id || exportingFuel) return;
+        setExportingFuel(true);
+        try {
+            const blob = await fuelLogsApi.exportCsv(id);
+            downloadBlob(blob, `ridecare-fuel-${id}.csv`);
+            toast.success("Fuel history exported");
+        } catch {
+            toast.error("Failed to export fuel history");
+        } finally {
+            setExportingFuel(false);
+        }
+    };
+
+    const handleExportServiceCsv = async () => {
+        if (!id || exportingService) return;
+        setExportingService(true);
+        try {
+            const blob = await serviceLogsApi.exportCsv(id);
+            downloadBlob(blob, `ridecare-service-${id}.csv`);
+            toast.success("Service history exported");
+        } catch {
+            toast.error("Failed to export service history");
+        } finally {
+            setExportingService(false);
+        }
+    };
 
     const handleFuelSubmit = (values: FuelLogSchema) => {
         if (editingLog) {
@@ -416,12 +459,23 @@ export default function VehicleDetailPage() {
 
                 {/* Fuel logs tab */}
                 <TabsContent value="fuel" className="mt-5 space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                         <p className="text-sm text-muted-foreground">
                             {fuelTotal} entries
                         </p>
 
-                        <Sheet open={fuelSheetOpen} onOpenChange={handleFuelSheetOpenChange}>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={fuelTotal === 0 || exportingFuel}
+                                onClick={() => void handleExportFuelCsv()}
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                {exportingFuel ? "Exporting…" : "Export CSV"}
+                            </Button>
+                            <Sheet open={fuelSheetOpen} onOpenChange={handleFuelSheetOpenChange}>
                             <SheetTrigger
                                 render={
                                     <Button
@@ -455,6 +509,7 @@ export default function VehicleDetailPage() {
                                 />
                             </SheetContent>
                         </Sheet>
+                        </div>
                     </div>
 
                     {logsLoading && (
@@ -504,54 +559,66 @@ export default function VehicleDetailPage() {
 
                 {/* Service logs tab */}
                 <TabsContent value="service" className="mt-5 space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                         <p className="text-sm text-muted-foreground">
                             {serviceTotal} entries
                         </p>
 
-                        <Sheet
-                            open={serviceSheetOpen}
-                            onOpenChange={handleServiceSheetOpenChange}
-                        >
-                            <SheetTrigger
-                                render={
-                                    <Button
-                                        size="sm"
-                                        className="bg-brand text-brand-foreground hover:bg-brand/90"
+                        <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={serviceTotal === 0 || exportingService}
+                                onClick={() => void handleExportServiceCsv()}
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                {exportingService ? "Exporting…" : "Export CSV"}
+                            </Button>
+                            <Sheet
+                                open={serviceSheetOpen}
+                                onOpenChange={handleServiceSheetOpenChange}
+                            >
+                                <SheetTrigger
+                                    render={
+                                        <Button
+                                            size="sm"
+                                            className="bg-brand text-brand-foreground hover:bg-brand/90"
+                                        />
+                                    }
+                                >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Log service
+                                </SheetTrigger>
+                                <SheetContent
+                                    side="right"
+                                    className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
+                                >
+                                    <SheetHeader className="mb-6 p-0">
+                                        <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
+                                            {editingServiceLog
+                                                ? "Edit service log"
+                                                : "Log service"}
+                                        </SheetTitle>
+                                        <p className="text-sm text-muted-foreground">
+                                            Record what was done and when the next service is due
+                                        </p>
+                                    </SheetHeader>
+                                    <ServiceLogForm
+                                        key={editingServiceLog?.id ?? "create"}
+                                        defaultValues={editingServiceLog ?? undefined}
+                                        onSubmit={handleServiceSubmit}
+                                        isPending={
+                                            createServiceLog.isPending ||
+                                            updateServiceLog.isPending
+                                        }
+                                        error={
+                                            createServiceLog.error || updateServiceLog.error
+                                        }
                                     />
-                                }
-                            >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Log service
-                            </SheetTrigger>
-                            <SheetContent
-                                side="right"
-                                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
-                            >
-                                <SheetHeader className="mb-6 p-0">
-                                    <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                        {editingServiceLog
-                                            ? "Edit service log"
-                                            : "Log service"}
-                                    </SheetTitle>
-                                    <p className="text-sm text-muted-foreground">
-                                        Record what was done and when the next service is due
-                                    </p>
-                                </SheetHeader>
-                                <ServiceLogForm
-                                    key={editingServiceLog?.id ?? "create"}
-                                    defaultValues={editingServiceLog ?? undefined}
-                                    onSubmit={handleServiceSubmit}
-                                    isPending={
-                                        createServiceLog.isPending ||
-                                        updateServiceLog.isPending
-                                    }
-                                    error={
-                                        createServiceLog.error || updateServiceLog.error
-                                    }
-                                />
-                            </SheetContent>
-                        </Sheet>
+                                </SheetContent>
+                            </Sheet>
+                        </div>
                     </div>
 
                     {serviceLogsLoading && (

@@ -26,12 +26,14 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Timeline-aware odometer validation
 - Full mileage recalculation on create / update / delete / baseline change
 - Stable cursor pagination (date + id) + fuel tab **Load more**
+- **CSV export** of full fuel history (`GET /fuel_logs/export`)
 
 ### Service history
 - Service visits with tags, cost, and next-due fields
 - `GET /service_logs/next` for reminders (cached nulls are real hits)
 - Cursor-paginated list + service tab **Load more**
 - Partial PATCH validates next-service odometer against existing reading
+- **CSV export** of full service history (`GET /service_logs/export`)
 
 ### Documents
 - Insurance / licence / RC vault via Supabase Storage
@@ -76,7 +78,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 ### List & export polish
 - Load more for documents lists
 - Cursor pagination for documents API
-- CSV / PDF export for fill-ups and service history
+- PDF export for fill-ups and service history
 
 ### Deeper analytics
 - Longer-range cost-per-km (fuel + service)
