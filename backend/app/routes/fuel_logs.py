@@ -17,6 +17,7 @@ from app.schemas.fuel_log import (
 )
 from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
+from app.utils.vehicle_access import verify_vehicle_ownership
 from app.utils.cache import (
     cache_delete,
     cache_delete_pattern,
@@ -46,27 +47,6 @@ async def _invalidate_fuel_derived_caches(
         vehicle_analytics_key(str(vehicle_id)),
     )
     await cache_delete_pattern(redis, f"cache:vehicles:user:{owner_id}*")
-
-
-async def verify_vehicle_ownership(
-    vehicle_id: uuid.UUID,
-    current_user: User,
-    db: AsyncSession,
-) -> Vehicle:
-    """Verify that the current user owns the vehicle"""
-    result = await db.execute(
-        select(Vehicle).where(
-            Vehicle.id == vehicle_id,
-            Vehicle.owner_id == current_user.id,
-        )
-    )
-    db_vehicle = result.scalar_one_or_none()
-    if not db_vehicle:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vehicle not found",
-        )
-    return db_vehicle
 
 
 async def get_owned_fuel_log(

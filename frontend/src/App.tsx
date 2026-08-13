@@ -21,30 +21,30 @@ import NotFoundPage from "@/pages/NotFoundPage";
  * Protected routes — wrapped in AppLayout (navbar + content area)
  */
 export default function App() {
-  return (
-    <ErrorBoundary fallback={<NotFoundPage />}>
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    return (
+        <ErrorBoundary fallback={<NotFoundPage />}>
+            <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+                {/* Public routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
 
-        {/* Protected routes — all share AppLayout */}
-        <Route element={<ProtectedRoute />}>
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<><ErrorBoundary><DashboardPage /></ErrorBoundary></>} />
-            <Route path="/vehicles" element={<><ErrorBoundary><VehiclesPage /></ErrorBoundary></>} />
-            <Route path="/vehicles/:id" element={<><ErrorBoundary><VehicleDetailPage /></ErrorBoundary></>} />
-            <Route path="/settings" element={<><ErrorBoundary><SettingsPage /></ErrorBoundary></>} />
-            <Route path="/maintenance" element={<><ErrorBoundary><MaintenanceGuidelinesPage /></ErrorBoundary></>} />
-          </Route>
-        </Route>
+                {/* Protected routes — all share AppLayout */}
+                <Route element={<ProtectedRoute />}>
+                    <Route element={<AppLayout />}>
+                        <Route path="/dashboard" element={<><ErrorBoundary><DashboardPage /></ErrorBoundary></>} />
+                        <Route path="/vehicles" element={<><ErrorBoundary><VehiclesPage /></ErrorBoundary></>} />
+                        <Route path="/vehicles/:id" element={<><ErrorBoundary><VehicleDetailPage /></ErrorBoundary></>} />
+                        <Route path="/settings" element={<><ErrorBoundary><SettingsPage /></ErrorBoundary></>} />
+                        <Route path="/maintenance" element={<><ErrorBoundary><MaintenanceGuidelinesPage /></ErrorBoundary></>} />
+                    </Route>
+                </Route>
 
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+                <Route path="*" element={<NotFoundPage />} />
+            </Routes>
 
-      <Toaster position="top-right" richColors />
-    </ErrorBoundary>
-  );
+            <Toaster position="top-right" richColors />
+        </ErrorBoundary>
+    );
 }

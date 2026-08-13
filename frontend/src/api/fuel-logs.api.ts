@@ -1,10 +1,11 @@
 import apiClient from "@/lib/axios";
 import type { CursorPage } from "@/types";
+import type { FuelLogSchema } from "@/features/fuel-logs/schemas";
 
 /**
- * Fuel log API calls
- * All endpoints map to the backend /fuel_logs routes
- * vehicle_id is passed as a query parameter
+ * Fuel log API calls.
+ * All endpoints map to the backend /fuel_logs routes.
+ * vehicle_id is passed as a query parameter.
  */
 
 export interface FuelLog {
@@ -19,22 +20,8 @@ export interface FuelLog {
     notes: string | null;
 }
 
-
-export interface CreateFuelLogPayload {
-    date: string;
-    odometer: number;
-    total_cost: number;
-    price_per_liter: number;
-    notes?: string;
-}
-
-export interface UpdateFuelLogPayload {
-    date?: string;
-    odometer?: number;
-    total_cost?: number;
-    price_per_liter?: number;
-    notes?: string;
-}
+export type CreateFuelLogPayload = FuelLogSchema;
+export type UpdateFuelLogPayload = Partial<FuelLogSchema>;
 
 export const fuelLogsApi = {
     getAll: async (
@@ -43,12 +30,6 @@ export const fuelLogsApi = {
     ): Promise<CursorPage<FuelLog>> => {
         const { data } = await apiClient.get("/fuel_logs/", {
             params: { vehicle_id: vehicleId, ...params },
-        });
-        return data;
-    },
-    getById: async (vehicleId: string, logId: string): Promise<FuelLog> => {
-        const { data } = await apiClient.get(`/fuel_logs/${logId}`, {
-            params: { vehicle_id: vehicleId },
         });
         return data;
     },
@@ -80,6 +61,5 @@ export const fuelLogsApi = {
         });
         return data;
     },
-}
+};
 
-export default fuelLogsApi;

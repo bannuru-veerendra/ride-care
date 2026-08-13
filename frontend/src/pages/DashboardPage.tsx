@@ -11,7 +11,6 @@ import {
     TrendingUp,
     Wrench,
 } from "lucide-react";
-import { format } from "date-fns";
 
 import { buttonVariants } from "@/components/ui/button";
 import RideCareLogo from "@/components/common/RideCareLogo";
@@ -24,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { formatAppDate } from "@/lib/date";
 import type { Vehicle } from "@/features/vehicles/types";
 
 const SELECTED_VEHICLE_KEY = "ridecare-dashboard-vehicle";
@@ -295,10 +295,10 @@ export default function DashboardPage() {
                                                 ? `${Math.abs(daysUntilNextService)} day${Math.abs(daysUntilNextService) === 1 ? "" : "s"} past due`
                                                 : `${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"} left`
                                             : kmUntilNextService !== null
-                                              ? serviceOverdue
-                                                  ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past due`
-                                                  : `${kmUntilNextService.toLocaleString("en-IN")} km left`
-                                              : "Check service schedule"}
+                                                ? serviceOverdue
+                                                    ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past due`
+                                                    : `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                                : "Check service schedule"}
                                     </p>
                                 </div>
                                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -337,10 +337,7 @@ export default function DashboardPage() {
                                             ? `${Math.abs(doc.days_until)} day${Math.abs(doc.days_until) === 1 ? "" : "s"} ago`
                                             : `${doc.days_until} day${doc.days_until === 1 ? "" : "s"} left`}
                                         {" · "}
-                                        {format(
-                                            new Date(doc.expiry_date),
-                                            "dd MMM yyyy"
-                                        )}
+                                        {formatAppDate(doc.expiry_date)}
                                     </p>
                                 </div>
                                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -492,21 +489,18 @@ export default function DashboardPage() {
                                                 ? "Overdue"
                                                 : daysUntilNextService !== null &&
                                                     daysUntilNextService >= 0
-                                                  ? formatServiceCountdown(
+                                                    ? formatServiceCountdown(
                                                         daysUntilNextService
                                                     )
-                                                  : kmUntilNextService !== null
-                                                    ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
-                                                    : "—"}
+                                                    : kmUntilNextService !== null
+                                                        ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                                        : "—"}
                                         </p>
                                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                             <p className="text-xs text-muted-foreground">
                                                 {[
                                                     nextServiceDate
-                                                        ? format(
-                                                              new Date(nextServiceDate),
-                                                              "dd MMM yyyy"
-                                                          )
+                                                        ? formatAppDate(nextServiceDate)
                                                         : null,
                                                     // Show remaining km in the subtitle when the
                                                     // headline is already the date countdown.
@@ -520,8 +514,8 @@ export default function DashboardPage() {
                                                         : serviceOverdue &&
                                                             kmUntilNextService != null &&
                                                             kmUntilNextService < 0
-                                                          ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past`
-                                                          : null,
+                                                            ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past`
+                                                            : null,
                                                 ]
                                                     .filter(Boolean)
                                                     .join(" · ")}
@@ -735,7 +729,7 @@ export default function DashboardPage() {
                                             {log.total_cost.toLocaleString("en-IN")}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {format(new Date(log.date), "dd MMM yyyy")}{" "}
+                                            {formatAppDate(log.date)}{" "}
                                             · {log.odometer.toLocaleString("en-IN")} km
                                         </p>
                                     </div>

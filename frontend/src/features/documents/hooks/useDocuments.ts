@@ -12,8 +12,6 @@ import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
  */
 export const documentKeys = {
     infinite: (vehicleId: string) => ["documents-infinite", vehicleId] as const,
-    details: (vehicleId: string, documentId: string) =>
-        ["documents", vehicleId, documentId] as const,
 };
 
 function invalidateDocumentDerivedQueries(

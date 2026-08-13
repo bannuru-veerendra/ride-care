@@ -20,6 +20,20 @@ const apiClient = axios.create({
     },
 });
 
+// FormData must not keep application/json — browser sets multipart + boundary
+apiClient.interceptors.request.use((config) => {
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+        const headers = config.headers;
+        if (headers && typeof headers.set === "function") {
+            headers.set("Content-Type", false);
+        } else if (headers) {
+            delete (headers as Record<string, unknown>)["Content-Type"];
+            delete (headers as Record<string, unknown>)["content-type"];
+        }
+    }
+    return config;
+});
+
 // Guard against SPA HTML leaking through a broken /api rewrite
 apiClient.interceptors.response.use((response) => {
     // Blob / ArrayBuffer downloads (CSV export) are not HTML JSON responses

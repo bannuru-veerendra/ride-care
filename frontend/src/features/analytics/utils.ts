@@ -1,17 +1,17 @@
 /**
- * Chart prop types for analytics components.
- * Series data is produced by GET /vehicles/{id}/analytics.
+ * Chart prop types after mapping GET /vehicles/{id}/analytics series.
+ * API points use date_label; charts plot the display label as `date`.
  */
 
 export interface MileageTrendPoint {
-  date: string;
-  mileage: number;
-  odometer: number;
+    date: string;
+    mileage: number;
+    odometer: number;
 }
 
 export interface MonthlySpendPoint {
-  month: string;
-  year_month?: string;
-  spend: number;
-  liters: number;
+    month: string;
+    year_month?: string;
+    spend: number;
+    liters: number;
 }

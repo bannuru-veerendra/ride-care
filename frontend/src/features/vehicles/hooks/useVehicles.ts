@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { vehiclesApi } from "@/api/vehicles.api";
 import type { CreateVehiclePayload, UpdateVehiclePayload } from "@/api/vehicles.api";
+import { getCursorNextPageParam } from "@/lib/query-client";
 
 
 /**
@@ -13,6 +14,23 @@ export const vehicleKeys = {
     details: (id: string) => ["vehicle-detail", id] as const,
     analytics: (id: string) => ["vehicle-analytics", id] as const,
     summary: (id: string) => ["vehicle-summary", id] as const,
+};
+
+function invalidateVehicleLists(queryClient: ReturnType<typeof useQueryClient>) {
+    queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
+}
+
+function removeVehicleScopedQueries(
+    queryClient: ReturnType<typeof useQueryClient>,
+    id: string
+) {
+    queryClient.removeQueries({ queryKey: vehicleKeys.details(id) });
+    queryClient.removeQueries({ queryKey: vehicleKeys.summary(id) });
+    queryClient.removeQueries({ queryKey: vehicleKeys.analytics(id) });
+    // Literal prefixes — avoid circular imports with feature hook modules
+    queryClient.removeQueries({ queryKey: ["fuel-logs-infinite", id] });
+    queryClient.removeQueries({ queryKey: ["service-logs-infinite", id] });
+    queryClient.removeQueries({ queryKey: ["documents", id] });
 }
 
 /** Paginated vehicles with Load more support for the garage */
@@ -25,12 +43,11 @@ export const useInfiniteVehicles = () => {
                 size: 20,
             }),
         initialPageParam: undefined as string | undefined,
-        getNextPageParam: (lastPage) =>
-            lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
+        getNextPageParam: getCursorNextPageParam,
     });
 };
 
-/** @deprecated Prefer useInfiniteVehicles — kept for single-page consumers that auto-load */
+/** Flat vehicle list for dashboard picker (single page, up to 100) */
 export const useVehicles = () => {
     return useQuery({
         queryKey: vehicleKeys.all,
@@ -74,9 +91,7 @@ export const useCreateVehicle = () => {
     
     return useMutation({
         mutationFn: (payload: CreateVehiclePayload) => vehiclesApi.create(payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
-        },
+        onSuccess: () => invalidateVehicleLists(queryClient),
     });
 };
 
@@ -88,7 +103,7 @@ export const useUpdateVehicle = (id: string) => {
     return useMutation({
         mutationFn: (payload: UpdateVehiclePayload) => vehiclesApi.update(id, payload),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
+            invalidateVehicleLists(queryClient);
             queryClient.invalidateQueries({ queryKey: vehicleKeys.details(id) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(id) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.analytics(id) });
@@ -103,8 +118,9 @@ export const useDeleteVehicle = () => {
 
     return useMutation({
         mutationFn: (id: string) => vehiclesApi.delete(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
+        onSuccess: (_data, id) => {
+            invalidateVehicleLists(queryClient);
+            removeVehicleScopedQueries(queryClient, id);
         },
     });
 };

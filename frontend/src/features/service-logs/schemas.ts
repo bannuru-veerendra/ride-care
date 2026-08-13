@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { appTodayISO } from "@/lib/date";
+import { odometerSchema, pastOrTodayDateSchema } from "@/lib/date";
 
 /**
  * Common service items users can pick from.
@@ -24,15 +24,8 @@ export const COMMON_SERVICES = [
  * Mirrors backend validation rules.
  */
 export const serviceLogSchema = z.object({
-    date: z
-        .string()
-        .min(1, { message: "Date is required" })
-        .refine((value) => value <= appTodayISO(), {
-            message: "Service log date cannot be in the future",
-        }),
-    odometer: z
-        .number({ error: "Odometer must be a number" })
-        .min(1, { message: "Odometer must be greater than 0" }),
+    date: pastOrTodayDateSchema("Service log"),
+    odometer: odometerSchema,
     service_center: z.string().optional(),
     total_cost: z
         .number({ error: "Cost must be a number" })

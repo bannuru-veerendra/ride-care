@@ -27,6 +27,7 @@ from app.utils.cache import (
 from app.utils.export_csv import service_log_csv_rows
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
+from app.utils.vehicle_access import verify_vehicle_ownership
 
 
 router = APIRouter(prefix="/service_logs", tags=["service_logs"])
@@ -45,27 +46,6 @@ async def _invalidate_service_derived_caches(
         vehicle_detail_key(str(vehicle_id)),
     )
     await cache_delete_pattern(redis, f"cache:vehicles:user:{owner_id}*")
-
-
-async def verify_vehicle_ownership(
-    vehicle_id: uuid.UUID,
-    current_user: User,
-    db: AsyncSession,
-) -> Vehicle:
-    """Verify that the current user owns the vehicle"""
-    result = await db.execute(
-        select(Vehicle).where(
-            Vehicle.id == vehicle_id,
-            Vehicle.owner_id == current_user.id,
-        )
-    )
-    vehicle = result.scalar_one_or_none()
-    if not vehicle:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vehicle not found",
-        )
-    return vehicle
 
 
 async def get_owned_service_log(
@@ -102,6 +82,21 @@ def _validate_next_service_odometer(
         )
 
 
+def _validate_service_odometer_against_baseline(
+    odometer: int,
+    baseline_odometer: int,
+) -> None:
+    """Service readings feed live odometer — reject values below the vehicle baseline."""
+    if odometer < baseline_odometer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Odometer reading ({odometer}) must be greater than or equal to "
+                f"the vehicle's baseline odometer ({baseline_odometer})"
+            ),
+        )
+
+
 @router.post("/", response_model=ServiceLogResponse, status_code=status.HTTP_201_CREATED)
 async def create_service_log(
     service_log: ServiceLogCreate,
@@ -112,6 +107,10 @@ async def create_service_log(
 ) -> ServiceLogResponse:
     """Create a new service log"""
     db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
+    _validate_service_odometer_against_baseline(
+        service_log.odometer,
+        db_vehicle.current_odometer,
+    )
     db_service_log = ServiceLog(
         **service_log.model_dump(),
         vehicle_id=vehicle_id,
@@ -259,6 +258,10 @@ async def update_service_log(
         updates["next_service_odometer"]
         if "next_service_odometer" in updates
         else db_service_log.next_service_odometer
+    )
+    _validate_service_odometer_against_baseline(
+        merged_odometer,
+        db_vehicle.current_odometer,
     )
     _validate_next_service_odometer(merged_odometer, merged_next)
 

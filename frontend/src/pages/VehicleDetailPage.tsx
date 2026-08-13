@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
-    Plus,
     ArrowLeft,
     Gauge,
     Calendar,
@@ -10,6 +9,7 @@ import {
     FileText,
     BarChart2,
     Download,
+    Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,7 +46,7 @@ import {
     useDeleteServiceLog,
 } from "@/features/service-logs/hooks/useServiceLogs";
 import { serviceLogsApi } from "@/api/service-logs.api";
-import { downloadBlob } from "@/lib/download";
+import { exportCsvWithToast } from "@/lib/download";
 import type { ServiceLog } from "@/features/service-logs/types";
 import type { ServiceLogSchema } from "@/features/service-logs/schemas";
 import DocumentCard from "@/features/documents/components/DocumentCard";
@@ -60,6 +60,9 @@ import {
 import type { Document } from "@/features/documents/types";
 import type { DocumentSchema } from "@/features/documents/schemas";
 import AnalyticsTab from "@/features/analytics/components/AnalyticsTab";
+
+const TAB_TRIGGER_CLASS =
+    "font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5";
 
 /**
  * Vehicle detail page.
@@ -80,18 +83,16 @@ export default function VehicleDetailPage() {
         tabParam === "analytics"
             ? tabParam
             : actionParam === "service"
-              ? "service"
-              : actionParam === "documents"
-                ? "documents"
-                : "fuel";
+                ? "service"
+                : actionParam === "documents"
+                    ? "documents"
+                    : "fuel";
 
     const [activeTab, setActiveTab] = useState(initialTab);
     const [fuelSheetOpen, setFuelSheetOpen] = useState(false);
     const [editingLog, setEditingLog] = useState<FuelLog | null>(null);
-
     const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
     const [editingServiceLog, setEditingServiceLog] = useState<ServiceLog | null>(null);
-
     const [documentSheetOpen, setDocumentSheetOpen] = useState(false);
     const [editingDocument, setEditingDocument] = useState<Document | null>(null);
     const [exportingFuel, setExportingFuel] = useState(false);
@@ -177,29 +178,29 @@ export default function VehicleDetailPage() {
     const handleExportFuelCsv = async () => {
         if (!id || exportingFuel) return;
         setExportingFuel(true);
-        try {
-            const blob = await fuelLogsApi.exportCsv(id);
-            downloadBlob(blob, `ridecare-fuel-${id}.csv`);
-            toast.success("Fuel history exported");
-        } catch {
-            toast.error("Failed to export fuel history");
-        } finally {
-            setExportingFuel(false);
-        }
+        await exportCsvWithToast(
+            () => fuelLogsApi.exportCsv(id),
+            `ridecare-fuel-${id}.csv`,
+            {
+                success: "Fuel history exported",
+                error: "Failed to export fuel history",
+            }
+        );
+        setExportingFuel(false);
     };
 
     const handleExportServiceCsv = async () => {
         if (!id || exportingService) return;
         setExportingService(true);
-        try {
-            const blob = await serviceLogsApi.exportCsv(id);
-            downloadBlob(blob, `ridecare-service-${id}.csv`);
-            toast.success("Service history exported");
-        } catch {
-            toast.error("Failed to export service history");
-        } finally {
-            setExportingService(false);
-        }
+        await exportCsvWithToast(
+            () => serviceLogsApi.exportCsv(id),
+            `ridecare-service-${id}.csv`,
+            {
+                success: "Service history exported",
+                error: "Failed to export service history",
+            }
+        );
+        setExportingService(false);
     };
 
     const handleFuelSubmit = (values: FuelLogSchema) => {
@@ -223,24 +224,6 @@ export default function VehicleDetailPage() {
         }
     };
 
-    const handleFuelEdit = (log: FuelLog) => {
-        setEditingLog(log);
-        setFuelSheetOpen(true);
-    };
-
-    const handleFuelDelete = (logId: string) => {
-        if (!confirm("Delete this fuel log?")) return;
-        deleteFuelLog.mutate(logId, {
-            onSuccess: () => toast.success("Fuel log deleted"),
-            onError: () => toast.error("Failed to delete fuel log"),
-        });
-    };
-
-    const handleFuelSheetOpenChange = (open: boolean) => {
-        setFuelSheetOpen(open);
-        if (!open) setEditingLog(null);
-    };
-
     const handleServiceSubmit = (values: ServiceLogSchema) => {
         if (editingServiceLog) {
             // Explicit null clears optional fields; omitting them leaves the old value.
@@ -249,8 +232,7 @@ export default function VehicleDetailPage() {
                     ...values,
                     service_center: values.service_center || null,
                     next_service_date: values.next_service_date || null,
-                    next_service_odometer:
-                        values.next_service_odometer ?? null,
+                    next_service_odometer: values.next_service_odometer ?? null,
                     notes: values.notes || null,
                 },
                 {
@@ -281,24 +263,6 @@ export default function VehicleDetailPage() {
                 }
             );
         }
-    };
-
-    const handleServiceEdit = (log: ServiceLog) => {
-        setEditingServiceLog(log);
-        setServiceSheetOpen(true);
-    };
-
-    const handleServiceDelete = (logId: string) => {
-        if (!confirm("Delete this service log?")) return;
-        deleteServiceLog.mutate(logId, {
-            onSuccess: () => toast.success("Service log deleted"),
-            onError: () => toast.error("Failed to delete service log"),
-        });
-    };
-
-    const handleServiceSheetOpenChange = (open: boolean) => {
-        setServiceSheetOpen(open);
-        if (!open) setEditingServiceLog(null);
     };
 
     const handleDocumentSubmit = (values: DocumentSchema & { file?: File }) => {
@@ -346,24 +310,6 @@ export default function VehicleDetailPage() {
                 }
             );
         }
-    };
-
-    const handleDocumentEdit = (document: Document) => {
-        setEditingDocument(document);
-        setDocumentSheetOpen(true);
-    };
-
-    const handleDocumentDelete = (documentId: string) => {
-        if (!confirm("Delete this document?")) return;
-        deleteDocument.mutate(documentId, {
-            onSuccess: () => toast.success("Document deleted"),
-            onError: () => toast.error("Failed to delete document"),
-        });
-    };
-
-    const handleDocumentSheetOpenChange = (open: boolean) => {
-        setDocumentSheetOpen(open);
-        if (!open) setEditingDocument(null);
     };
 
     if (vehicleLoading) {
@@ -424,7 +370,9 @@ export default function VehicleDetailPage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                         <Gauge className="h-3.5 w-3.5 text-brand" />
-                        <span>{vehicle.current_odometer.toLocaleString("en-IN")} km</span>
+                        <span>
+                            {vehicle.current_odometer.toLocaleString("en-IN")} km
+                        </span>
                     </div>
                 </div>
             </div>
@@ -435,31 +383,19 @@ export default function VehicleDetailPage() {
                     variant="line"
                     className="h-auto w-full justify-start gap-0 rounded-none border-b border-white/10 bg-transparent p-0"
                 >
-                    <TabsTrigger
-                        value="fuel"
-                        className="font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5"
-                    >
+                    <TabsTrigger value="fuel" className={TAB_TRIGGER_CLASS}>
                         <Fuel className="h-4 w-4" />
                         Fuel
                     </TabsTrigger>
-                    <TabsTrigger
-                        value="service"
-                        className="font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5"
-                    >
+                    <TabsTrigger value="service" className={TAB_TRIGGER_CLASS}>
                         <Wrench className="h-4 w-4" />
                         Service
                     </TabsTrigger>
-                    <TabsTrigger
-                        value="documents"
-                        className="font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5"
-                    >
+                    <TabsTrigger value="documents" className={TAB_TRIGGER_CLASS}>
                         <FileText className="h-4 w-4" />
                         Docs
                     </TabsTrigger>
-                    <TabsTrigger
-                        value="analytics"
-                        className="font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5"
-                    >
+                    <TabsTrigger value="analytics" className={TAB_TRIGGER_CLASS}>
                         <BarChart2 className="h-4 w-4" />
                         Analytics
                     </TabsTrigger>
@@ -471,7 +407,6 @@ export default function VehicleDetailPage() {
                         <p className="text-sm text-muted-foreground">
                             {fuelTotal} entries
                         </p>
-
                         <div className="flex shrink-0 items-center gap-2">
                             <Button
                                 type="button"
@@ -481,85 +416,68 @@ export default function VehicleDetailPage() {
                                 onClick={() => void handleExportFuelCsv()}
                             >
                                 <Download className="mr-2 h-4 w-4" />
-                                {exportingFuel ? "Exporting…" : "Export CSV"}
+                                {exportingFuel ? "Exporting..." : "Export CSV"}
                             </Button>
-                            <Sheet open={fuelSheetOpen} onOpenChange={handleFuelSheetOpenChange}>
-                            <SheetTrigger
-                                render={
-                                    <Button
-                                        size="sm"
-                                        className="bg-brand text-brand-foreground hover:bg-brand/90"
-                                    />
-                                }
+                            <ResourceFormSheet
+                                open={fuelSheetOpen}
+                                onOpenChange={(open) => {
+                                    setFuelSheetOpen(open);
+                                    if (!open) setEditingLog(null);
+                                }}
+                                triggerLabel="Log fuel"
+                                title={editingLog ? "Edit fuel log" : "Log fuel"}
+                                description="Enter fill-up details — we calculate liters and km/l"
                             >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Log fuel
-                            </SheetTrigger>
-                            <SheetContent
-                                side="right"
-                                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
-                            >
-                                <SheetHeader className="mb-6 p-0">
-                                    <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                        {editingLog ? "Edit fuel log" : "Log fuel"}
-                                    </SheetTitle>
-                                    <p className="text-sm text-muted-foreground">
-                                        Enter fill-up details — we calculate liters and km/l
-                                    </p>
-                                </SheetHeader>
                                 <FuelLogForm
                                     defaultValues={editingLog ?? undefined}
                                     onSubmit={handleFuelSubmit}
                                     isPending={
-                                        createFuelLog.isPending || updateFuelLog.isPending
+                                        createFuelLog.isPending ||
+                                        updateFuelLog.isPending
                                     }
-                                    error={createFuelLog.error || updateFuelLog.error}
+                                    error={
+                                        createFuelLog.error || updateFuelLog.error
+                                    }
                                 />
-                            </SheetContent>
-                        </Sheet>
+                            </ResourceFormSheet>
                         </div>
                     </div>
 
-                    {logsLoading && (
-                        <div className="space-y-3">
-                            {[1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-24 rounded-xl" />
-                            ))}
-                        </div>
-                    )}
-
+                    {logsLoading && <ResourceListSkeleton />}
                     {!logsLoading && fuelLogs.length === 0 && (
-                        <div className="surface-panel px-6 py-14 text-center">
-                            <p className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                No fuel logs yet
-                            </p>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                Tap "Log fuel" to record your first fill-up
-                            </p>
-                        </div>
+                        <ResourceEmptyState
+                            title="No fuel logs yet"
+                            description='Tap "Log fuel" to record your first fill-up'
+                        />
                     )}
-
                     {!logsLoading && fuelLogs.length > 0 && (
                         <div className="space-y-3">
                             {fuelLogs.map((log) => (
                                 <FuelLogCard
                                     key={log.id}
                                     log={log}
-                                    onDelete={handleFuelDelete}
-                                    onEdit={handleFuelEdit}
+                                    onDelete={(logId) => {
+                                        if (!confirm("Delete this fuel log?")) return;
+                                        deleteFuelLog.mutate(logId, {
+                                            onSuccess: () =>
+                                                toast.success("Fuel log deleted"),
+                                            onError: () =>
+                                                toast.error("Failed to delete fuel log"),
+                                        });
+                                    }}
+                                    onEdit={(log) => {
+                                        setEditingLog(log);
+                                        setFuelSheetOpen(true);
+                                    }}
                                 />
                             ))}
                             {fuelHasNextPage && (
-                                <Button
-                                    variant="outline"
-                                    className="w-full"
-                                    disabled={fuelFetchingNextPage}
-                                    onClick={() => void fetchNextFuelPage()}
-                                >
-                                    {fuelFetchingNextPage
-                                        ? "Loading..."
-                                        : `Load more (${fuelLogs.length} of ${fuelTotal})`}
-                                </Button>
+                                <LoadMoreButton
+                                    loaded={fuelLogs.length}
+                                    total={fuelTotal}
+                                    isFetching={fuelFetchingNextPage}
+                                    onLoadMore={() => void fetchNextFuelPage()}
+                                />
                             )}
                         </div>
                     )}
@@ -571,7 +489,6 @@ export default function VehicleDetailPage() {
                         <p className="text-sm text-muted-foreground">
                             {serviceTotal} entries
                         </p>
-
                         <div className="flex shrink-0 items-center gap-2">
                             <Button
                                 type="button"
@@ -581,94 +498,77 @@ export default function VehicleDetailPage() {
                                 onClick={() => void handleExportServiceCsv()}
                             >
                                 <Download className="mr-2 h-4 w-4" />
-                                {exportingService ? "Exporting…" : "Export CSV"}
+                                {exportingService ? "Exporting..." : "Export CSV"}
                             </Button>
-                            <Sheet
+                            <ResourceFormSheet
                                 open={serviceSheetOpen}
-                                onOpenChange={handleServiceSheetOpenChange}
+                                onOpenChange={(open) => {
+                                    setServiceSheetOpen(open);
+                                    if (!open) setEditingServiceLog(null);
+                                }}
+                                triggerLabel="Log service"
+                                title={
+                                    editingServiceLog
+                                        ? "Edit service log"
+                                        : "Log service"
+                                }
+                                description="Record what was done and when the next service is due"
                             >
-                                <SheetTrigger
-                                    render={
-                                        <Button
-                                            size="sm"
-                                            className="bg-brand text-brand-foreground hover:bg-brand/90"
-                                        />
+                                <ServiceLogForm
+                                    key={editingServiceLog?.id ?? "create"}
+                                    defaultValues={editingServiceLog ?? undefined}
+                                    onSubmit={handleServiceSubmit}
+                                    isPending={
+                                        createServiceLog.isPending ||
+                                        updateServiceLog.isPending
                                     }
-                                >
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Log service
-                                </SheetTrigger>
-                                <SheetContent
-                                    side="right"
-                                    className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
-                                >
-                                    <SheetHeader className="mb-6 p-0">
-                                        <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                            {editingServiceLog
-                                                ? "Edit service log"
-                                                : "Log service"}
-                                        </SheetTitle>
-                                        <p className="text-sm text-muted-foreground">
-                                            Record what was done and when the next service is due
-                                        </p>
-                                    </SheetHeader>
-                                    <ServiceLogForm
-                                        key={editingServiceLog?.id ?? "create"}
-                                        defaultValues={editingServiceLog ?? undefined}
-                                        onSubmit={handleServiceSubmit}
-                                        isPending={
-                                            createServiceLog.isPending ||
-                                            updateServiceLog.isPending
-                                        }
-                                        error={
-                                            createServiceLog.error || updateServiceLog.error
-                                        }
-                                    />
-                                </SheetContent>
-                            </Sheet>
+                                    error={
+                                        createServiceLog.error ||
+                                        updateServiceLog.error
+                                    }
+                                />
+                            </ResourceFormSheet>
                         </div>
                     </div>
 
-                    {serviceLogsLoading && (
-                        <div className="space-y-3">
-                            {[1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-24 rounded-xl" />
-                            ))}
-                        </div>
-                    )}
-
+                    {serviceLogsLoading && <ResourceListSkeleton />}
                     {!serviceLogsLoading && serviceLogs.length === 0 && (
-                        <div className="surface-panel px-6 py-14 text-center">
-                            <p className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                No service logs yet
-                            </p>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                Tap "Log service" to record your first service
-                            </p>
-                        </div>
+                        <ResourceEmptyState
+                            title="No service logs yet"
+                            description='Tap "Log service" to record your first service'
+                        />
                     )}
-
                     {!serviceLogsLoading && serviceLogs.length > 0 && (
                         <div className="space-y-3">
                             {serviceLogs.map((log) => (
                                 <ServiceLogCard
                                     key={log.id}
                                     log={log}
-                                    onDelete={handleServiceDelete}
-                                    onEdit={handleServiceEdit}
+                                    onDelete={(logId) => {
+                                        if (!confirm("Delete this service log?"))
+                                            return;
+                                        deleteServiceLog.mutate(logId, {
+                                            onSuccess: () =>
+                                                toast.success("Service log deleted"),
+                                            onError: () =>
+                                                toast.error(
+                                                    "Failed to delete service log"
+                                                ),
+                                        });
+                                    }}
+                                    onEdit={(log) => {
+                                        setEditingServiceLog(log);
+                                        setServiceSheetOpen(true);
+                                    }}
                                 />
                             ))}
                             {serviceHasNextPage && (
-                                <Button
-                                    variant="outline"
-                                    className="w-full"
-                                    disabled={serviceFetchingNextPage}
-                                    onClick={() => void fetchNextServicePage()}
-                                >
-                                    {serviceFetchingNextPage
-                                        ? "Loading..."
-                                        : `Load more (${serviceLogs.length} of ${serviceTotal})`}
-                                </Button>
+                                <LoadMoreButton
+                                    loaded={serviceLogs.length}
+                                    total={serviceTotal}
+                                    isFetching={serviceFetchingNextPage}
+                                    onLoadMore={() => void fetchNextServicePage()}
+                                />
                             )}
                         </div>
                     )}
@@ -680,79 +580,64 @@ export default function VehicleDetailPage() {
                         <p className="text-sm text-muted-foreground">
                             {documentsTotal} document{documentsTotal === 1 ? "" : "s"}
                         </p>
-
-                        <Sheet
+                        <ResourceFormSheet
                             open={documentSheetOpen}
-                            onOpenChange={handleDocumentSheetOpenChange}
+                            onOpenChange={(open) => {
+                                setDocumentSheetOpen(open);
+                                if (!open) setEditingDocument(null);
+                            }}
+                            triggerLabel="Upload doc"
+                            title={
+                                editingDocument
+                                    ? "Edit document"
+                                    : "Upload document"
+                            }
+                            description="Keep insurance, licence, and RC in one vault"
                         >
-                            <SheetTrigger
-                                render={
-                                    <Button
-                                        size="sm"
-                                        className="bg-brand text-brand-foreground hover:bg-brand/90"
-                                    />
+                            <DocumentForm
+                                key={editingDocument?.id ?? "create"}
+                                defaultValues={editingDocument ?? undefined}
+                                onSubmit={handleDocumentSubmit}
+                                isPending={
+                                    uploadDocument.isPending ||
+                                    updateDocument.isPending
                                 }
-                            >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Upload doc
-                            </SheetTrigger>
-                            <SheetContent
-                                side="right"
-                                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
-                            >
-                                <SheetHeader className="mb-6 p-0">
-                                    <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                        {editingDocument
-                                            ? "Edit document"
-                                            : "Upload document"}
-                                    </SheetTitle>
-                                    <p className="text-sm text-muted-foreground">
-                                        Keep insurance, licence, and RC in one vault
-                                    </p>
-                                </SheetHeader>
-                                <DocumentForm
-                                    key={editingDocument?.id ?? "create"}
-                                    defaultValues={editingDocument ?? undefined}
-                                    onSubmit={handleDocumentSubmit}
-                                    isPending={
-                                        uploadDocument.isPending ||
-                                        updateDocument.isPending
-                                    }
-                                    error={
-                                        uploadDocument.error || updateDocument.error
-                                    }
-                                />
-                            </SheetContent>
-                        </Sheet>
+                                error={
+                                    uploadDocument.error || updateDocument.error
+                                }
+                            />
+                        </ResourceFormSheet>
                     </div>
 
-                    {documentsLoading && (
-                        <div className="space-y-3">
-                            {[1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-24 rounded-xl" />
-                            ))}
-                        </div>
-                    )}
-
+                    {documentsLoading && <ResourceListSkeleton />}
                     {!documentsLoading && documents.length === 0 && (
-                        <div className="surface-panel px-6 py-14 text-center">
-                            <p className="font-heading text-2xl font-bold uppercase tracking-wide">
-                                No documents yet
-                            </p>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                Tap "Upload doc" to add insurance, licence, or RC
-                            </p>
-                        </div>
+                        <ResourceEmptyState
+                            title="No documents yet"
+                            description='Tap "Upload doc" to add insurance, licence, or RC'
+                        />
                     )}
-
                     {!documentsLoading && documents.length > 0 && (
                         <div className="space-y-3">
                             {documents.map((document) => (
                                 <DocumentCard
                                     key={document.id}
                                     document={document}
-                                    onDelete={handleDocumentDelete}
-                                    onEdit={handleDocumentEdit}
+                                    onDelete={(documentId) => {
+                                        if (!confirm("Delete this document?"))
+                                            return;
+                                        deleteDocument.mutate(documentId, {
+                                            onSuccess: () =>
+                                                toast.success("Document deleted"),
+                                            onError: () =>
+                                                toast.error(
+                                                    "Failed to delete document"
+                                                ),
+                                        });
+                                    }}
+                                    onEdit={(document) => {
+                                        setEditingDocument(document);
+                                        setDocumentSheetOpen(true);
+                                    }}
                                 />
                             ))}
                             {documentsHasNextPage && (
@@ -776,5 +661,100 @@ export default function VehicleDetailPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    );
+}
+
+/** Right-side sheet with brand CTA for fuel/service/document forms on this page. */
+function ResourceFormSheet({
+    open,
+    onOpenChange,
+    triggerLabel,
+    title,
+    description,
+    children,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    triggerLabel: string;
+    title: string;
+    description: string;
+    children: ReactNode;
+}) {
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetTrigger
+                render={
+                    <Button
+                        size="sm"
+                        className="bg-brand text-brand-foreground hover:bg-brand/90"
+                    />
+                }
+            >
+                <Plus className="mr-2 h-4 w-4" />
+                {triggerLabel}
+            </SheetTrigger>
+            <SheetContent
+                side="right"
+                className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
+            >
+                <SheetHeader className="mb-6 p-0">
+                    <SheetTitle className="font-heading text-2xl font-bold uppercase tracking-wide">
+                        {title}
+                    </SheetTitle>
+                    <p className="text-sm text-muted-foreground">{description}</p>
+                </SheetHeader>
+                {children}
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+function ResourceListSkeleton({ count = 3 }: { count?: number }) {
+    return (
+        <div className="space-y-3">
+            {Array.from({ length: count }, (_, i) => (
+                <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+        </div>
+    );
+}
+
+function ResourceEmptyState({
+    title,
+    description,
+}: {
+    title: string;
+    description: string;
+}) {
+    return (
+        <div className="surface-panel px-6 py-14 text-center">
+            <p className="font-heading text-2xl font-bold uppercase tracking-wide">
+                {title}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        </div>
+    );
+}
+
+function LoadMoreButton({
+    loaded,
+    total,
+    isFetching,
+    onLoadMore,
+}: {
+    loaded: number;
+    total: number;
+    isFetching: boolean;
+    onLoadMore: () => void;
+}) {
+    return (
+        <Button
+            variant="outline"
+            className="w-full"
+            disabled={isFetching}
+            onClick={onLoadMore}
+        >
+            {isFetching ? "Loading..." : `Load more (${loaded} of ${total})`}
+        </Button>
     );
 }

@@ -6,11 +6,11 @@ import useAuthStore from "@/store/auth.store";
  * Redirects to login if the user is not authenticated.
  */
 export default function ProtectedRoute() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
 
-  return <Outlet />;
+    return <Outlet />;
 }
