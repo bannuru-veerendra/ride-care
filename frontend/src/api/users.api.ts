@@ -1,34 +1,26 @@
 import apiClient from "@/lib/axios";
+import type { User } from "@/types";
+import type {
+    PasswordUpdateSchema,
+    ProfileUpdateSchema,
+} from "@/features/users/schemas";
 
 /**
  * Users API calls.
  * All endpoints map to the backend /users routes.
  */
-export interface UserProfile {
-    id: string;
-    email: string;
-    full_name: string;
-}
 
-export interface UpdateProfilePayload {
-    full_name?: string;
-    email?: string;
-}
-
-export interface UpdatePasswordPayload {
-    current_password: string;
-    new_password: string;
-    confirm_password: string;
-}
+export type UpdateProfilePayload = ProfileUpdateSchema;
+export type UpdatePasswordPayload = PasswordUpdateSchema;
 
 export const usersApi = {
-    getMe: async (): Promise<UserProfile> => {
-        const { data } = await apiClient.get<UserProfile>("/users/me");
+    getMe: async (): Promise<User> => {
+        const { data } = await apiClient.get<User>("/users/me");
         return data;
     },
 
-    updateMe: async (payload: UpdateProfilePayload): Promise<UserProfile> => {
-        const { data } = await apiClient.patch<UserProfile>("/users/me", payload);
+    updateMe: async (payload: UpdateProfilePayload): Promise<User> => {
+        const { data } = await apiClient.patch<User>("/users/me", payload);
         return data;
     },
 

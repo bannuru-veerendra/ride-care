@@ -5,21 +5,21 @@ import type {
     UpdateServiceLogPayload,
 } from "@/api/service-logs.api";
 import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
+import { getCursorNextPageParam } from "@/lib/query-client";
 
 /**
  * Query keys for service log queries
  * Scoped under vehicle ID so invalidation is precise
  */
 export const serviceLogKeys = {
-    all: (vehicleId: string) => ["service-logs", vehicleId] as const,
-    infinite: (vehicleId: string) => ["service-logs", vehicleId, "infinite"] as const,
+    infinite: (vehicleId: string) => ["service-logs-infinite", vehicleId] as const,
 };
 
 function invalidateServiceDerivedQueries(
     queryClient: ReturnType<typeof useQueryClient>,
     vehicleId: string
 ) {
-    queryClient.invalidateQueries({ queryKey: serviceLogKeys.all(vehicleId) });
+    queryClient.invalidateQueries({ queryKey: serviceLogKeys.infinite(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.details(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
@@ -35,8 +35,7 @@ export const useInfiniteServiceLogs = (vehicleId: string) => {
                 size: 20,
             }),
         initialPageParam: undefined as string | undefined,
-        getNextPageParam: (lastPage) =>
-            lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
+        getNextPageParam: getCursorNextPageParam,
         enabled: !!vehicleId,
     });
 };

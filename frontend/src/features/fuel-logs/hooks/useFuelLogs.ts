@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-q
 import { fuelLogsApi } from "@/api/fuel-logs.api";
 import type { CreateFuelLogPayload, UpdateFuelLogPayload } from "@/api/fuel-logs.api";
 import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
+import { getCursorNextPageParam } from "@/lib/query-client";
 
 /**
  * Query keys for fuel log queries
@@ -32,8 +33,7 @@ export const useInfiniteFuelLogs = (vehicleId: string) => {
                 size: 20,
             }),
         initialPageParam: undefined as string | undefined,
-        getNextPageParam: (lastPage) =>
-            lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
+        getNextPageParam: getCursorNextPageParam,
         enabled: !!vehicleId,
     });
 };

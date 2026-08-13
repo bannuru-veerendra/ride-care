@@ -1,10 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Settings, Wrench } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Wrench, type LucideIcon } from "lucide-react";
 
 import { useLogout } from "@/features/auth/hooks/useLogout";
 import { useCurrentUser } from "@/features/users/hooks/useUsers";
+import { useDismissible } from "@/lib/use-dismissible";
 import { cn } from "@/lib/utils";
+
+export interface AccountNavItem {
+    to?: string;
+    label: string;
+    icon: LucideIcon;
+    action?: "logout";
+}
+
+/** Shared account destinations for desktop menu and mobile nav. */
+export const ACCOUNT_NAV_ITEMS: AccountNavItem[] = [
+    { to: "/settings", label: "Settings", icon: Settings },
+    { to: "/maintenance", label: "Maintenance guide", icon: Wrench },
+    { label: "Log out", icon: LogOut, action: "logout" },
+];
 
 function getInitials(fullName: string): string {
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -22,26 +37,8 @@ export default function AccountMenu() {
     const { data: user } = useCurrentUser();
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-
-        const onPointerDown = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) {
-                setOpen(false);
-            }
-        };
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
-        };
-
-        document.addEventListener("mousedown", onPointerDown);
-        document.addEventListener("keydown", onKeyDown);
-        return () => {
-            document.removeEventListener("mousedown", onPointerDown);
-            document.removeEventListener("keydown", onKeyDown);
-        };
-    }, [open]);
+    const close = useCallback(() => setOpen(false), []);
+    useDismissible(open, rootRef, close);
 
     const displayName = user?.full_name ?? "Account";
     const email = user?.email;
@@ -100,58 +97,34 @@ export default function AccountMenu() {
                         ) : null}
                     </div>
 
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            setOpen(false);
-                            navigate("/settings");
-                        }}
-                        className={cn(
-                            "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm",
-                            "text-muted-foreground transition-colors",
-                            "hover:bg-white/5 hover:text-foreground"
-                        )}
-                    >
-                        <Settings className="size-4" />
-                        Settings
-                    </button>
-
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            setOpen(false);
-                            navigate("/maintenance");
-                        }}
-                        className={cn(
-                            "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm",
-                            "text-muted-foreground transition-colors",
-                            "hover:bg-white/5 hover:text-foreground"
-                        )}
-                    >
-                        <Wrench className="size-4" />
-                        Maintenance guide
-                    </button>
-
-                    <div className="my-1 h-px bg-white/10" />
-
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            setOpen(false);
-                            void logout();
-                        }}
-                        className={cn(
-                            "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm",
-                            "text-muted-foreground transition-colors",
-                            "hover:bg-white/5 hover:text-brand"
-                        )}
-                    >
-                        <LogOut className="size-4" />
-                        Log out
-                    </button>
+                    {ACCOUNT_NAV_ITEMS.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                            <button
+                                key={item.label}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpen(false);
+                                    if (item.action === "logout") {
+                                        void logout();
+                                        return;
+                                    }
+                                    if (item.to) navigate(item.to);
+                                }}
+                                className={cn(
+                                    "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm",
+                                    "text-muted-foreground transition-colors",
+                                    item.action === "logout"
+                                        ? "hover:bg-white/5 hover:text-brand"
+                                        : "hover:bg-white/5 hover:text-foreground"
+                                )}
+                            >
+                                <Icon className="size-4" />
+                                {item.label}
+                            </button>
+                        );
+                    })}
                 </div>
             ) : null}
         </div>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { appTodayISO } from "@/lib/date";
+import { odometerSchema, pastOrTodayDateSchema } from "@/lib/date";
 
 /** Accept positive numbers with at most 2 decimal places; normalize to 2 dp. */
 const moneySchema = z
@@ -17,16 +17,8 @@ const moneySchema = z
  * Mirrors backend validation rules
  */
 export const fuelLogSchema = z.object({
-    date: z
-        .string()
-        .min(1, { message: "Date is required" })
-        .refine((value) => value <= appTodayISO(), {
-            message: "Fuel log date cannot be in the future",
-        }),
-    odometer: z
-        .number({ error: "Odometer must be a number" })
-        .positive({ message: "Odometer must be greater than 0" })
-        .int({ message: "Odometer must be a whole number (km)" }),
+    date: pastOrTodayDateSchema("Fuel log"),
+    odometer: odometerSchema,
     total_cost: moneySchema,
     price_per_liter: moneySchema,
     notes: z.string().optional(),

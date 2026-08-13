@@ -11,7 +11,6 @@ T = TypeVar("T")
 # Cache TTLs in seconds
 VEHICLE_CACHE_TTL = 60 * 5  # 5 minutes
 NEXT_SERVICE_CACHE_TTL = 60 * 5  # 5 minutes
-GUIDELINES_CACHE_TTL = 60 * 60 * 24  # 24 hours
 
 
 class _CacheMissType:
@@ -51,11 +50,6 @@ def vehicle_summary_key(vehicle_id: str) -> str:
 def vehicle_analytics_key(vehicle_id: str) -> str:
     """Cache key for vehicle analytics charts."""
     return f"cache:vehicle_analytics:{vehicle_id}"
-
-
-def guidelines_key() -> str:
-    """Cache key for maintenance guidelines."""
-    return "cache:guidelines"
 
 
 # ── Core get/set helpers ──────────────────────────────────────

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, X, Plus, Wrench } from "lucide-react";
-import { isAxiosError } from "axios";
+import { X, Plus, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import FormErrorBanner from "@/components/common/FormErrorBanner";
+import FormSubmitButton from "@/components/common/FormSubmitButton";
 import {
     serviceLogSchema,
     type ServiceLogSchema,
@@ -101,19 +102,11 @@ export default function ServiceLogForm({
         setSelectedServices((prev) => prev.filter((s) => s !== service));
     };
 
-    const apiError = isAxiosError(error)
-        ? error.response?.data?.detail ?? "Something went wrong. Please try again."
-        : null;
-
     const inputClass = "border-white/15 bg-white/5";
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
-            {apiError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {apiError}
-                </div>
-            )}
+            <FormErrorBanner error={error} />
 
             <div className="relative overflow-hidden rounded-2xl border border-brand/30 bg-brand/10 px-5 py-5">
                 <div
@@ -338,22 +331,12 @@ export default function ServiceLogForm({
                 </div>
             </div>
 
-            <Button
-                type="submit"
+            <FormSubmitButton
+                isPending={isPending}
+                isEdit={!!defaultValues}
+                createLabel="Log service"
                 className="w-full bg-brand text-brand-foreground hover:bg-brand/90"
-                disabled={isPending}
-            >
-                {isPending ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                    </>
-                ) : defaultValues ? (
-                    "Save changes"
-                ) : (
-                    "Log service"
-                )}
-            </Button>
+            />
         </form>
     );
 }

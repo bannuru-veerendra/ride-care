@@ -1,17 +1,18 @@
 import apiClient from "@/lib/axios";
 import type { CursorPage } from "@/types";
+import {
+    DOCUMENT_TYPES,
+    type DocumentSchema,
+} from "@/features/documents/schemas";
 
 /**
  * Document API calls.
  * All endpoints map to the backend /documents routes.
  * vehicle_id is passed as a query parameter.
- * File upload uses multipart/form-data.
+ * File upload uses multipart/form-data (Content-Type left to the browser).
  */
 
-export type DocumentType =
-    | "insurance"
-    | "driving_license"
-    | "registration_certificate";
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 export interface Document {
     id: string;
@@ -25,19 +26,16 @@ export interface Document {
     expiry_status: "ok" | "soon" | "expired" | null;
 }
 
-export interface UploadDocumentPayload {
-    document_type: DocumentType;
+export type UploadDocumentPayload = DocumentSchema & {
     file: File;
-    expiry_date?: string;
-    notes?: string;
-}
+};
 
-export interface UpdateDocumentPayload {
+export type UpdateDocumentPayload = {
     document_type?: DocumentType;
     expiry_date?: string | null;
     notes?: string | null;
     file?: File;
-}
+};
 
 export const documentsApi = {
     getAll: async (
@@ -46,13 +44,6 @@ export const documentsApi = {
     ): Promise<CursorPage<Document>> => {
         const { data } = await apiClient.get("/documents/", {
             params: { vehicle_id: vehicleId, ...params },
-        });
-        return data;
-    },
-
-    getById: async (vehicleId: string, documentId: string): Promise<Document> => {
-        const { data } = await apiClient.get(`/documents/${documentId}`, {
-            params: { vehicle_id: vehicleId },
         });
         return data;
     },
@@ -69,7 +60,6 @@ export const documentsApi = {
 
         const { data } = await apiClient.post("/documents/", formData, {
             params: { vehicle_id: vehicleId },
-            headers: { "Content-Type": "multipart/form-data" },
         });
         return data;
     },
@@ -97,7 +87,6 @@ export const documentsApi = {
 
         const { data } = await apiClient.patch(`/documents/${documentId}`, formData, {
             params: { vehicle_id: vehicleId },
-            headers: { "Content-Type": "multipart/form-data" },
         });
         return data;
     },
@@ -108,5 +97,3 @@ export const documentsApi = {
         });
     },
 };
-
-export default documentsApi;

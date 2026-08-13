@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
     FileText,
     Calendar,
@@ -9,7 +9,6 @@ import {
     AlertTriangle,
     MoreHorizontal,
 } from "lucide-react";
-import { format } from "date-fns";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +16,9 @@ import { Button } from "@/components/ui/button";
 import { DOCUMENT_LABELS } from "../schemas";
 import type { Document } from "../types";
 import { cn } from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
+import { formatAppDate } from "@/lib/date";
+import { useDismissible } from "@/lib/use-dismissible";
 
 interface DocumentCardProps {
     document: Document;
@@ -29,12 +31,7 @@ async function downloadSignedFile(url: string, filename: string) {
         const response = await fetch(url);
         if (!response.ok) throw new Error("Download failed");
         const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const link = window.document.createElement("a");
-        link.href = objectUrl;
-        link.download = filename;
-        link.click();
-        URL.revokeObjectURL(objectUrl);
+        downloadBlob(blob, filename);
     } catch {
         window.open(url, "_blank", "noopener,noreferrer");
     }
@@ -51,31 +48,13 @@ export default function DocumentCard({
 }: DocumentCardProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
+    const closeMenu = useCallback(() => setMenuOpen(false), []);
+    useDismissible(menuOpen, menuRef, closeMenu);
 
     // Urgency fields come from the API (DOCUMENT_SOON_DAYS lives on the backend).
     const daysUntilExpiry = document.days_until;
     const isExpired = document.expiry_status === "expired";
     const isExpiringSoon = document.expiry_status === "soon";
-
-    useEffect(() => {
-        if (!menuOpen) return;
-
-        const onPointerDown = (event: MouseEvent) => {
-            if (!menuRef.current?.contains(event.target as Node)) {
-                setMenuOpen(false);
-            }
-        };
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setMenuOpen(false);
-        };
-
-        window.document.addEventListener("mousedown", onPointerDown);
-        window.document.addEventListener("keydown", onKeyDown);
-        return () => {
-            window.document.removeEventListener("mousedown", onPointerDown);
-            window.document.removeEventListener("keydown", onKeyDown);
-        };
-    }, [menuOpen]);
 
     return (
         <Card className="overflow-visible border-white/10 bg-card/90 transition-colors hover:border-brand/40">
@@ -187,11 +166,7 @@ export default function DocumentCard({
                             <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
                                 <Calendar className="h-3.5 w-3.5 shrink-0 text-brand" />
                                 <span>
-                                    Expires{" "}
-                                    {format(
-                                        new Date(document.expiry_date),
-                                        "dd MMM yyyy"
-                                    )}
+                                    Expires {formatAppDate(document.expiry_date)}
                                 </span>
                                 {isExpired && (
                                     <Badge

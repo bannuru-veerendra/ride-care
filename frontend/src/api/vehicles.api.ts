@@ -128,5 +128,3 @@ export const vehiclesApi = {
         await apiClient.delete(`/vehicles/${id}`);
     }
 }
-
-export default vehiclesApi;

@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Fuel, Gauge, Loader2, TrendingUp } from "lucide-react";
-import { isAxiosError } from "axios";
+import { Fuel, Gauge, TrendingUp } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import FormErrorBanner from "@/components/common/FormErrorBanner";
+import FormSubmitButton from "@/components/common/FormSubmitButton";
 import { fuelLogSchema, type FuelLogSchema } from "../schemas";
 import type { FuelLog } from "../types";
 import { appTodayISO } from "@/lib/date";
@@ -67,10 +67,6 @@ export default function FuelLogForm({
         }
     }, [defaultValues, reset]);
 
-    const apiError = isAxiosError(error)
-        ? error.response?.data?.detail ?? "Something went wrong. Please try again."
-        : null;
-
     const inputClass = "border-white/15 bg-white/5";
 
     return (
@@ -79,11 +75,7 @@ export default function FuelLogForm({
             className="flex flex-col gap-6"
             noValidate
         >
-            {apiError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {apiError}
-                </div>
-            )}
+            <FormErrorBanner error={error} />
 
             {/* Mileage-first preview */}
             <div className="relative overflow-hidden rounded-2xl border border-brand/30 bg-brand/10 px-5 py-5">
@@ -213,22 +205,12 @@ export default function FuelLogForm({
                 </div>
             </div>
 
-            <Button
-                type="submit"
+            <FormSubmitButton
+                isPending={isPending}
+                isEdit={!!defaultValues}
+                createLabel="Log fuel & get mileage"
                 className="w-full bg-brand text-brand-foreground hover:bg-brand/90"
-                disabled={isPending}
-            >
-                {isPending ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                    </>
-                ) : defaultValues ? (
-                    "Save changes"
-                ) : (
-                    "Log fuel & get mileage"
-                )}
-            </Button>
+            />
         </form>
     );
 }

@@ -1,5 +1,6 @@
 import apiClient from "@/lib/axios";
 import type { CursorPage } from "@/types";
+import type { ServiceLogSchema } from "@/features/service-logs/schemas";
 
 /**
  * Service log API calls.
@@ -20,27 +21,17 @@ export interface ServiceLog {
     notes: string | null;
 }
 
-export interface CreateServiceLogPayload {
+export type CreateServiceLogPayload = ServiceLogSchema;
+export type UpdateServiceLogPayload = Partial<{
     date: string;
     odometer: number;
-    service_center?: string;
+    service_center: string | null;
     total_cost: number;
     services_done: string[];
-    next_service_date?: string;
-    next_service_odometer?: number;
-    notes?: string;
-}
-
-export interface UpdateServiceLogPayload {
-    date?: string;
-    odometer?: number;
-    service_center?: string | null;
-    total_cost?: number;
-    services_done?: string[];
-    next_service_date?: string | null;
-    next_service_odometer?: number | null;
-    notes?: string | null;
-}
+    next_service_date: string | null;
+    next_service_odometer: number | null;
+    notes: string | null;
+}>;
 
 export const serviceLogsApi = {
     getAll: async (
@@ -49,13 +40,6 @@ export const serviceLogsApi = {
     ): Promise<CursorPage<ServiceLog>> => {
         const { data } = await apiClient.get("/service_logs/", {
             params: { vehicle_id: vehicleId, ...params },
-        });
-        return data;
-    },
-
-    getById: async (vehicleId: string, logId: string): Promise<ServiceLog> => {
-        const { data } = await apiClient.get(`/service_logs/${logId}`, {
-            params: { vehicle_id: vehicleId },
         });
         return data;
     },
@@ -96,4 +80,3 @@ export const serviceLogsApi = {
     },
 };
 
-export default serviceLogsApi;

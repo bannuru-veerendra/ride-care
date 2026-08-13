@@ -88,6 +88,27 @@ async def test_create_service_log_invalid_next_odometer(
     assert response.status_code == 422
 
 
+async def test_create_service_log_rejects_odometer_below_baseline(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Service odometer below baseline would inflate live odometer incorrectly — reject it."""
+    vehicle_id = created_vehicle["id"]
+    baseline = created_vehicle["baseline_odometer"]
+    response = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today()),
+            "odometer": baseline - 1,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "baseline" in response.json()["detail"].lower()
+
+
 async def test_update_service_log_rejects_next_odometer_below_existing(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
