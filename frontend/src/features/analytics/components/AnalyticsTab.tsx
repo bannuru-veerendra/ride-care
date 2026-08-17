@@ -29,14 +29,14 @@ export default function AnalyticsTab({ vehicleId }: Props) {
         );
     }
 
-    if (!data || data.total_fill_ups === 0) {
+    if (!data || (data.total_fill_ups === 0 && data.service_count === 0)) {
         return (
             <div className="surface-panel px-6 py-14 text-center">
                 <p className="font-heading text-2xl font-bold uppercase tracking-wide">
                     No data yet
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                    Log at least one fuel fill-up to see analytics
+                    Log a fill-up or service visit to see analytics
                 </p>
             </div>
         );
@@ -51,39 +51,45 @@ export default function AnalyticsTab({ vehicleId }: Props) {
     return (
         <div className="space-y-6">
             <AnalyticsSummaryCards
-                totalSpend={data.total_spend}
-                totalLiters={data.total_liters}
+                combinedSpend={data.combined_spend}
+                fuelSpend={data.total_spend}
+                serviceSpend={data.service_spend}
+                kmDriven={data.km_driven}
+                costPerKm={data.cost_per_km}
                 bestMileage={data.best_mileage}
                 worstMileage={data.worst_mileage}
-                totalFillUps={data.total_fill_ups}
             />
 
-            <div className="surface-panel px-5 py-5">
-                <div className="mb-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">
-                        Mileage trend
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                        km/l over last 10 fill-ups
-                    </p>
-                </div>
-                <MileageTrendChart
-                    data={mileageTrend}
-                    avgMileage={data.avg_mileage}
-                />
-            </div>
+            {data.total_fill_ups > 0 && (
+                <>
+                    <div className="surface-panel px-5 py-5">
+                        <div className="mb-4">
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">
+                                Mileage trend
+                            </p>
+                            <p className="mt-0.5 text-sm text-muted-foreground">
+                                km/l over last 10 fill-ups
+                            </p>
+                        </div>
+                        <MileageTrendChart
+                            data={mileageTrend}
+                            avgMileage={data.avg_mileage}
+                        />
+                    </div>
 
-            <div className="surface-panel px-5 py-5">
-                <div className="mb-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">
-                        Monthly fuel spend
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                        ₹ spent per month · last 6 months
-                    </p>
-                </div>
-                <MonthlySpendChart data={data.monthly_spend} />
-            </div>
+                    <div className="surface-panel px-5 py-5">
+                        <div className="mb-4">
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">
+                                Monthly fuel spend
+                            </p>
+                            <p className="mt-0.5 text-sm text-muted-foreground">
+                                ₹ spent per month · last 6 months
+                            </p>
+                        </div>
+                        <MonthlySpendChart data={data.monthly_spend} />
+                    </div>
+                </>
+            )}
 
             {data.best_mileage != null &&
                 data.worst_mileage != null &&

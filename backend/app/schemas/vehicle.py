@@ -137,3 +137,32 @@ class VehicleAnalyticsResponse(BaseModel):
     total_fill_ups: int
     mileage_trend: list[MileageTrendPoint]
     monthly_spend: list[MonthlySpendPoint]
+    service_spend: float
+    service_count: int
+    combined_spend: float
+    km_driven: int
+    cost_per_km: float | None
+    fuel_cost_per_km: float | None
+    service_cost_per_km: float | None
+
+
+class VehicleCompareItem(BaseModel):
+    """One garage bike in the side-by-side compare payload."""
+    vehicle_id: uuid.UUID
+    brand: str
+    vehicle_name: str
+    year: int
+    current_odometer: int
+    km_driven: int
+    avg_mileage: float | None
+    fuel_spend: float
+    service_spend: float
+    combined_spend: float
+    cost_per_km: float | None
+    fill_up_count: int
+    service_count: int
+
+
+class VehicleCompareResponse(BaseModel):
+    """Garage-wide comparison for GET /vehicles/compare."""
+    items: list[VehicleCompareItem]

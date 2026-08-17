@@ -21,6 +21,7 @@ from app.utils.cache import (
     cache_get,
     cache_set,
     next_service_key,
+    vehicle_analytics_key,
     vehicle_detail_key,
     vehicle_summary_key,
 )
@@ -44,6 +45,7 @@ async def _invalidate_service_derived_caches(
         next_service_key(str(vehicle_id)),
         vehicle_summary_key(str(vehicle_id)),
         vehicle_detail_key(str(vehicle_id)),
+        vehicle_analytics_key(str(vehicle_id)),
     )
     await cache_delete_pattern(redis, f"cache:vehicles:user:{owner_id}*")
 

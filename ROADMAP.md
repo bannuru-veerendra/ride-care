@@ -19,7 +19,8 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Cursor-paginated vehicle list + garage **Load more**
 - Baseline change recalculates stored fuel mileage
 - `GET /vehicles/{id}/summary` — spend, mileage, recent fill-ups, next service, **service_reminder**, **document_reminders**
-- `GET /vehicles/{id}/analytics` — totals, trend series, monthly spend (SQL over all logs)
+- `GET /vehicles/{id}/analytics` — totals, **cost-per-km (fuel + service)**, last-10 mileage trend, last-6 months fuel spend
+- `GET /vehicles/compare` — side-by-side spend, mileage, and ₹/km across the garage
 
 ### Fuel & mileage
 - Fill-up logging with server-side liters and km/L
@@ -48,44 +49,32 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Filterable API + `/maintenance` page (component / severity)
 
 ### Caching & platform
-- Redis cache for vehicle list/detail, summary, analytics, and next-service
+- Redis cache for vehicle list/detail, summary, analytics, compare, and next-service
 - Write-through invalidation on fuel / service / vehicle / document writes
-- Alembic migrations, async SQLAlchemy, GitHub Actions CI
+- Alembic migrations, async SQLAlchemy, GitHub Actions CI (pytest)
 - Deployed API (Render) + frontend (Vercel) with same-origin `/api` proxy for cookies
 
 ### Frontend product surface
-- Dark rider UI: auth, garage, vehicle detail (Fuel · Service · Docs · Analytics)
+- Dark rider UI: auth, garage, compare, vehicle detail (Fuel · Service · Docs · Analytics)
 - Dashboard driven by the summary API
-- **In-app reminders** on the dashboard — service soon/overdue + document expiry (no email/push yet)
+- **In-app reminders** on the dashboard — service soon/overdue + document expiry
 - Settings (profile / password), error boundary, 404 page
-- Recharts analytics: summary cards, mileage trend, monthly spend
+- Recharts analytics: cost-per-km, summary cards, mileage trend, monthly fuel spend
 
 ---
 
 ## Next
 
-### Reminders beyond the app
-- Email / push for service-due and document-expiry
-- Prefer server-side scheduling; Redis is already in the stack
-
-### Smarter maintenance
-- Due dates driven by odometer / last service on top of the static catalog
-- Optional vehicle-type filters (chain vs CVT, liquid- vs air-cooled)
-
-### Insurance beyond the vault
-- Structured policy fields (provider, number, coverage)
-- Expiry and renewal tracking
-
-### List & export polish
-- CSV / PDF export for fill-ups and service history
-
-### Deeper analytics
-- Longer-range cost-per-km (fuel + service)
-- Cross-bike comparisons
+Nothing queued as a product slice. See Later for ideas that are out of scope.
 
 ---
 
 ## Later
 
+These are out of scope for now — not missing pieces of the current product.
+
+- Email / push for service-due and document-expiry
+- Auto due dates from the maintenance catalog + odometer (guide is interval tips today)
+- Structured insurance fields (provider, number, coverage)
 - Multi-rider / shared garage permissions
 - AI assists: natural-language “when is my next service?”, fuel-price context

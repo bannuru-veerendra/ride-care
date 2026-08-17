@@ -1,12 +1,14 @@
-import { Fuel, TrendingDown, Award, Hash } from "lucide-react";
+import { Fuel, TrendingDown, Award, IndianRupee } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Props {
-    totalSpend: number;
-    totalLiters: number;
+    combinedSpend: number;
+    fuelSpend: number;
+    serviceSpend: number;
+    kmDriven: number;
+    costPerKm: number | null;
     bestMileage: number | null;
     worstMileage: number | null;
-    totalFillUps: number;
 }
 
 /**
@@ -14,18 +16,32 @@ interface Props {
  * Avg mileage lives on the dashboard + trend chart baseline — not repeated here.
  */
 export default function AnalyticsSummaryCards({
-    totalSpend,
-    totalLiters,
+    combinedSpend,
+    fuelSpend,
+    serviceSpend,
+    kmDriven,
+    costPerKm,
     bestMileage,
     worstMileage,
-    totalFillUps,
 }: Props) {
     const stats = [
         {
+            label: "Cost per km",
+            value:
+                costPerKm != null
+                    ? `₹${costPerKm.toLocaleString("en-IN")}`
+                    : "—",
+            icon: IndianRupee,
+            sub:
+                kmDriven > 0
+                    ? `${kmDriven.toLocaleString("en-IN")} km · fuel + service`
+                    : "needs km past baseline",
+        },
+        {
             label: "Total spent",
-            value: `₹${totalSpend.toLocaleString("en-IN")}`,
+            value: `₹${combinedSpend.toLocaleString("en-IN")}`,
             icon: Fuel,
-            sub: `${totalLiters}L total`,
+            sub: `Fuel ₹${fuelSpend.toLocaleString("en-IN")} · Service ₹${serviceSpend.toLocaleString("en-IN")}`,
         },
         {
             label: "Best fill-up",
@@ -38,12 +54,6 @@ export default function AnalyticsSummaryCards({
             value: worstMileage ? `${worstMileage} km/l` : "—",
             icon: TrendingDown,
             sub: "lowest km/l",
-        },
-        {
-            label: "Total fill-ups",
-            value: totalFillUps.toString(),
-            icon: Hash,
-            sub: "logged",
         },
     ];
 

@@ -12,6 +12,7 @@ import NotFoundPage from "@/pages/NotFoundPage";
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const VehiclesPage = lazy(() => import("@/pages/VehiclesPage"));
 const VehicleDetailPage = lazy(() => import("@/pages/VehicleDetailPage"));
+const ComparePage = lazy(() => import("@/pages/ComparePage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const MaintenanceGuidelinesPage = lazy(
     () => import("@/pages/MaintenanceGuidelinesPage")
@@ -39,6 +40,7 @@ export default function App() {
                         <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
                         <Route path="/vehicles" element={<ErrorBoundary><VehiclesPage /></ErrorBoundary>} />
                         <Route path="/vehicles/:id" element={<ErrorBoundary><VehicleDetailPage /></ErrorBoundary>} />
+                        <Route path="/compare" element={<ErrorBoundary><ComparePage /></ErrorBoundary>} />
                         <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                         <Route path="/maintenance" element={<ErrorBoundary><MaintenanceGuidelinesPage /></ErrorBoundary>} />
                     </Route>

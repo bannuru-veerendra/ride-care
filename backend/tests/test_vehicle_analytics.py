@@ -33,6 +33,13 @@ async def test_vehicle_analytics_empty(
     assert data["mileage_trend"] == []
     assert len(data["monthly_spend"]) == 6
     assert all(point["spend"] == 0 for point in data["monthly_spend"])
+    assert data["service_spend"] == 0
+    assert data["service_count"] == 0
+    assert data["combined_spend"] == 0
+    assert data["km_driven"] == 0
+    assert data["cost_per_km"] is None
+    assert data["fuel_cost_per_km"] is None
+    assert data["service_cost_per_km"] is None
 
 
 async def test_vehicle_analytics_aggregates(
@@ -170,3 +177,53 @@ async def test_vehicle_analytics_unauthenticated(
     vehicle_id = created_vehicle["id"]
     response = await client.get(f"/vehicles/{vehicle_id}/analytics")
     assert response.status_code == 401
+
+
+async def test_vehicle_analytics_cost_per_km_includes_service(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """cost_per_km uses fuel + service spend over km since baseline."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+
+    fuel_resp = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today),
+            "odometer": 10500,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert fuel_resp.status_code == 201
+
+    service_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today),
+            "odometer": 10500,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    assert service_resp.status_code == 201
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_spend"] == 500
+    assert data["service_spend"] == 1500
+    assert data["service_count"] == 1
+    assert data["combined_spend"] == 2000
+    assert data["km_driven"] == 500
+    assert data["cost_per_km"] == 4.0
+    assert data["fuel_cost_per_km"] == 1.0
+    assert data["service_cost_per_km"] == 3.0
+
