@@ -33,6 +33,7 @@ export default function SettingsPage() {
 
     const profileForm = useForm<ProfileUpdateSchema>({
         resolver: zodResolver(profileUpdateSchema),
+        reValidateMode: "onBlur",
         defaultValues: {
             full_name: "",
             email: "",
@@ -42,6 +43,7 @@ export default function SettingsPage() {
 
     const passwordForm = useForm<PasswordUpdateSchema>({
         resolver: zodResolver(passwordUpdateSchema),
+        reValidateMode: "onBlur",
         defaultValues: {
             current_password: "",
             new_password: "",
@@ -135,6 +137,7 @@ export default function SettingsPage() {
                     <form
                         onSubmit={profileForm.handleSubmit(onProfileSubmit)}
                         className="mt-6 space-y-5"
+                        noValidate
                     >
                         <div className="space-y-1.5">
                             <Label htmlFor="full_name">Full Name</Label>
@@ -196,6 +199,7 @@ export default function SettingsPage() {
                     <form
                         onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
                         className="mt-6 space-y-5"
+                        noValidate
                     >
                         <div className="space-y-1.5">
                             <Label htmlFor="current_password">Current password</Label>

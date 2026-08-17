@@ -54,6 +54,7 @@ export default function DocumentForm({
         formState: { errors },
     } = useForm<DocumentSchema>({
         resolver: zodResolver(documentSchema),
+        reValidateMode: "onBlur",
         defaultValues: {
             document_type: defaultValues?.document_type,
             expiry_date: defaultValues?.expiry_date ?? "",

@@ -27,6 +27,7 @@ export default function LoginPage() {
         formState: { errors },
     } = useForm<LoginSchema>({
         resolver: zodResolver(loginSchema),
+        reValidateMode: "onBlur",
     });
 
     useEffect(() => {
@@ -53,6 +54,7 @@ export default function LoginPage() {
             <form
                 onSubmit={handleSubmit(onSubmit)}
                 className="mt-6 space-y-5"
+                noValidate
             >
                 <div className="space-y-1.5">
                     <Label htmlFor="email">Email</Label>

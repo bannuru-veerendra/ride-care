@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { useConfirmDialog } from "@/components/common/ConfirmDialog";
 import VehicleCard from "@/features/vehicles/components/VehicleCard";
 import VehicleForm from "@/features/vehicles/components/VehicleForm";
 import {
@@ -42,6 +43,7 @@ export default function VehiclesPage() {
     const createVehicle = useCreateVehicle();
     const updateVehicle = useUpdateVehicle(editingVehicle?.id ?? "");
     const deleteVehicle = useDeleteVehicle();
+    const requestConfirm = useConfirmDialog();
 
     const handleSubmit = (values: VehicleSchema) => {
         if (editingVehicle) {
@@ -68,10 +70,17 @@ export default function VehiclesPage() {
     };
 
     const handleDelete = (id: string) => {
-        if (!confirm("Are you sure you want to delete this vehicle?")) return;
-        deleteVehicle.mutate(id, {
-            onSuccess: () => toast.success("Vehicle deleted"),
-            onError: () => toast.error("Failed to delete vehicle"),
+        requestConfirm({
+            title: "Delete this vehicle?",
+            description:
+                "This bike and its fuel, service, and document history will be removed.",
+            confirmLabel: "Delete",
+            onConfirm: () => {
+                deleteVehicle.mutate(id, {
+                    onSuccess: () => toast.success("Vehicle deleted"),
+                    onError: () => toast.error("Failed to delete vehicle"),
+                });
+            },
         });
     };
 

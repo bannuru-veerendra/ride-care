@@ -34,6 +34,7 @@ export default function VehicleForm({
         formState: { errors },
     } = useForm<VehicleSchema>({
         resolver: zodResolver(vehicleSchema),
+        reValidateMode: "onBlur",
     });
 
     // Pre-fill form when editing

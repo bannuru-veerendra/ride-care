@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Fuel, Gauge, TrendingUp } from "lucide-react";
@@ -19,6 +19,24 @@ interface FuelLogFormProps {
     error: Error | null;
 }
 
+function readNumber(value: string): number | undefined {
+    if (value === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatLiters(cost: number | undefined, price: number | undefined): string {
+    if (
+        typeof cost === "number" &&
+        typeof price === "number" &&
+        price > 0 &&
+        cost > 0
+    ) {
+        return (cost / price).toFixed(2);
+    }
+    return "—";
+}
+
 /**
  * Reusable fuel log form used for both create and edit.
  * Live liters preview from amount ÷ price.
@@ -30,42 +48,65 @@ export default function FuelLogForm({
     isPending,
     error,
 }: FuelLogFormProps) {
+    const litersRef = useRef<HTMLSpanElement>(null);
+    const costRef = useRef<number | undefined>(defaultValues?.total_cost);
+    const priceRef = useRef<number | undefined>(defaultValues?.price_per_liter);
+
     const {
         register,
         handleSubmit,
         reset,
-        watch,
         formState: { errors },
     } = useForm<FuelLogSchema>({
         resolver: zodResolver(fuelLogSchema),
+        reValidateMode: "onBlur",
         defaultValues: {
             date: appTodayISO(),
         },
     });
 
-    const totalCost = watch("total_cost");
-    const pricePerLiter = watch("price_per_liter");
-
-    const litersPreview =
-        typeof totalCost === "number" &&
-        typeof pricePerLiter === "number" &&
-        pricePerLiter > 0 &&
-        totalCost > 0
-            ? totalCost / pricePerLiter
-            : null;
+    const paintLiters = () => {
+        if (litersRef.current) {
+            litersRef.current.textContent = formatLiters(
+                costRef.current,
+                priceRef.current
+            );
+        }
+    };
 
     // Pre-fill form when editing
     useEffect(() => {
-        if (defaultValues) {
-            reset({
-                date: defaultValues.date,
-                odometer: defaultValues.odometer,
-                total_cost: defaultValues.total_cost,
-                price_per_liter: defaultValues.price_per_liter,
-                notes: defaultValues.notes ?? "",
-            });
+        if (!defaultValues) return;
+        costRef.current = defaultValues.total_cost;
+        priceRef.current = defaultValues.price_per_liter;
+        reset({
+            date: defaultValues.date,
+            odometer: defaultValues.odometer,
+            total_cost: defaultValues.total_cost,
+            price_per_liter: defaultValues.price_per_liter,
+            notes: defaultValues.notes ?? "",
+        });
+        if (litersRef.current) {
+            litersRef.current.textContent = formatLiters(
+                defaultValues.total_cost,
+                defaultValues.price_per_liter
+            );
         }
     }, [defaultValues, reset]);
+
+    const totalCostReg = register("total_cost", { valueAsNumber: true });
+    const priceReg = register("price_per_liter", { valueAsNumber: true });
+
+    const onMoneyChange =
+        (
+            field: typeof totalCostReg | typeof priceReg,
+            target: typeof costRef | typeof priceRef
+        ) =>
+        (event: ChangeEvent<HTMLInputElement>) => {
+            void field.onChange(event);
+            target.current = readNumber(event.currentTarget.value);
+            paintLiters();
+        };
 
     const inputClass = "border-white/15 bg-white/5";
 
@@ -90,7 +131,12 @@ export default function FuelLogForm({
                             Liters
                         </p>
                         <p className="font-heading mt-1 text-4xl font-extrabold tracking-wide text-foreground">
-                            {litersPreview !== null ? litersPreview.toFixed(2) : "—"}
+                            <span ref={litersRef}>
+                                {formatLiters(
+                                    defaultValues?.total_cost,
+                                    defaultValues?.price_per_liter
+                                )}
+                            </span>
                         </p>
                     </div>
                     <div>
@@ -161,7 +207,8 @@ export default function FuelLogForm({
                             min={0.01}
                             placeholder="500.00"
                             className={inputClass}
-                            {...register("total_cost", { valueAsNumber: true })}
+                            {...totalCostReg}
+                            onChange={onMoneyChange(totalCostReg, costRef)}
                         />
                         {errors.total_cost && (
                             <p className="text-xs text-destructive">
@@ -180,7 +227,8 @@ export default function FuelLogForm({
                             min={0.01}
                             placeholder="105.00"
                             className={inputClass}
-                            {...register("price_per_liter", { valueAsNumber: true })}
+                            {...priceReg}
+                            onChange={onMoneyChange(priceReg, priceRef)}
                         />
                         {errors.price_per_liter && (
                             <p className="text-xs text-destructive">
