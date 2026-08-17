@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, lazy, Suspense } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
     ArrowLeft,
@@ -59,10 +59,14 @@ import {
 } from "@/features/documents/hooks/useDocuments";
 import type { Document } from "@/features/documents/types";
 import type { DocumentSchema } from "@/features/documents/schemas";
-import AnalyticsTab from "@/features/analytics/components/AnalyticsTab";
+import { useConfirmDialog } from "@/components/common/ConfirmDialog";
 
 const TAB_TRIGGER_CLASS =
     "font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5";
+
+const AnalyticsTab = lazy(
+    () => import("@/features/analytics/components/AnalyticsTab")
+);
 
 /**
  * Vehicle detail page.
@@ -174,6 +178,7 @@ export default function VehicleDetailPage() {
     const uploadDocument = useUploadDocument(id!);
     const updateDocument = useUpdateDocument(id!, editingDocument?.id ?? "");
     const deleteDocument = useDeleteDocument(id!);
+    const requestConfirm = useConfirmDialog();
 
     const handleExportFuelCsv = async () => {
         if (!id || exportingFuel) return;
@@ -456,15 +461,14 @@ export default function VehicleDetailPage() {
                                 <FuelLogCard
                                     key={log.id}
                                     log={log}
-                                    onDelete={(logId) => {
-                                        if (!confirm("Delete this fuel log?")) return;
-                                        deleteFuelLog.mutate(logId, {
-                                            onSuccess: () =>
-                                                toast.success("Fuel log deleted"),
-                                            onError: () =>
-                                                toast.error("Failed to delete fuel log"),
-                                        });
-                                    }}
+                                    onDelete={confirmDelete(
+                                        requestConfirm,
+                                        "Delete this fuel log?",
+                                        "This fill-up will be removed from the vehicle log.",
+                                        "Fuel log deleted",
+                                        "Failed to delete fuel log",
+                                        deleteFuelLog.mutate
+                                    )}
                                     onEdit={(log) => {
                                         setEditingLog(log);
                                         setFuelSheetOpen(true);
@@ -544,18 +548,14 @@ export default function VehicleDetailPage() {
                                 <ServiceLogCard
                                     key={log.id}
                                     log={log}
-                                    onDelete={(logId) => {
-                                        if (!confirm("Delete this service log?"))
-                                            return;
-                                        deleteServiceLog.mutate(logId, {
-                                            onSuccess: () =>
-                                                toast.success("Service log deleted"),
-                                            onError: () =>
-                                                toast.error(
-                                                    "Failed to delete service log"
-                                                ),
-                                        });
-                                    }}
+                                    onDelete={confirmDelete(
+                                        requestConfirm,
+                                        "Delete this service log?",
+                                        "This service entry will be removed from the vehicle log.",
+                                        "Service log deleted",
+                                        "Failed to delete service log",
+                                        deleteServiceLog.mutate
+                                    )}
                                     onEdit={(log) => {
                                         setEditingServiceLog(log);
                                         setServiceSheetOpen(true);
@@ -622,18 +622,14 @@ export default function VehicleDetailPage() {
                                 <DocumentCard
                                     key={document.id}
                                     document={document}
-                                    onDelete={(documentId) => {
-                                        if (!confirm("Delete this document?"))
-                                            return;
-                                        deleteDocument.mutate(documentId, {
-                                            onSuccess: () =>
-                                                toast.success("Document deleted"),
-                                            onError: () =>
-                                                toast.error(
-                                                    "Failed to delete document"
-                                                ),
-                                        });
-                                    }}
+                                    onDelete={confirmDelete(
+                                        requestConfirm,
+                                        "Delete this document?",
+                                        "This file will be permanently removed.",
+                                        "Document deleted",
+                                        "Failed to delete document",
+                                        deleteDocument.mutate
+                                    )}
                                     onEdit={(document) => {
                                         setEditingDocument(document);
                                         setDocumentSheetOpen(true);
@@ -657,7 +653,9 @@ export default function VehicleDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="analytics" className="mt-5">
-                    <AnalyticsTab vehicleId={id!} />
+                    <Suspense fallback={<Skeleton className="h-56 w-full rounded-xl" />}>
+                        <AnalyticsTab vehicleId={id!} />
+                    </Suspense>
                 </TabsContent>
             </Tabs>
         </div>
@@ -757,4 +755,29 @@ function LoadMoreButton({
             {isFetching ? "Loading..." : `Load more (${loaded} of ${total})`}
         </Button>
     );
+}
+
+function confirmDelete(
+    requestConfirm: ReturnType<typeof useConfirmDialog>,
+    title: string,
+    description: string,
+    success: string,
+    fail: string,
+    mutate: (
+        id: string,
+        opts: { onSuccess: () => void; onError: () => void }
+    ) => void
+) {
+    return (id: string) => {
+        requestConfirm({
+            title,
+            description,
+            onConfirm: () => {
+                mutate(id, {
+                    onSuccess: () => toast.success(success),
+                    onError: () => toast.error(fail),
+                });
+            },
+        });
+    };
 }

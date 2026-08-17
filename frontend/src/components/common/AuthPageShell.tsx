@@ -24,7 +24,7 @@ export default function AuthPageShell({
                     alt=""
                     className="h-full w-full object-cover"
                 />
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px]" />
+                <div className="absolute inset-0 bg-background/85" />
                 <div
                     aria-hidden
                     className="absolute bottom-12 left-1/2 h-px w-48 -translate-x-1/2 bg-gradient-to-r from-transparent via-brand/50 to-transparent"

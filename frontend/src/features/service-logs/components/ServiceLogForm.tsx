@@ -53,6 +53,7 @@ export default function ServiceLogForm({
         formState: { errors },
     } = useForm<ServiceLogSchema>({
         resolver: zodResolver(serviceLogSchema),
+        reValidateMode: "onBlur",
         defaultValues: {
             date: appTodayISO(),
             services_done: [],

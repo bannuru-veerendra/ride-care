@@ -24,6 +24,7 @@ export default function RegisterPage() {
         formState: { errors },
     } = useForm<RegisterSchema>({
         resolver: zodResolver(registerSchema),
+        reValidateMode: "onBlur",
     });
 
     const onSubmit = (data: RegisterSchema) => {
@@ -39,6 +40,7 @@ export default function RegisterPage() {
             <form
                 onSubmit={handleSubmit(onSubmit)}
                 className="mt-6 space-y-5"
+                noValidate
             >
                 <div className="space-y-1.5">
                     <Label htmlFor="full_name">Full Name</Label>

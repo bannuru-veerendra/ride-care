@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -6,19 +7,21 @@ import ProtectedRoute from "@/components/common/ProtectedRoute";
 import AppLayout from "@/components/common/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
-import DashboardPage from "@/pages/DashboardPage";
-import VehiclesPage from "@/pages/VehiclesPage";
-import VehicleDetailPage from "@/pages/VehicleDetailPage";
-import SettingsPage from "@/pages/SettingsPage";
-import MaintenanceGuidelinesPage from "@/pages/MaintenanceGuidelinesPage";
 import NotFoundPage from "@/pages/NotFoundPage";
+
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const VehiclesPage = lazy(() => import("@/pages/VehiclesPage"));
+const VehicleDetailPage = lazy(() => import("@/pages/VehicleDetailPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const MaintenanceGuidelinesPage = lazy(
+    () => import("@/pages/MaintenanceGuidelinesPage")
+);
 
 /**
  * Root application component.
  * Defines all client-side routes.
- *
- * Public routes  — login, register
- * Protected routes — wrapped in AppLayout (navbar + content area)
+ * Auth pages stay eager; the rest of the app is code-split so the first
+ * login/register interaction is not blocked by dashboard or chart code.
  */
 export default function App() {
     return (
@@ -33,11 +36,11 @@ export default function App() {
                 {/* Protected routes — all share AppLayout */}
                 <Route element={<ProtectedRoute />}>
                     <Route element={<AppLayout />}>
-                        <Route path="/dashboard" element={<><ErrorBoundary><DashboardPage /></ErrorBoundary></>} />
-                        <Route path="/vehicles" element={<><ErrorBoundary><VehiclesPage /></ErrorBoundary></>} />
-                        <Route path="/vehicles/:id" element={<><ErrorBoundary><VehicleDetailPage /></ErrorBoundary></>} />
-                        <Route path="/settings" element={<><ErrorBoundary><SettingsPage /></ErrorBoundary></>} />
-                        <Route path="/maintenance" element={<><ErrorBoundary><MaintenanceGuidelinesPage /></ErrorBoundary></>} />
+                        <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
+                        <Route path="/vehicles" element={<ErrorBoundary><VehiclesPage /></ErrorBoundary>} />
+                        <Route path="/vehicles/:id" element={<ErrorBoundary><VehicleDetailPage /></ErrorBoundary>} />
+                        <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+                        <Route path="/maintenance" element={<ErrorBoundary><MaintenanceGuidelinesPage /></ErrorBoundary>} />
                     </Route>
                 </Route>
 
