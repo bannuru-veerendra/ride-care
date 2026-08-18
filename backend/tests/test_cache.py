@@ -244,6 +244,80 @@ async def test_vehicle_analytics_cache_invalidated_on_fuel_create(
     assert refreshed.json()["total_spend"] == 500
 
 
+async def test_vehicle_analytics_cache_invalidated_on_service_create(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Creating a service log invalidates analytics cache (cost-per-km)."""
+    from app.utils.dates import app_today
+
+    vehicle_id = created_vehicle["id"]
+
+    warm = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+    assert warm.json()["service_spend"] == 0
+
+    create_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today()),
+            "odometer": 12000,
+            "total_cost": 1500,
+            "services_done": ["Engine oil"],
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+
+    refreshed = await client.get(
+        f"/vehicles/{vehicle_id}/analytics",
+        headers=auth_headers,
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["service_spend"] == 1500
+    assert refreshed.json()["combined_spend"] == 1500
+    assert refreshed.json()["km_driven"] == 2000
+    assert refreshed.json()["cost_per_km"] == 0.75
+
+
+async def test_vehicle_compare_cache_invalidated_on_fuel_create(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Creating a fuel log invalidates garage compare cache."""
+    from app.utils.dates import app_today
+
+    vehicle_id = created_vehicle["id"]
+
+    warm = await client.get("/vehicles/compare", headers=auth_headers)
+    item = next(v for v in warm.json()["items"] if v["vehicle_id"] == vehicle_id)
+    assert item["fill_up_count"] == 0
+    assert item["cost_per_km"] is None
+
+    create_resp = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(app_today()),
+            "odometer": 10500,
+            "total_cost": 500,
+            "price_per_liter": 100,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+
+    refreshed = await client.get("/vehicles/compare", headers=auth_headers)
+    item = next(
+        v for v in refreshed.json()["items"] if v["vehicle_id"] == vehicle_id
+    )
+    assert item["fill_up_count"] == 1
+    assert item["fuel_spend"] == 500
+    assert item["km_driven"] == 500
+    assert item["cost_per_km"] == 1.0
+
+
 async def test_vehicle_summary_cache_invalidated_on_fuel_create(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):

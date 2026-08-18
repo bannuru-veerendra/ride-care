@@ -19,11 +19,14 @@ from app.schemas.vehicle import (
     MileageTrendPoint,
     MonthlySpendPoint,
     VehicleAnalyticsResponse,
+    VehicleCompareItem,
+    VehicleCompareResponse,
     VehicleCreate,
     VehicleResponse,
     VehicleSummaryResponse,
     VehicleUpdate,
 )
+from app.utils.analytics import cost_per_km, km_driven, round_money
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import (
     CACHE_MISS,
@@ -34,6 +37,7 @@ from app.utils.cache import (
     cache_set,
     next_service_key,
     vehicle_analytics_key,
+    vehicle_compare_key,
     vehicle_detail_key,
     vehicle_list_key,
     vehicle_summary_key,
@@ -296,6 +300,103 @@ async def get_vehicles(
     return result
 
 
+@router.get("/compare", response_model=VehicleCompareResponse)
+async def compare_vehicles(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> VehicleCompareResponse:
+    """Side-by-side cost and mileage for every bike in the garage."""
+    cache_key = vehicle_compare_key(str(current_user.id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not CACHE_MISS:
+        try:
+            return VehicleCompareResponse.model_validate(cached)
+        except ValidationError:
+            await cache_delete(redis, cache_key)
+
+    result = await db.execute(
+        select(Vehicle)
+        .where(Vehicle.owner_id == current_user.id)
+        .order_by(Vehicle.created_at.desc())
+    )
+    vehicles = list(result.scalars().all())
+    if not vehicles:
+        payload = VehicleCompareResponse(items=[])
+        await cache_set(
+            redis, cache_key, payload.model_dump(mode="json"), VEHICLE_CACHE_TTL
+        )
+        return payload
+
+    live_odometers = await get_live_odometers_map(db, vehicles)
+    vehicle_ids = [vehicle.id for vehicle in vehicles]
+
+    fuel_result = await db.execute(
+        select(
+            FuelLog.vehicle_id,
+            func.count().label("fill_ups"),
+            func.coalesce(func.sum(FuelLog.total_cost), 0.0).label("fuel_spend"),
+            func.avg(FuelLog.mileage).label("avg_mileage"),
+        )
+        .where(FuelLog.vehicle_id.in_(vehicle_ids))
+        .group_by(FuelLog.vehicle_id)
+    )
+    fuel_by_vehicle = {row.vehicle_id: row for row in fuel_result.all()}
+
+    service_result = await db.execute(
+        select(
+            ServiceLog.vehicle_id,
+            func.count().label("service_count"),
+            func.coalesce(func.sum(ServiceLog.total_cost), 0.0).label(
+                "service_spend"
+            ),
+        )
+        .where(ServiceLog.vehicle_id.in_(vehicle_ids))
+        .group_by(ServiceLog.vehicle_id)
+    )
+    service_by_vehicle = {row.vehicle_id: row for row in service_result.all()}
+
+    items: list[VehicleCompareItem] = []
+    for vehicle in vehicles:
+        fuel_row = fuel_by_vehicle.get(vehicle.id)
+        service_row = service_by_vehicle.get(vehicle.id)
+        fuel_spend = round_money(fuel_row.fuel_spend) if fuel_row else 0.0
+        service_spend = (
+            round_money(service_row.service_spend) if service_row else 0.0
+        )
+        combined = round_money(fuel_spend + service_spend)
+        kilometers = km_driven(
+            vehicle.current_odometer, live_odometers[vehicle.id]
+        )
+        items.append(
+            VehicleCompareItem(
+                vehicle_id=vehicle.id,
+                brand=vehicle.brand,
+                vehicle_name=vehicle.vehicle_name,
+                year=vehicle.year,
+                current_odometer=live_odometers[vehicle.id],
+                km_driven=kilometers,
+                avg_mileage=_round_mileage(
+                    fuel_row.avg_mileage if fuel_row else None
+                ),
+                fuel_spend=fuel_spend,
+                service_spend=service_spend,
+                combined_spend=combined,
+                cost_per_km=cost_per_km(combined, kilometers),
+                fill_up_count=int(fuel_row.fill_ups) if fuel_row else 0,
+                service_count=(
+                    int(service_row.service_count) if service_row else 0
+                ),
+            )
+        )
+
+    payload = VehicleCompareResponse(items=items)
+    await cache_set(
+        redis, cache_key, payload.model_dump(mode="json"), VEHICLE_CACHE_TTL
+    )
+    return payload
+
+
 @router.get("/{vehicle_id}/summary", response_model=VehicleSummaryResponse)
 async def get_vehicle_summary(
     vehicle_id: uuid.UUID,
@@ -440,14 +541,15 @@ async def get_vehicle_analytics(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> VehicleAnalyticsResponse:
-    """Return chart-ready analytics scanned across all fuel logs."""
+    """Return chart-ready analytics scanned across fuel and service logs."""
     result = await db.execute(
         select(Vehicle).where(
             Vehicle.id == vehicle_id,
             Vehicle.owner_id == current_user.id,
         )
     )
-    if result.scalar_one_or_none() is None:
+    db_vehicle = result.scalar_one_or_none()
+    if db_vehicle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehicle not found",
@@ -456,7 +558,10 @@ async def get_vehicle_analytics(
     cache_key = vehicle_analytics_key(str(vehicle_id))
     cached = await cache_get(redis, cache_key)
     if cached is not CACHE_MISS:
-        return cached
+        try:
+            return VehicleAnalyticsResponse.model_validate(cached)
+        except ValidationError:
+            await cache_delete(redis, cache_key)
 
     totals_result = await db.execute(
         select(
@@ -524,9 +629,24 @@ async def get_vehicle_analytics(
             )
         )
 
+    service_totals_result = await db.execute(
+        select(
+            func.count().label("service_count"),
+            func.coalesce(func.sum(ServiceLog.total_cost), 0.0).label(
+                "service_spend"
+            ),
+        ).where(ServiceLog.vehicle_id == vehicle_id)
+    )
+    service_totals = service_totals_result.one()
+    fuel_spend = round_money(totals.total_spend)
+    service_spend = round_money(service_totals.service_spend)
+    combined_spend = round_money(fuel_spend + service_spend)
+    live_odometer = await get_live_odometer(db, db_vehicle)
+    kilometers = km_driven(db_vehicle.current_odometer, live_odometer)
+
     payload = VehicleAnalyticsResponse(
         vehicle_id=vehicle_id,
-        total_spend=float(totals.total_spend),
+        total_spend=fuel_spend,
         total_liters=round(float(totals.total_liters), 2),
         avg_mileage=_round_mileage(avg_raw),
         best_mileage=_round_mileage(best_raw),
@@ -534,6 +654,13 @@ async def get_vehicle_analytics(
         total_fill_ups=int(totals.total_fill_ups),
         mileage_trend=mileage_trend,
         monthly_spend=monthly_spend,
+        service_spend=service_spend,
+        service_count=int(service_totals.service_count),
+        combined_spend=combined_spend,
+        km_driven=kilometers,
+        cost_per_km=cost_per_km(combined_spend, kilometers),
+        fuel_cost_per_km=cost_per_km(fuel_spend, kilometers),
+        service_cost_per_km=cost_per_km(service_spend, kilometers),
     )
     await cache_set(
         redis,

@@ -43,9 +43,10 @@ Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 | Mileage math | Liters + km/L from cost, price/L, and odometer deltas — recalculated on every fill-up edit/delete **and** baseline change |
 | Live odometer | `max(baseline, fuel, service)` so garage and dashboard never lie |
 | Dashboard aggregates | `GET /vehicles/{id}/summary` scans **all** logs — plus `service_reminder` and `document_reminders` for in-app alerts |
-| Charts | `GET /vehicles/{id}/analytics` — trend series + monthly spend from SQL |
+| Charts | `GET /vehicles/{id}/analytics` — cost-per-km (fuel + service), trend series, monthly fuel spend |
+| Compare | `GET /vehicles/compare` — side-by-side spend, mileage, and ₹/km across the garage |
 | Scale | Stable cursor pagination (`date`/`created_at` + `id`) — same-day rows never skip |
-| Speed | Redis cache with write-through invalidation on fuel, service, and vehicle writes |
+| Speed | Redis cache with write-through invalidation on fuel, service, vehicle, and document writes |
 | Auth | httpOnly cookie JWT + refresh rotation, access-token blocklist (`jti`) + revoke-epoch on password change, rate limits |
 | Docs | Typed vault uploads with signed URLs — never public blobs; vehicle delete cleans storage |
 | Guidelines | File-backed maintenance catalog (in-memory), filterable without a DB table |
@@ -58,7 +59,7 @@ The frontend stays thin: sheets, charts, and **Load more** lists over a clear RE
 
 ### Dashboard — status at a glance
 
-Multi-bike picker, live odometer, average mileage, next-service countdown, **in-app reminders** (service due + document expiry), monthly spend, and mileage trend — all from the summary API.
+Multi-bike picker, live odometer, average mileage, next-service countdown, **in-app reminders** (service due + document expiry), this-month spend, and month-over-month mileage change — all from the summary API. Charts live on the vehicle Analytics tab.
 
 ![RideCare dashboard](docs/screenshots/01-dashboard.png)
 
@@ -70,7 +71,7 @@ Add, edit, and open bikes. Registration, year, and live kilometers on each card.
 
 ### Fuel — mileage as the headline
 
-Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side. **Load more** via cursor pages.
+Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side. **Load more** via cursor pages. **Export CSV** of the full history.
 
 ![Fuel logs](docs/screenshots/03-fuel-logs.png)
 
@@ -78,7 +79,7 @@ Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated
 
 ### Service — history + next due
 
-Cost, odometer, tagged jobs, and next service date / km reminders. Cursor-paginated list with **Load more**.
+Cost, odometer, tagged jobs, and next service date / km reminders. Cursor-paginated list with **Load more**. **Export CSV** of the full history.
 
 ![Service logs](docs/screenshots/05-service-logs.png)
 
@@ -92,7 +93,9 @@ Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, signed downl
 
 ### Analytics — spend and mileage charts
 
-Per-vehicle Analytics tab (Recharts): summary cards, last-10 mileage trend, last-6 months fuel spend — from `GET /vehicles/{id}/analytics`.
+Per-vehicle Analytics tab (Recharts): **cost-per-km (fuel + service)**, summary cards, last-10 mileage trend, last-6 months fuel spend — from `GET /vehicles/{id}/analytics`. **Compare** (`/compare`) puts every bike side by side.
+
+![Analytics](docs/screenshots/08-analytics.png)
 
 ![Analytics](docs/screenshots/08-analytics.png)
 
@@ -146,7 +149,7 @@ Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owne
 | UI | React 19, TypeScript, Vite 8, Tailwind CSS v4, shadcn/ui, Recharts |
 | Client | TanStack Query, Zustand, Axios, Zod + React Hook Form |
 | Hosting | Frontend on **Vercel** (`/api` proxy) · API on **Render** |
-| Quality | pytest (async API suite), oxlint, GitHub Actions CI |
+| Quality | pytest on GitHub Actions · oxlint locally |
 
 ---
 
@@ -158,9 +161,9 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 |--------|---------|------------|
 | **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; access JWT blocklist on logout/refresh; Swagger OAuth2 form still returns bearer body |
 | **Users** | `GET/PATCH /users/me` · password change | Session revoke + access revoke-epoch + cookie clear |
-| **Vehicles** | CRUD · `…/summary` · `…/analytics` | Live odometer; Redis-cached reads; baseline → mileage recalc |
-| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` | Liters + km/L; cascade recalc; list/detail cache invalidation |
-| **Service** | CRUD · `GET …/next` | Next-due helper; cached nulls correctly; Load more on UI |
+| **Vehicles** | CRUD · `…/summary` · `…/analytics` · `GET /vehicles/compare` | Live odometer; cost-per-km (fuel + service); garage compare |
+| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` · `GET …/export` | Liters + km/L; cascade recalc; CSV of full history |
+| **Service** | CRUD · `GET …/next` · `GET …/export` | Next-due helper; cached nulls correctly; CSV of full history |
 | **Documents** | Multipart CRUD · cursor list | Type enum, 10 MB, signed URLs; clear expiry/notes; expiry status from API |
 | **Guidelines** | `/maintenance-guidelines/` + filters | JSON file + in-memory cache |
 
@@ -181,15 +184,17 @@ List responses use a shared cursor page (stable across same-day rows):
 
 | Start here | What you’ll see |
 |------------|-----------------|
-| [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Summary, analytics, live odometer, Redis-cached reads |
+| [`backend/app/routes/vehicles.py`](backend/app/routes/vehicles.py) | Summary, analytics, compare, live odometer, Redis-cached reads |
+| [`backend/app/utils/analytics.py`](backend/app/utils/analytics.py) | Cost-per-km (fuel + service) over km since baseline |
 | [`backend/app/routes/fuel_logs.py`](backend/app/routes/fuel_logs.py) | Mileage recalculation + odometer rules |
 | [`backend/app/utils/fuel_mileage.py`](backend/app/utils/fuel_mileage.py) | Shared timeline recalc (fuel writes + baseline updates) |
 | [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers, `CACHE_MISS` sentinel, key builders |
 | [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Composite cursor paginator |
+| [`backend/app/utils/reminders.py`](backend/app/utils/reminders.py) | Service soon/overdue + document expiry rules |
 | [`backend/data/maintenance_guidelines.json`](backend/data/maintenance_guidelines.json) | Guideline catalog |
-| [`backend/tests/`](backend/tests/) | Auth, CRUD, pagination, cache, summary, analytics, guidelines |
+| [`backend/tests/`](backend/tests/) | Auth, users, CRUD, pagination, cache, summary, analytics, compare, export, documents, rate limits, guidelines |
 | [`frontend/src/features/`](frontend/src/features/) | Domain modules (hooks · forms · charts) |
-| [`frontend/src/pages/`](frontend/src/pages/) | Dashboard, garage, detail, settings, maintenance |
+| [`frontend/src/pages/`](frontend/src/pages/) | Dashboard, garage, compare, detail, settings, maintenance |
 | [`ROADMAP.md`](ROADMAP.md) | Shipped vs next |
 
 ```
@@ -260,9 +265,9 @@ cd backend
 
 ---
 
-## Shipped today
+## What’s included
 
-Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · document vault with **Load more** · summary dashboard with **in-app reminders** · analytics charts · maintenance guide · stable cursor pagination · Redis caching with correct invalidation · access-token blocklisting · CI + production deploy
+Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · Redis caching with write-through invalidation · access-token blocklisting · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

@@ -94,6 +94,33 @@ export interface VehicleAnalytics {
     total_fill_ups: number;
     mileage_trend: MileageTrendPoint[];
     monthly_spend: MonthlySpendPoint[];
+    service_spend: number;
+    service_count: number;
+    combined_spend: number;
+    km_driven: number;
+    cost_per_km: number | null;
+    fuel_cost_per_km: number | null;
+    service_cost_per_km: number | null;
+}
+
+export interface VehicleCompareItem {
+    vehicle_id: string;
+    brand: string;
+    vehicle_name: string;
+    year: number;
+    current_odometer: number;
+    km_driven: number;
+    avg_mileage: number | null;
+    fuel_spend: number;
+    service_spend: number;
+    combined_spend: number;
+    cost_per_km: number | null;
+    fill_up_count: number;
+    service_count: number;
+}
+
+export interface VehicleCompareResponse {
+    items: VehicleCompareItem[];
 }
 
 export const vehiclesApi = {
@@ -114,6 +141,10 @@ export const vehiclesApi = {
     },
     getSummary: async (id: string): Promise<VehicleSummary> => {
         const { data } = await apiClient.get(`/vehicles/${id}/summary`);
+        return data;
+    },
+    compare: async (): Promise<VehicleCompareResponse> => {
+        const { data } = await apiClient.get("/vehicles/compare");
         return data;
     },
     create: async (payload: CreateVehiclePayload): Promise<Vehicle> => {

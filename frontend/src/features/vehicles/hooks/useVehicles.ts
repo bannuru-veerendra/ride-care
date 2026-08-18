@@ -11,6 +11,7 @@ import { getCursorNextPageParam } from "@/lib/query-client";
 export const vehicleKeys = {
     all: ["vehicles"] as const,
     infinite: ["vehicles", "infinite"] as const,
+    compare: ["vehicles", "compare"] as const,
     details: (id: string) => ["vehicle-detail", id] as const,
     analytics: (id: string) => ["vehicle-analytics", id] as const,
     summary: (id: string) => ["vehicle-summary", id] as const,
@@ -52,6 +53,14 @@ export const useVehicles = () => {
     return useQuery({
         queryKey: vehicleKeys.all,
         queryFn: () => vehiclesApi.getAll({ size: 100 }),
+    });
+};
+
+/** Garage-wide cost and mileage comparison */
+export const useVehicleCompare = () => {
+    return useQuery({
+        queryKey: vehicleKeys.compare,
+        queryFn: () => vehiclesApi.compare(),
     });
 };
 
