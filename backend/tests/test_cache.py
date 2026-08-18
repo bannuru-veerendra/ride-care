@@ -105,10 +105,10 @@ async def test_vehicle_cache_invalidated_on_delete(
     assert vehicle_id not in ids
 
 
-async def test_next_service_cached(
+async def test_next_service_consistent(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
-    """Next service endpoint is cached."""
+    """Next service endpoint returns stable results."""
     vehicle_id = created_vehicle["id"]
 
     response1 = await client.get(
@@ -126,26 +126,14 @@ async def test_next_service_cached(
     assert response1.json() == response2.json()
 
 
-async def test_next_service_cache_invalidated_on_create(
+async def test_next_service_updates_after_create(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
-    """
-    Creating a service log with next_service_date
-    invalidates the next service cache.
-    """
+    """Creating a service log with next_service_date updates the next endpoint."""
     from datetime import date, timedelta
 
     vehicle_id = created_vehicle["id"]
 
-    # Warm the cache — should be None initially
-    response1 = await client.get(
-        "/service_logs/next",
-        params={"vehicle_id": vehicle_id},
-        headers=auth_headers,
-    )
-    assert response1.json() is None
-
-    # Create service log with next service date
     next_date = str(date.today() + timedelta(days=90))
     await client.post(
         "/service_logs/",
@@ -160,7 +148,6 @@ async def test_next_service_cache_invalidated_on_create(
         headers=auth_headers,
     )
 
-    # Cache invalidated — next service should now appear
     response2 = await client.get(
         "/service_logs/next",
         params={"vehicle_id": vehicle_id},
@@ -410,25 +397,3 @@ async def test_vehicle_list_cache_invalidated_on_fuel_create(
     refreshed = await client.get("/vehicles/", headers=auth_headers)
     listed = next(v for v in refreshed.json()["items"] if v["id"] == vehicle_id)
     assert listed["current_odometer"] == 10800
-
-
-async def test_next_service_null_is_cached(
-    client: AsyncClient, auth_headers: dict, created_vehicle: dict
-):
-    """Cached null for next service is treated as a hit, not a miss."""
-    vehicle_id = created_vehicle["id"]
-
-    response1 = await client.get(
-        "/service_logs/next",
-        params={"vehicle_id": vehicle_id},
-        headers=auth_headers,
-    )
-    response2 = await client.get(
-        "/service_logs/next",
-        params={"vehicle_id": vehicle_id},
-        headers=auth_headers,
-    )
-
-    assert response1.status_code == 200
-    assert response1.json() is None
-    assert response2.json() is None

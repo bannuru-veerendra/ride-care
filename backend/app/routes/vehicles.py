@@ -5,7 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import ValidationError
 from redis.asyncio import Redis
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -35,7 +35,6 @@ from app.utils.cache import (
     cache_delete_pattern,
     cache_get,
     cache_set,
-    next_service_key,
     vehicle_analytics_key,
     vehicle_compare_key,
     vehicle_detail_key,
@@ -72,47 +71,6 @@ def _round_mileage(value: float | None) -> float | None:
     return round(float(value), 1)
 
 
-async def _last_two_filled_month_mileages(
-    db: AsyncSession,
-    vehicle_id: uuid.UUID,
-) -> list[tuple[str, float]]:
-    """
-    Return up to two (month_label, avg_mileage) pairs for the most recent
-    calendar months that have fuel logs with mileage.
-    Example: Aug empty, Jul+Jun filled → [("Jul", 47.1), ("Jun", 45.0)]
-    """
-    month_start = func.date_trunc("month", FuelLog.date)
-    result = await db.execute(
-        select(
-            month_start.label("month_start"),
-            func.avg(FuelLog.mileage).label("avg_mileage"),
-        )
-        .where(
-            FuelLog.vehicle_id == vehicle_id,
-            FuelLog.mileage.isnot(None),
-        )
-        .group_by(month_start)
-        .order_by(month_start.desc())
-        .limit(2)
-    )
-    rows = result.all()
-    filled: list[tuple[str, float]] = []
-    for row in rows:
-        month_value = row.month_start
-        if month_value is None or row.avg_mileage is None:
-            continue
-        # date_trunc may return datetime
-        if hasattr(month_value, "date"):
-            month_date = month_value.date()
-        else:
-            month_date = month_value
-        label = month_date.strftime("%b")
-        mileage = _round_mileage(row.avg_mileage)
-        if mileage is not None:
-            filled.append((label, mileage))
-    return filled
-
-
 async def get_live_odometer(
     db: AsyncSession,
     vehicle: Vehicle,
@@ -126,35 +84,67 @@ async def get_live_odometers_map(
     db: AsyncSession,
     vehicles: list[Vehicle],
 ) -> dict[uuid.UUID, int]:
-    """Return live odometer for each vehicle"""
+    """Return live odometer for each vehicle in one round-trip."""
     if not vehicles:
         return {}
 
     vehicle_ids = [vehicle.id for vehicle in vehicles]
     baselines = {vehicle.id: vehicle.current_odometer for vehicle in vehicles}
+    log_max_by_vehicle: dict[uuid.UUID, int] = {}
 
-    fuel_result = await db.execute(
-        select(FuelLog.vehicle_id, func.max(FuelLog.odometer))
+    fuel_max = (
+        select(
+            FuelLog.vehicle_id.label("vehicle_id"),
+            func.max(FuelLog.odometer).label("odometer"),
+        )
         .where(FuelLog.vehicle_id.in_(vehicle_ids))
         .group_by(FuelLog.vehicle_id)
     )
-    service_result = await db.execute(
-        select(ServiceLog.vehicle_id, func.max(ServiceLog.odometer))
+    service_max = (
+        select(
+            ServiceLog.vehicle_id.label("vehicle_id"),
+            func.max(ServiceLog.odometer).label("odometer"),
+        )
         .where(ServiceLog.vehicle_id.in_(vehicle_ids))
         .group_by(ServiceLog.vehicle_id)
     )
-
-    fuel_max_by_vehicle = dict(fuel_result.all())
-    service_max_by_vehicle = dict(service_result.all())
+    log_max = fuel_max.union_all(service_max).subquery()
+    result = await db.execute(
+        select(log_max.c.vehicle_id, func.max(log_max.c.odometer)).group_by(
+            log_max.c.vehicle_id
+        )
+    )
+    for vehicle_id, odometer in result.all():
+        log_max_by_vehicle[vehicle_id] = int(odometer or 0)
 
     return {
         vehicle_id: max(
             baselines[vehicle_id],
-            fuel_max_by_vehicle.get(vehicle_id) or 0,
-            service_max_by_vehicle.get(vehicle_id) or 0,
+            log_max_by_vehicle.get(vehicle_id) or 0,
         )
         for vehicle_id in vehicle_ids
     }
+
+
+def _average(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return _round_mileage(sum(values) / len(values))
+
+
+async def _expiring_documents(
+    db: AsyncSession,
+    vehicle_id: uuid.UUID,
+) -> list[Document]:
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.vehicle_id == vehicle_id,
+            Document.expiry_date.isnot(None),
+        )
+        .order_by(Document.expiry_date.asc())
+    )
+    return list(result.scalars().all())
 
 
 async def get_min_log_odometer(
@@ -208,6 +198,188 @@ async def to_vehicle_response(
     )
 
 
+async def _owned_vehicle(
+    db: AsyncSession,
+    vehicle_id: uuid.UUID,
+    owner_id: uuid.UUID,
+) -> Vehicle | None:
+    result = await db.execute(
+        select(Vehicle).where(
+            Vehicle.id == vehicle_id,
+            Vehicle.owner_id == owner_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _fetch_vehicle_list(
+    db: AsyncSession,
+    redis: Redis,
+    current_user: User,
+    cursor: str | None = None,
+    size: int = 100,
+) -> CursorPage[VehicleResponse]:
+    """Cached garage page."""
+    cache_key = vehicle_list_key(str(current_user.id))
+    if cursor or size != 20:
+        cache_key = f"{cache_key}:{cursor}:{size}"
+
+    cached = await cache_get(redis, cache_key)
+    if cached is not CACHE_MISS:
+        return CursorPage[VehicleResponse].model_validate(cached)
+
+    try:
+        page = await paginate(
+            db,
+            Vehicle,
+            filter_clause=Vehicle.owner_id == current_user.id,
+            order_by_column=Vehicle.created_at,
+            cursor_column=Vehicle.created_at,
+            tiebreaker_column=Vehicle.id,
+            cursor=cursor,
+            size=size,
+            descending=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    live_odometers = await get_live_odometers_map(db, page.items)
+    result = CursorPage(
+        items=[
+            build_vehicle_response(vehicle, live_odometers[vehicle.id])
+            for vehicle in page.items
+        ],
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+        total=page.total,
+    )
+    await cache_set(redis, cache_key, result.model_dump(mode="json"), VEHICLE_CACHE_TTL)
+    return result
+
+
+async def _build_summary_payload(
+    db: AsyncSession,
+    db_vehicle: Vehicle,
+) -> VehicleSummaryResponse:
+    """One fuel scan + one service scan + documents. Same connection, fewer round-trips."""
+    vehicle_id = db_vehicle.id
+    today = app_today()
+    this_start, this_end = _month_bounds(today)
+    last_start, last_end = _month_bounds(_shift_month(today, -1))
+
+    fuel_result = await db.execute(
+        select(FuelLog)
+        .where(FuelLog.vehicle_id == vehicle_id)
+        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
+    )
+    fuel_logs = list(fuel_result.scalars().all())
+
+    service_result = await db.execute(
+        select(ServiceLog)
+        .where(ServiceLog.vehicle_id == vehicle_id)
+        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
+    )
+    service_logs = list(service_result.scalars().all())
+
+    documents = await _expiring_documents(db, vehicle_id)
+
+    fuel_max = max((log.odometer for log in fuel_logs), default=0)
+    service_max = max((log.odometer for log in service_logs), default=0)
+    live_odometer = max(int(db_vehicle.current_odometer), fuel_max, service_max)
+
+    this_mileages: list[float] = []
+    last_mileages: list[float] = []
+    all_mileages: list[float] = []
+    this_month_spend = 0.0
+    last_month_spend = 0.0
+    by_month: dict[date, list[float]] = {}
+    for log in fuel_logs:
+        if this_start <= log.date <= this_end:
+            this_month_spend += float(log.total_cost)
+        elif last_start <= log.date <= last_end:
+            last_month_spend += float(log.total_cost)
+        if log.mileage is None:
+            continue
+        mileage = float(log.mileage)
+        all_mileages.append(mileage)
+        month_key = date(log.date.year, log.date.month, 1)
+        by_month.setdefault(month_key, []).append(mileage)
+        if this_start <= log.date <= this_end:
+            this_mileages.append(mileage)
+        elif last_start <= log.date <= last_end:
+            last_mileages.append(mileage)
+
+    filled_months: list[tuple[str, float]] = []
+    for month_key in sorted(by_month.keys(), reverse=True)[:2]:
+        mileage = _average(by_month[month_key])
+        if mileage is not None:
+            filled_months.append((month_key.strftime("%b"), mileage))
+    recent_filled = filled_months[0] if len(filled_months) >= 1 else None
+    prior_filled = filled_months[1] if len(filled_months) >= 2 else None
+
+    next_service = next(
+        (
+            log
+            for log in service_logs
+            if log.next_service_date is not None
+            or log.next_service_odometer is not None
+        ),
+        None,
+    )
+
+    return VehicleSummaryResponse(
+        vehicle_id=vehicle_id,
+        fuel_log_count=len(fuel_logs),
+        average_mileage=_average(all_mileages),
+        this_month_spend=this_month_spend,
+        last_month_spend=last_month_spend,
+        this_month_mileage=_average(this_mileages),
+        last_month_mileage=_average(last_mileages),
+        recent_filled_month_mileage=recent_filled[1] if recent_filled else None,
+        prior_filled_month_mileage=prior_filled[1] if prior_filled else None,
+        recent_filled_month_label=recent_filled[0] if recent_filled else None,
+        prior_filled_month_label=prior_filled[0] if prior_filled else None,
+        recent_fuel_logs=fuel_logs[:3],
+        next_service=next_service,
+        service_reminder=build_service_reminder(
+            next_service,
+            today=today,
+            live_odometer=live_odometer,
+        ),
+        document_reminders=build_document_reminders(documents, today=today),
+    )
+
+
+async def _fetch_vehicle_summary(
+    db: AsyncSession,
+    redis: Redis,
+    current_user: User,
+    vehicle_id: uuid.UUID,
+) -> VehicleSummaryResponse | None:
+    db_vehicle = await _owned_vehicle(db, vehicle_id, current_user.id)
+    if db_vehicle is None:
+        return None
+
+    cache_key = vehicle_summary_key(str(vehicle_id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not CACHE_MISS:
+        try:
+            return VehicleSummaryResponse.model_validate(cached)
+        except ValidationError:
+            await cache_delete(redis, cache_key)
+
+    payload = await _build_summary_payload(db, db_vehicle)
+    await cache_set(
+        redis,
+        cache_key,
+        payload.model_dump(mode="json"),
+        VEHICLE_CACHE_TTL,
+    )
+    return payload
+
+
 @router.post("/", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
 async def create_vehicle(
     vehicle: VehicleCreate,
@@ -258,46 +430,7 @@ async def get_vehicles(
     Cached per user for 5 minutes.
     Cache invalidated on any vehicle create/update/delete.
     """
-    cache_key = vehicle_list_key(str(current_user.id))
-    # Include cursor and size in cache key so different
-    # pages are cached independently
-    if cursor or size != 20:
-        cache_key = f"{cache_key}:{cursor}:{size}"
-
-    cached = await cache_get(redis, cache_key)
-    if cached is not CACHE_MISS:
-        return cached
-
-    try:
-        page = await paginate(
-            db,
-            Vehicle,
-            filter_clause=Vehicle.owner_id == current_user.id,
-            order_by_column=Vehicle.created_at,
-            cursor_column=Vehicle.created_at,
-            tiebreaker_column=Vehicle.id,
-            cursor=cursor,
-            size=size,
-            descending=True,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    live_odometers = await get_live_odometers_map(db, page.items)
-    result = CursorPage(
-        items=[
-            build_vehicle_response(vehicle, live_odometers[vehicle.id])
-            for vehicle in page.items
-        ],
-        next_cursor=page.next_cursor,
-        has_more=page.has_more,
-        total=page.total,
-    )
-
-    await cache_set(redis, cache_key, result.model_dump(mode="json"), VEHICLE_CACHE_TTL)
-    return result
+    return await _fetch_vehicle_list(db, redis, current_user, cursor, size)
 
 
 @router.get("/compare", response_model=VehicleCompareResponse)
@@ -405,132 +538,12 @@ async def get_vehicle_summary(
     redis: Redis = Depends(get_redis),
 ) -> VehicleSummaryResponse:
     """Return dashboard aggregations scanned across all fuel/service logs."""
-    result = await db.execute(
-        select(Vehicle).where(
-            Vehicle.id == vehicle_id,
-            Vehicle.owner_id == current_user.id,
-        )
-    )
-    db_vehicle = result.scalar_one_or_none()
-    if db_vehicle is None:
+    payload = await _fetch_vehicle_summary(db, redis, current_user, vehicle_id)
+    if payload is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehicle not found",
         )
-
-    cache_key = vehicle_summary_key(str(vehicle_id))
-    cached = await cache_get(redis, cache_key)
-    if cached is not CACHE_MISS:
-        try:
-            return VehicleSummaryResponse.model_validate(cached)
-        except ValidationError:
-            # Schema evolved (e.g. reminder fields) — rebuild instead of 500.
-            await cache_delete(redis, cache_key)
-
-    today = app_today()
-    this_start, this_end = _month_bounds(today)
-    last_start, last_end = _month_bounds(_shift_month(today, -1))
-    live_odometer = await get_live_odometer(db, db_vehicle)
-
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(FuelLog)
-        .where(FuelLog.vehicle_id == vehicle_id)
-    )
-    fuel_log_count = int(count_result.scalar_one())
-
-    avg_result = await db.execute(
-        select(func.avg(FuelLog.mileage)).where(
-            FuelLog.vehicle_id == vehicle_id,
-            FuelLog.mileage.isnot(None),
-        )
-    )
-    average_mileage = _round_mileage(avg_result.scalar_one_or_none())
-
-    async def month_spend(start: date, end: date) -> float:
-        spend_result = await db.execute(
-            select(func.coalesce(func.sum(FuelLog.total_cost), 0.0)).where(
-                FuelLog.vehicle_id == vehicle_id,
-                FuelLog.date >= start,
-                FuelLog.date <= end,
-            )
-        )
-        return float(spend_result.scalar_one())
-
-    async def month_mileage(start: date, end: date) -> float | None:
-        mileage_result = await db.execute(
-            select(func.avg(FuelLog.mileage)).where(
-                FuelLog.vehicle_id == vehicle_id,
-                FuelLog.date >= start,
-                FuelLog.date <= end,
-                FuelLog.mileage.isnot(None),
-            )
-        )
-        return _round_mileage(mileage_result.scalar_one_or_none())
-
-    recent_result = await db.execute(
-        select(FuelLog)
-        .where(FuelLog.vehicle_id == vehicle_id)
-        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
-        .limit(3)
-    )
-    recent_fuel_logs = list(recent_result.scalars().all())
-
-    next_service_result = await db.execute(
-        select(ServiceLog)
-        .where(
-            ServiceLog.vehicle_id == vehicle_id,
-            or_(
-                ServiceLog.next_service_date.isnot(None),
-                ServiceLog.next_service_odometer.isnot(None),
-            ),
-        )
-        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
-        .limit(1)
-    )
-    next_service = next_service_result.scalar_one_or_none()
-
-    documents_result = await db.execute(
-        select(Document)
-        .where(
-            Document.vehicle_id == vehicle_id,
-            Document.expiry_date.isnot(None),
-        )
-        .order_by(Document.expiry_date.asc())
-    )
-    documents = list(documents_result.scalars().all())
-
-    filled_months = await _last_two_filled_month_mileages(db, vehicle_id)
-    recent_filled = filled_months[0] if len(filled_months) >= 1 else None
-    prior_filled = filled_months[1] if len(filled_months) >= 2 else None
-
-    payload = VehicleSummaryResponse(
-        vehicle_id=vehicle_id,
-        fuel_log_count=fuel_log_count,
-        average_mileage=average_mileage,
-        this_month_spend=await month_spend(this_start, this_end),
-        last_month_spend=await month_spend(last_start, last_end),
-        this_month_mileage=await month_mileage(this_start, this_end),
-        last_month_mileage=await month_mileage(last_start, last_end),
-        recent_filled_month_mileage=recent_filled[1] if recent_filled else None,
-        prior_filled_month_mileage=prior_filled[1] if prior_filled else None,
-        recent_filled_month_label=recent_filled[0] if recent_filled else None,
-        prior_filled_month_label=prior_filled[0] if prior_filled else None,
-        recent_fuel_logs=recent_fuel_logs,
-        next_service=next_service,
-        service_reminder=build_service_reminder(
-            next_service,
-            today=today,
-            live_odometer=live_odometer,
-        ),
-        document_reminders=build_document_reminders(documents, today=today),
-    )
-    await cache_set(
-        redis,
-        cache_key,
-        payload.model_dump(mode="json"),
-        VEHICLE_CACHE_TTL,
-    )
     return payload
 
 
@@ -821,7 +834,6 @@ async def delete_vehicle(
 
     # Invalidate caches
     await cache_delete(redis, vehicle_detail_key(str(vehicle_id)))
-    await cache_delete(redis, next_service_key(str(vehicle_id)))
     await cache_delete(
         redis,
         vehicle_summary_key(str(vehicle_id)),

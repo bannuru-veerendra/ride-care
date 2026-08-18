@@ -50,18 +50,23 @@ export default function DashboardPage() {
     const vehicles = vehiclesPage?.items ?? [];
     const count = vehiclesPage?.total ?? 0;
 
-    const [selectedVehicleId, setSelectedVehicleId] = useState("");
+    const [selectedVehicleId, setSelectedVehicleId] = useState(
+        () => localStorage.getItem(SELECTED_VEHICLE_KEY) ?? ""
+    );
 
     useEffect(() => {
         if (!vehicles.length) {
-            setSelectedVehicleId("");
+            if (!vehiclesLoading) {
+                setSelectedVehicleId("");
+            }
             return;
         }
 
-        const saved = localStorage.getItem(SELECTED_VEHICLE_KEY);
-        const match = vehicles.find((vehicle) => vehicle.id === saved);
-        setSelectedVehicleId(match?.id ?? vehicles[0].id);
-    }, [vehicles]);
+        const match = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+        if (!match) {
+            setSelectedVehicleId(vehicles[0].id);
+        }
+    }, [vehicles, vehiclesLoading, selectedVehicleId]);
 
     const handleSelectVehicle = (id: string) => {
         setSelectedVehicleId(id);
@@ -73,7 +78,7 @@ export default function DashboardPage() {
         vehicles[0];
 
     const { data: summary, isLoading: summaryLoading } = useVehicleSummary(
-        selectedVehicle?.id ?? ""
+        selectedVehicleId
     );
 
     const recentFuelLogs = summary?.recent_fuel_logs ?? [];
@@ -106,27 +111,27 @@ export default function DashboardPage() {
     const serviceSoon = serviceReminder?.status === "soon";
 
     const showReminders =
-        !!selectedVehicle &&
+        !!selectedVehicleId &&
         (serviceOverdue || serviceSoon || documentReminders.length > 0);
 
-    const fuelHref = selectedVehicle
-        ? `/vehicles/${selectedVehicle.id}?action=fuel`
+    const fuelHref = selectedVehicleId
+        ? `/vehicles/${selectedVehicleId}?action=fuel`
         : "/vehicles";
-    const serviceHref = selectedVehicle
-        ? `/vehicles/${selectedVehicle.id}?action=service`
+    const serviceHref = selectedVehicleId
+        ? `/vehicles/${selectedVehicleId}?action=service`
         : "/vehicles";
-    const serviceTabHref = selectedVehicle
-        ? `/vehicles/${selectedVehicle.id}?tab=service`
+    const serviceTabHref = selectedVehicleId
+        ? `/vehicles/${selectedVehicleId}?tab=service`
         : "/vehicles";
-    const documentsTabHref = selectedVehicle
-        ? `/vehicles/${selectedVehicle.id}?tab=documents`
+    const documentsTabHref = selectedVehicleId
+        ? `/vehicles/${selectedVehicleId}?tab=documents`
         : "/vehicles";
-    const vehicleHref = selectedVehicle
-        ? `/vehicles/${selectedVehicle.id}`
+    const vehicleHref = selectedVehicleId
+        ? `/vehicles/${selectedVehicleId}`
         : "/vehicles";
 
     let statusLine = "Ready when you are.";
-    if (selectedVehicle) {
+    if (selectedVehicleId) {
         if (serviceOverdue) {
             statusLine = "Service overdue — book it soon.";
         } else if (serviceSoon && daysUntilNextService !== null && daysUntilNextService >= 0) {
@@ -144,7 +149,9 @@ export default function DashboardPage() {
         }
     }
 
-    if (vehiclesLoading) {
+    // First visit (no saved bike): wait for the list. Returning riders already
+    // have an id in localStorage, so summary can load in parallel with the list.
+    if (vehiclesLoading && !selectedVehicleId) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-36 w-full rounded-3xl" />
@@ -162,7 +169,7 @@ export default function DashboardPage() {
     }
 
     // Empty garage — full branded hero
-    if (count === 0) {
+    if (!vehiclesLoading && count === 0) {
         return (
             <div className="space-y-8">
                 <section className="relative -mx-4 min-h-[min(78dvh,640px)] overflow-hidden sm:-mx-6 sm:rounded-3xl sm:border sm:border-white/10">
@@ -256,7 +263,7 @@ export default function DashboardPage() {
             </section>
 
             {/* In-app reminders — service due + document expiry */}
-            {showReminders && selectedVehicle && (
+            {showReminders && (
                 <section
                     className="animate-fade-up space-y-2"
                     style={{ animationDelay: "40ms" }}
@@ -348,7 +355,7 @@ export default function DashboardPage() {
             )}
 
             {/* Quick actions */}
-            {selectedVehicle && (
+            {selectedVehicleId && (
                 <section
                     className="animate-fade-up grid grid-cols-2 gap-3"
                     style={{ animationDelay: "80ms" }}
@@ -391,7 +398,7 @@ export default function DashboardPage() {
             )}
 
             {/* Quick stats */}
-            {selectedVehicle && (
+            {selectedVehicleId && (
                 <section
                     className="animate-fade-up"
                     style={{ animationDelay: "140ms" }}
@@ -423,7 +430,7 @@ export default function DashboardPage() {
                         )}
                     </div>
 
-                    {count === 1 && (
+                    {count === 1 && selectedVehicle && (
                         <p className="mb-3 text-sm text-muted-foreground">
                             {selectedVehicle.brand} {selectedVehicle.vehicle_name}
                         </p>
@@ -437,9 +444,11 @@ export default function DashboardPage() {
                                     Odometer
                                 </div>
                                 <p className="font-heading mt-2 text-3xl font-extrabold tracking-wide">
-                                    {selectedVehicle.current_odometer.toLocaleString(
-                                        "en-IN"
-                                    )}
+                                    {selectedVehicle
+                                        ? selectedVehicle.current_odometer.toLocaleString(
+                                              "en-IN"
+                                          )
+                                        : "—"}
                                 </p>
                                 <p className="text-xs text-muted-foreground">km</p>
                             </CardContent>
@@ -558,7 +567,7 @@ export default function DashboardPage() {
             )}
 
             {/* Monthly spend + mileage trend */}
-            {selectedVehicle && hasFuelLogs && (
+            {selectedVehicleId && hasFuelLogs && (
                 <section
                     className="animate-fade-up grid grid-cols-2 gap-3"
                     style={{ animationDelay: "200ms" }}
@@ -634,7 +643,7 @@ export default function DashboardPage() {
             )}
 
             {/* Empty fuel state */}
-            {selectedVehicle && !summaryLoading && !hasFuelLogs && (
+            {selectedVehicleId && !summaryLoading && !hasFuelLogs && (
                 <section
                     className="animate-fade-up surface-panel px-6 py-8 text-center sm:px-8"
                     style={{ animationDelay: "200ms" }}
@@ -661,7 +670,7 @@ export default function DashboardPage() {
             )}
 
             {/* Empty service state */}
-            {selectedVehicle &&
+            {selectedVehicleId &&
                 !summaryLoading &&
                 !hasNextService && (
                     <section
@@ -694,7 +703,7 @@ export default function DashboardPage() {
                 )}
 
             {/* Recent fill-ups */}
-            {selectedVehicle && recentFuelLogs.length > 0 && (
+            {selectedVehicleId && recentFuelLogs.length > 0 && (
                 <section
                     className="animate-fade-up"
                     style={{ animationDelay: "260ms" }}
@@ -736,7 +745,7 @@ export default function DashboardPage() {
                                 </div>
                                 {log.mileage !== null && (
                                     <Badge className="shrink-0 border-0 bg-brand/15 text-xs font-semibold text-brand">
-                                        {log.mileage} km/l
+                                        {log.mileage.toFixed(1)} km/l
                                     </Badge>
                                 )}
                             </Link>

@@ -1,13 +1,9 @@
-import logging
-
 from fastapi import APIRouter, Depends, Query
 
 from app.data.guidelines import load_guidelines
 from app.models.user import User
 from app.schemas.maintenance_guideline import MaintenanceGuidelineResponse
 from app.utils.auth_dependency import get_current_user
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/maintenance-guidelines",

@@ -34,8 +34,8 @@ function getInitials(fullName: string): string {
 export default function AccountMenu() {
     const navigate = useNavigate();
     const logout = useLogout();
-    const { data: user } = useCurrentUser();
     const [open, setOpen] = useState(false);
+    const { data: user } = useCurrentUser({ enabled: open });
     const rootRef = useRef<HTMLDivElement>(null);
     const close = useCallback(() => setOpen(false), []);
     useDismissible(open, rootRef, close);

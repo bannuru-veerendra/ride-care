@@ -146,7 +146,7 @@ export default function FuelLogForm({
                         </p>
                         <p className="font-heading mt-1 text-4xl font-extrabold tracking-wide text-brand">
                             {defaultValues?.mileage != null
-                                ? defaultValues.mileage
+                                ? defaultValues.mileage.toFixed(1)
                                 : "—"}
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">

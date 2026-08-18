@@ -25,7 +25,7 @@ def load_guidelines() -> list[dict]:
     try:
         with open(GUIDELINES_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            logger.info("Loaded %d maintenance guidelines from file", len(data))
+            logger.debug("Loaded %d maintenance guidelines from file", len(data))
             return data
     except FileNotFoundError:
         logger.error("Guidelines file not found at %s", GUIDELINES_FILE)
