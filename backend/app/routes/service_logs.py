@@ -14,13 +14,8 @@ from app.schemas.pagination import CursorPage
 from app.schemas.service_log import ServiceLogCreate, ServiceLogResponse, ServiceLogUpdate
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import (
-    CACHE_MISS,
-    NEXT_SERVICE_CACHE_TTL,
     cache_delete,
     cache_delete_pattern,
-    cache_get,
-    cache_set,
-    next_service_key,
     vehicle_analytics_key,
     vehicle_detail_key,
     vehicle_summary_key,
@@ -42,7 +37,6 @@ async def _invalidate_service_derived_caches(
     """Drop caches that depend on service logs / live odometer."""
     await cache_delete(
         redis,
-        next_service_key(str(vehicle_id)),
         vehicle_summary_key(str(vehicle_id)),
         vehicle_detail_key(str(vehicle_id)),
         vehicle_analytics_key(str(vehicle_id)),
@@ -184,18 +178,9 @@ async def get_next_service_log(
     vehicle_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> ServiceLogResponse | None:
-    """
-    Returns the most recent service log with next service info.
-    Cached per vehicle for 5 minutes.
-    """
+    """Most recent service log with a next due date or odometer."""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
-
-    cache_key = next_service_key(str(vehicle_id))
-    cached = await cache_get(redis, cache_key)
-    if cached is not CACHE_MISS:
-        return cached
 
     result = await db.execute(
         select(ServiceLog)
@@ -209,15 +194,7 @@ async def get_next_service_log(
         .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
         .limit(1)
     )
-    service_log = result.scalar_one_or_none()
-
-    value = (
-        ServiceLogResponse.model_validate(service_log).model_dump(mode="json")
-        if service_log
-        else None
-    )
-    await cache_set(redis, cache_key, value, NEXT_SERVICE_CACHE_TTL)
-    return service_log
+    return result.scalar_one_or_none()
 
 
 @router.get("/{service_log_id}", response_model=ServiceLogResponse)

@@ -22,6 +22,18 @@ from app.utils.redis_client import close_redis, get_redis
 logger = logging.getLogger(__name__)
 
 
+def _configure_logging() -> None:
+    """Production: warnings+ only. Dev keeps INFO for local debugging."""
+    if settings.APP_ENV == "development":
+        return
+    logging.basicConfig(level=logging.WARNING, force=True)
+    for name in ("sqlalchemy.engine", "uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+_configure_logging()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     yield

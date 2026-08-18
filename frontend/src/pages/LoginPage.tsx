@@ -53,7 +53,7 @@ export default function LoginPage() {
         >
             <form
                 onSubmit={handleSubmit(onSubmit)}
-                className="mt-6 space-y-5"
+                className="mt-4 space-y-3"
                 noValidate
             >
                 <div className="space-y-1.5">
@@ -105,7 +105,7 @@ export default function LoginPage() {
                 </Button>
             </form>
 
-            <p className="mt-6 text-sm text-muted-foreground">
+            <p className="mt-4 text-sm text-muted-foreground">
                 New rider?{" "}
                 <Link
                     to="/register"

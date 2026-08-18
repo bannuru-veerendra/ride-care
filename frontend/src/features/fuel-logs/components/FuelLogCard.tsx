@@ -19,7 +19,7 @@ export default function FuelLogCard({ log, onDelete, onEdit }: FuelLogCardProps)
         log.mileage !== null ? (
             <>
                 <p className="font-heading text-4xl font-extrabold leading-none tracking-wide text-brand sm:text-5xl">
-                    {log.mileage}
+                    {log.mileage.toFixed(1)}
                 </p>
                 <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.16em] text-brand/80">
                     km/l

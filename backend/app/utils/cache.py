@@ -10,7 +10,6 @@ T = TypeVar("T")
 
 # Cache TTLs in seconds
 VEHICLE_CACHE_TTL = 60 * 5  # 5 minutes
-NEXT_SERVICE_CACHE_TTL = 60 * 5  # 5 minutes
 
 
 class _CacheMissType:
@@ -35,11 +34,6 @@ def vehicle_list_key(user_id: str) -> str:
 def vehicle_detail_key(vehicle_id: str) -> str:
     """Cache key for a single vehicle."""
     return f"cache:vehicle:{vehicle_id}"
-
-
-def next_service_key(vehicle_id: str) -> str:
-    """Cache key for next service info."""
-    return f"cache:next_service:{vehicle_id}"
 
 
 def vehicle_summary_key(vehicle_id: str) -> str:
@@ -101,7 +95,6 @@ async def cache_delete(redis: Redis, *keys: str) -> None:
     try:
         if keys:
             await redis.delete(*keys)
-            logger.debug("Cache invalidated keys=%s", keys)
     except Exception as e:
         logger.warning("Cache DELETE failed keys=%s error=%s", keys, e)
 

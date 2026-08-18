@@ -31,16 +31,16 @@ export default function AuthPageShell({
                 />
             </div>
 
-            <div className="flex w-full flex-col items-center justify-center px-4 py-12">
-                <div className="animate-speed-in mb-8">
-                    <RideCareLogo to={logoTo} compact={false} inverted />
+            <div className="flex w-full flex-col items-center justify-center px-4 py-5 sm:py-8">
+                <div className="animate-speed-in mb-4">
+                    <RideCareLogo to={logoTo} inverted />
                 </div>
 
-                <div className="animate-fade-up surface-panel w-full max-w-md px-6 py-8 sm:px-8">
-                    <h1 className="font-heading text-3xl font-bold uppercase tracking-wide">
+                <div className="animate-fade-up surface-panel w-full max-w-md px-5 py-5 sm:px-7 sm:py-6">
+                    <h1 className="font-heading text-2xl font-bold uppercase tracking-wide sm:text-3xl">
                         {title}
                     </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
                     {children}
                 </div>
             </div>

@@ -15,10 +15,11 @@ export const usersKeys = {
 };
 
 /** Fetch the current authenticated user's profile */
-export const useCurrentUser = () => {
+export const useCurrentUser = (options?: { enabled?: boolean }) => {
     return useQuery({
         queryKey: usersKeys.me,
         queryFn: usersApi.getMe,
+        enabled: options?.enabled ?? true,
     });
 };
 

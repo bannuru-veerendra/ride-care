@@ -39,7 +39,7 @@ export default function RegisterPage() {
         >
             <form
                 onSubmit={handleSubmit(onSubmit)}
-                className="mt-6 space-y-5"
+                className="mt-4 space-y-3"
                 noValidate
             >
                 <div className="space-y-1.5">
@@ -89,8 +89,7 @@ export default function RegisterPage() {
                         {...register("password")}
                     />
                     <p className="text-xs text-muted-foreground">
-                        At least 8 characters, with one uppercase letter, one
-                        number, and one special character.
+                        8+ characters, one uppercase, one number, one special character.
                     </p>
                     {errors.password && (
                         <p className="text-sm text-destructive">
@@ -128,7 +127,7 @@ export default function RegisterPage() {
                 </Button>
             </form>
 
-            <p className="mt-6 text-sm text-muted-foreground">
+            <p className="mt-4 text-sm text-muted-foreground">
                 Already have an account?{" "}
                 <Link
                     to="/login"

@@ -115,9 +115,9 @@ export default function VehiclesPage() {
                     </SheetTrigger>
                     <SheetContent
                         side="right"
-                        className="w-full overflow-y-auto border-white/10 sm:max-w-md"
+                        className="w-full overflow-y-auto border-white/10 px-6 py-6 sm:max-w-md"
                     >
-                        <SheetHeader className="mb-6">
+                        <SheetHeader className="mb-6 p-0">
                             <SheetTitle>
                                 {editingVehicle ? "Edit vehicle" : "Add new bike"}
                             </SheetTitle>
