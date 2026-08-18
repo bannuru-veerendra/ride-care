@@ -45,7 +45,6 @@ export default function AnalyticsTab({ vehicleId }: Props) {
     const mileageTrend = data.mileage_trend.map((point) => ({
         date: point.date_label,
         mileage: point.mileage,
-        odometer: point.odometer,
     }));
 
     return (

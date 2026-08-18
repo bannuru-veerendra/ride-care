@@ -11,7 +11,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Refresh-token rotation in Redis; logout revokes sessions
 - Password strength policy; profile + password change with session revoke **and cookie clear**
 - Access-token blocklisting in Redis (`jti`) on logout / refresh; per-user revoke epoch on password change
-- IP- and user-based rate limiting
+- IP- and user-based rate limiting (user limiter pipelined with auth Redis reads)
 
 ### Vehicles & odometer
 - Multi-vehicle CRUD with ownership checks
@@ -31,7 +31,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 
 ### Service history
 - Service visits with tags, cost, and next-due fields
-- `GET /service_logs/next` for reminders (cached nulls are real hits)
+- `GET /service_logs/next` for reminders
 - Cursor-paginated list + service tab **Load more**
 - Partial PATCH validates next-service odometer against existing reading
 - **CSV export** of full service history (`GET /service_logs/export`)
@@ -49,10 +49,13 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Filterable API + `/maintenance` page (component / severity)
 
 ### Caching & platform
-- Redis cache for vehicle list/detail, summary, analytics, compare, and next-service
+- Redis cache for vehicle list/detail, summary, analytics, and compare
 - Write-through invalidation on fuel / service / vehicle / document writes
+- Auth hot path: one Redis pipeline for rate limit + blocklist + revoke-epoch + user identity; warm requests skip the Postgres user lookup
+- Identity cache invalidated on profile / password change
 - Alembic migrations, async SQLAlchemy, GitHub Actions CI (pytest)
 - Deployed API (Render) + frontend (Vercel) with same-origin `/api` proxy for cookies
+- Local Vite `/api` proxy to `127.0.0.1:8000` (same-origin cookies, no Windows `localhost` IPv6 delay)
 
 ### Frontend product surface
 - Dark rider UI: auth, garage, compare, vehicle detail (Fuel · Service · Docs · Analytics)

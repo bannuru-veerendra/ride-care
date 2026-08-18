@@ -10,6 +10,7 @@ T = TypeVar("T")
 
 # Cache TTLs in seconds
 VEHICLE_CACHE_TTL = 60 * 5  # 5 minutes
+USER_IDENTITY_TTL = 60 * 5  # 5 minutes
 
 
 class _CacheMissType:
@@ -25,6 +26,21 @@ CACHE_MISS = _CacheMissType()
 
 
 # ── Key builders ──────────────────────────────────────────────
+
+def user_identity_key(user_id: str) -> str:
+    """Cache key for auth identity (no password)."""
+    return f"cache:user:{user_id}"
+
+
+def user_identity_payload(user: Any) -> dict[str, Any]:
+    """Public fields stored in the identity cache. Never include hashed_password."""
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": bool(user.is_active),
+    }
+
 
 def vehicle_list_key(user_id: str) -> str:
     """Cache key for a user's vehicle list."""
@@ -52,6 +68,24 @@ def vehicle_compare_key(user_id: str) -> str:
 
 
 # ── Core get/set helpers ──────────────────────────────────────
+
+def parse_cached_json(raw: bytes | str | None) -> Any | None:
+    """Decode a Redis cache blob. None on miss or invalid JSON."""
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def parse_user_identity(raw: bytes | str | None) -> dict[str, Any] | None:
+    """Decode a cached user identity dict. None on miss or invalid shape."""
+    data = parse_cached_json(raw)
+    if not isinstance(data, dict) or "id" not in data or "email" not in data:
+        return None
+    return data
+
 
 async def cache_get(redis: Redis, key: str) -> Any | _CacheMissType:
     """

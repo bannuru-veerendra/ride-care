@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { usersApi } from "@/api/users.api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import useAuthStore from "@/store/auth.store";
+import type { User } from "@/types";
 import type {
     UpdatePasswordPayload,
     UpdateProfilePayload,
@@ -14,11 +15,22 @@ export const usersKeys = {
     me: ["users", "me"] as const,
 };
 
+function rememberProfile(user: User) {
+    useAuthStore.getState().setProfileHint({
+        full_name: user.full_name,
+        email: user.email,
+    });
+}
+
 /** Fetch the current authenticated user's profile */
 export const useCurrentUser = (options?: { enabled?: boolean }) => {
     return useQuery({
         queryKey: usersKeys.me,
-        queryFn: usersApi.getMe,
+        queryFn: async () => {
+            const user = await usersApi.getMe();
+            rememberProfile(user);
+            return user;
+        },
         enabled: options?.enabled ?? true,
     });
 };
@@ -30,6 +42,7 @@ export const useUpdateProfile = () => {
     return useMutation({
         mutationFn: (payload: UpdateProfilePayload) => usersApi.updateMe(payload),
         onSuccess: (data) => {
+            rememberProfile(data);
             queryClient.setQueryData(usersKeys.me, data);
         },
     });

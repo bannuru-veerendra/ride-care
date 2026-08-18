@@ -99,8 +99,37 @@ class FakeRedis:
     async def expire(self, name: str, time: int) -> bool:
         return name in self._store or name in self._sets
 
+    def pipeline(self, transaction: bool = True, **kwargs):
+        return FakePipeline(self)
+
     async def aclose(self) -> None:
         return None
+
+
+class FakePipeline:
+    """Queues FakeRedis commands and runs them on execute()."""
+
+    def __init__(self, redis: FakeRedis) -> None:
+        self._redis = redis
+        self._ops: list[tuple] = []
+
+    def incr(self, name: str):
+        self._ops.append(("incr", name))
+        return self
+
+    def get(self, name: str):
+        self._ops.append(("get", name))
+        return self
+
+    async def execute(self):
+        results = []
+        for op, name in self._ops:
+            if op == "incr":
+                results.append(await self._redis.incr(name))
+            elif op == "get":
+                results.append(await self._redis.get(name))
+        self._ops.clear()
+        return results
 
 
 @pytest_asyncio.fixture(scope="session")

@@ -46,8 +46,8 @@ Most garage apps are thin CRUD. RideCare keeps **truth on the server**:
 | Charts | `GET /vehicles/{id}/analytics` — cost-per-km (fuel + service), trend series, monthly fuel spend |
 | Compare | `GET /vehicles/compare` — side-by-side spend, mileage, and ₹/km across the garage |
 | Scale | Stable cursor pagination (`date`/`created_at` + `id`) — same-day rows never skip |
-| Speed | Redis cache with write-through invalidation on fuel, service, vehicle, and document writes |
-| Auth | httpOnly cookie JWT + refresh rotation, access-token blocklist (`jti`) + revoke-epoch on password change, rate limits |
+| Speed | Redis cache with write-through invalidation on fuel, service, vehicle, and document writes; auth identity cache so warm requests skip the user `SELECT` |
+| Auth | httpOnly cookie JWT + refresh rotation, access-token blocklist (`jti`) + revoke-epoch on password change, pipelined rate limits |
 | Docs | Typed vault uploads with signed URLs — never public blobs; vehicle delete cleans storage |
 | Guidelines | File-backed maintenance catalog (in-memory), filterable without a DB table |
 
@@ -83,33 +83,39 @@ Cost, odometer, tagged jobs, and next service date / km reminders. Cursor-pagina
 
 ![Service logs](docs/screenshots/05-service-logs.png)
 
+![Log service sheet](docs/screenshots/06-log-service.png)
+
 ### Docs — digital vault
 
 Insurance, driving licence, and RC — PDF / JPEG / PNG, max 10 MB, signed downloads. Expiry and notes can be cleared on edit.
 
 ![Documents vault](docs/screenshots/07-documents.png)
 
-![Upload document](docs/screenshots/06-upload-document.png)
+![Upload document](docs/screenshots/08-upload-document.png)
 
 ### Analytics — spend and mileage charts
 
-Per-vehicle Analytics tab (Recharts): **cost-per-km (fuel + service)**, summary cards, last-10 mileage trend, last-6 months fuel spend — from `GET /vehicles/{id}/analytics`. **Compare** (`/compare`) puts every bike side by side.
+Per-vehicle Analytics tab (Recharts): **cost-per-km (fuel + service)**, summary cards, last-10 mileage trend, last-6 months fuel spend — from `GET /vehicles/{id}/analytics`.
 
-![Analytics](docs/screenshots/08-analytics.png)
+![Analytics](docs/screenshots/09-analytics.png)
 
-![Analytics](docs/screenshots/08-analytics.png)
+### Compare — fleet side by side
+
+`GET /vehicles/compare` puts every bike next to each other: km driven, average km/L, fuel vs service spend, and ₹/km. Best mileage and lowest cost-per-km are called out.
+
+![Compare](docs/screenshots/10-compare.png)
 
 ### Maintenance guide — interval tips
 
 Oil, chain, brakes, tyres, CVT… filterable by component and severity from a static JSON catalog.
 
-![Maintenance guide](docs/screenshots/09-maintenance-guide.png)
+![Maintenance guide](docs/screenshots/11-maintenance-guide.png)
 
 ### Settings — profile and password
 
 Update name/email or change password (revokes all sessions and clears auth cookies).
 
-![Settings](docs/screenshots/10-settings.png)
+![Settings](docs/screenshots/12-settings.png)
 
 ---
 
@@ -131,6 +137,7 @@ Update name/email or change password (revokes all sessions and clears auth cooki
              fuel · service        access blocklist
              documents             revoke-epoch
                                    rate limits
+                                   user identity cache
                                    response cache
 ```
 
@@ -159,11 +166,11 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 
 | Module | Surface | Highlights |
 |--------|---------|------------|
-| **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; access JWT blocklist on logout/refresh; Swagger OAuth2 form still returns bearer body |
-| **Users** | `GET/PATCH /users/me` · password change | Session revoke + access revoke-epoch + cookie clear |
+| **Auth** | `register` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; access JWT blocklist on logout/refresh; one Redis pipeline for rate limit + blocklist + identity; Swagger OAuth2 form still returns bearer body |
+| **Users** | `GET/PATCH /users/me` · password change | Session revoke + access revoke-epoch + identity-cache refresh + cookie clear |
 | **Vehicles** | CRUD · `…/summary` · `…/analytics` · `GET /vehicles/compare` | Live odometer; cost-per-km (fuel + service); garage compare |
 | **Fuel** | CRUD `/fuel_logs/?vehicle_id=` · `GET …/export` | Liters + km/L; cascade recalc; CSV of full history |
-| **Service** | CRUD · `GET …/next` · `GET …/export` | Next-due helper; cached nulls correctly; CSV of full history |
+| **Service** | CRUD · `GET …/next` · `GET …/export` | Next-due helper; CSV of full history |
 | **Documents** | Multipart CRUD · cursor list | Type enum, 10 MB, signed URLs; clear expiry/notes; expiry status from API |
 | **Guidelines** | `/maintenance-guidelines/` + filters | JSON file + in-memory cache |
 
@@ -188,7 +195,8 @@ List responses use a shared cursor page (stable across same-day rows):
 | [`backend/app/utils/analytics.py`](backend/app/utils/analytics.py) | Cost-per-km (fuel + service) over km since baseline |
 | [`backend/app/routes/fuel_logs.py`](backend/app/routes/fuel_logs.py) | Mileage recalculation + odometer rules |
 | [`backend/app/utils/fuel_mileage.py`](backend/app/utils/fuel_mileage.py) | Shared timeline recalc (fuel writes + baseline updates) |
-| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers, `CACHE_MISS` sentinel, key builders |
+| [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers, `CACHE_MISS` sentinel, vehicle + user-identity keys |
+| [`backend/app/utils/auth_context.py`](backend/app/utils/auth_context.py) | Shared auth hot-path state (rate-limit pipeline → `get_current_user`) |
 | [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Composite cursor paginator |
 | [`backend/app/utils/reminders.py`](backend/app/utils/reminders.py) | Service soon/overdue + document expiry rules |
 | [`backend/data/maintenance_guidelines.json`](backend/data/maintenance_guidelines.json) | Guideline catalog |
@@ -234,13 +242,13 @@ uvicorn main:app --reload
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # VITE_API_URL=http://localhost:8000
+cp .env.example .env   # VITE_API_URL=/api (Vite proxies to 127.0.0.1:8000)
 npm run dev
 ```
 
 App: [http://localhost:5173](http://localhost:5173)
 
-Production builds always call **`/api`** (same origin). Vercel rewrites `/api/*` to the Render API so auth cookies stay first-party.
+Production builds always call **`/api`** (same origin). Local Vite proxies `/api` to `127.0.0.1:8000` so cookies stay first-party and Windows does not pay the `localhost` IPv6 delay. Vercel rewrites `/api/*` to the Render API.
 
 ### Tests
 
@@ -267,7 +275,7 @@ cd backend
 
 ## What’s included
 
-Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · Redis caching with write-through invalidation · access-token blocklisting · CI + production deploy
+Auth · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · Redis caching with write-through invalidation · pipelined auth (rate limit + identity cache) · access-token blocklisting · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

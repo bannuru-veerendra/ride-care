@@ -5,6 +5,7 @@ import type {
     UpdateDocumentPayload,
 } from "@/api/documents.api";
 import { vehicleKeys } from "@/features/vehicles/hooks/useVehicles";
+import { getCursorNextPageParam } from "@/lib/query-client";
 
 /**
  * Query keys for document queries.
@@ -32,8 +33,7 @@ export const useInfiniteDocuments = (vehicleId: string) => {
                 size: 20,
             }),
         initialPageParam: undefined as string | undefined,
-        getNextPageParam: (lastPage) =>
-            lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
+        getNextPageParam: getCursorNextPageParam,
         enabled: !!vehicleId,
     });
 };

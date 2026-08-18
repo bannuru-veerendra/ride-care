@@ -12,6 +12,13 @@ from app.schemas.user import PasswordUpdate, UserProfileUpdate, UserResponse
 from app.utils.access_token_service import revoke_all_user_access_tokens
 from app.utils.auth_cookies import clear_auth_cookies
 from app.utils.auth_dependency import get_current_user
+from app.utils.cache import (
+    USER_IDENTITY_TTL,
+    cache_delete,
+    cache_set,
+    user_identity_key,
+    user_identity_payload,
+)
 from app.utils.redis_client import get_redis
 from app.utils.refresh_token_service import revoke_all_user_tokens
 from app.utils.security import hash_password, verify_password
@@ -24,6 +31,17 @@ _REDIS_UNAVAILABLE = HTTPException(
     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
     detail="Authentication service temporarily unavailable",
 )
+
+
+async def _user_for_write(db: AsyncSession, current_user: User) -> User:
+    """Session-attached User. Cached auth identity is not writable."""
+    db_user = await db.get(User, current_user.id)
+    if db_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+        )
+    return db_user
 
 
 @router.get("/me", response_model=UserResponse)
@@ -39,15 +57,17 @@ async def update_profile(
     profile_update: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> UserResponse:
     """Update the current user's name or email"""
+    db_user = await _user_for_write(db, current_user)
     updates = profile_update.model_dump(exclude_unset=True)
 
-    if "email" in updates and updates["email"] != current_user.email:
+    if "email" in updates and updates["email"] != db_user.email:
         existing_user = await db.execute(
             select(User).where(
                 User.email == updates["email"],
-                User.id != current_user.id,
+                User.id != db_user.id,
             )
         )
         if existing_user.scalar_one_or_none():
@@ -57,17 +77,24 @@ async def update_profile(
             )
 
     for key, value in updates.items():
-        setattr(current_user, key, value)
+        setattr(db_user, key, value)
 
     await db.commit()
-    await db.refresh(current_user)
+    await db.refresh(db_user)
+
+    await cache_set(
+        redis,
+        user_identity_key(str(db_user.id)),
+        user_identity_payload(db_user),
+        USER_IDENTITY_TTL,
+    )
 
     logger.info(
         "User %s updated profile fields: %s",
-        current_user.id,
+        db_user.id,
         list(updates.keys()),
     )
-    return current_user
+    return db_user
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
@@ -79,24 +106,26 @@ async def change_password(
     redis: Redis = Depends(get_redis),
 ) -> None:
     """Change the current user's password and revoke all sessions"""
+    db_user = await _user_for_write(db, current_user)
     if not verify_password(
         password_update.current_password,
-        current_user.hashed_password,
+        db_user.hashed_password,
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",
         )
 
-    current_user.hashed_password = hash_password(password_update.new_password)
+    db_user.hashed_password = hash_password(password_update.new_password)
 
     try:
-        await revoke_all_user_tokens(redis, str(current_user.id))
-        await revoke_all_user_access_tokens(redis, str(current_user.id))
+        await revoke_all_user_tokens(redis, str(db_user.id))
+        await revoke_all_user_access_tokens(redis, str(db_user.id))
+        await cache_delete(redis, user_identity_key(str(db_user.id)))
     except RedisError:
         logger.exception(
             "Redis unavailable while revoking sessions for user %s",
-            current_user.id,
+            db_user.id,
         )
         await db.rollback()
         raise _REDIS_UNAVAILABLE
@@ -106,5 +135,5 @@ async def change_password(
 
     logger.info(
         "User %s changed password — all sessions revoked",
-        current_user.id,
+        db_user.id,
     )
