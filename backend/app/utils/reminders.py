@@ -17,6 +17,48 @@ DOCUMENT_REMINDER_LIMIT = 5
 DocumentExpiryStatus = Literal["ok", "soon", "expired"]
 
 
+def _visit_is_after(schedule: ServiceLog, visit: ServiceLog) -> bool:
+    """True when visit is a later service record than the schedule's visit."""
+    if visit.id == schedule.id:
+        return False
+    return (visit.date, visit.odometer) > (schedule.date, schedule.odometer)
+
+
+def _schedule_fulfilled_by(schedule: ServiceLog, visit: ServiceLog) -> bool:
+    """
+    True when a later visit met every next-due target on the schedule log.
+
+    Example: schedule says next service by 18 Aug — a visit on or after 18 Aug
+    clears the date target. If both date and km are set, both must be met.
+    """
+    if not _visit_is_after(schedule, visit):
+        return False
+
+    date_ok = (
+        schedule.next_service_date is None
+        or visit.date >= schedule.next_service_date
+    )
+    odo_ok = (
+        schedule.next_service_odometer is None
+        or visit.odometer >= schedule.next_service_odometer
+    )
+    return date_ok and odo_ok
+
+
+def find_active_next_service(service_logs: list[ServiceLog]) -> ServiceLog | None:
+    """
+    Newest visit that still has next-due fields and was not fulfilled by a
+    later service log. service_logs should be ordered newest visit first.
+    """
+    for log in service_logs:
+        if log.next_service_date is None and log.next_service_odometer is None:
+            continue
+        if any(_schedule_fulfilled_by(log, visit) for visit in service_logs):
+            continue
+        return log
+    return None
+
+
 def document_expiry_fields(
     expiry_date: date | None,
     *,

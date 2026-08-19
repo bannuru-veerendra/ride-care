@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from redis.asyncio import Redis
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -23,6 +23,7 @@ from app.utils.cache import (
 from app.utils.export_csv import service_log_csv_rows
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
+from app.utils.reminders import find_active_next_service
 from app.utils.vehicle_access import verify_vehicle_ownership
 
 
@@ -179,22 +180,15 @@ async def get_next_service_log(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ServiceLogResponse | None:
-    """Most recent service log with a next due date or odometer."""
+    """Most recent service log with an active (unfulfilled) next due date or odometer."""
     await verify_vehicle_ownership(vehicle_id, current_user, db)
 
     result = await db.execute(
         select(ServiceLog)
-        .where(
-            ServiceLog.vehicle_id == vehicle_id,
-            or_(
-                ServiceLog.next_service_date.isnot(None),
-                ServiceLog.next_service_odometer.isnot(None),
-            ),
-        )
+        .where(ServiceLog.vehicle_id == vehicle_id)
         .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    return find_active_next_service(list(result.scalars().all()))
 
 
 @router.get("/{service_log_id}", response_model=ServiceLogResponse)

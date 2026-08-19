@@ -332,6 +332,46 @@ async def test_get_next_service_none(
     assert response.json() is None
 
 
+async def test_get_next_service_cleared_after_due_visit(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """A later visit on the due date clears the previous next-service schedule."""
+    vehicle_id = created_vehicle["id"]
+    due_date = str(date.today())
+
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(date.today() - timedelta(days=90)),
+            "odometer": 11000,
+            "total_cost": 1500,
+            "services_done": ["Oil change"],
+            "next_service_date": due_date,
+        },
+        headers=auth_headers,
+    )
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": due_date,
+            "odometer": 12000,
+            "total_cost": 1800,
+            "services_done": ["Oil change"],
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.get(
+        "/service_logs/next",
+        params={"vehicle_id": vehicle_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json() is None
+
+
 async def test_update_service_log(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):

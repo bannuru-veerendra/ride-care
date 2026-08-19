@@ -45,7 +45,11 @@ from app.utils.dates import app_today
 from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
-from app.utils.reminders import build_document_reminders, build_service_reminder
+from app.utils.reminders import (
+    build_document_reminders,
+    build_service_reminder,
+    find_active_next_service,
+)
 from app.utils.storage import cleanup_document
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
@@ -319,15 +323,7 @@ async def _build_summary_payload(
     recent_filled = filled_months[0] if len(filled_months) >= 1 else None
     prior_filled = filled_months[1] if len(filled_months) >= 2 else None
 
-    next_service = next(
-        (
-            log
-            for log in service_logs
-            if log.next_service_date is not None
-            or log.next_service_odometer is not None
-        ),
-        None,
-    )
+    next_service = find_active_next_service(service_logs)
 
     return VehicleSummaryResponse(
         vehicle_id=vehicle_id,
