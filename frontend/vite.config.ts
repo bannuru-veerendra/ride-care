@@ -13,4 +13,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      // Same-origin /api in dev: skips CORS preflight and Windows
+      // localhost → IPv6 fallback (~2s per request).
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+        rewrite: (url) => url.replace(/^\/api/, ""),
+      },
+    },
+  },
 });

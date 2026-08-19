@@ -1,7 +1,8 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { vehiclesApi } from "@/api/vehicles.api";
-import type { CreateVehiclePayload, UpdateVehiclePayload } from "@/api/vehicles.api";
+import type { CreateVehiclePayload, UpdateVehiclePayload, Vehicle } from "@/api/vehicles.api";
 import { getCursorNextPageParam } from "@/lib/query-client";
+import type { CursorPage } from "@/types";
 
 
 /**
@@ -17,6 +18,20 @@ export const vehicleKeys = {
     summary: (id: string) => ["vehicle-summary", id] as const,
 };
 
+function findCachedVehicle(
+    queryClient: ReturnType<typeof useQueryClient>,
+    id: string
+): Vehicle | undefined {
+    const list = queryClient.getQueryData<CursorPage<Vehicle>>(vehicleKeys.all);
+    const fromList = list?.items.find((vehicle) => vehicle.id === id);
+    if (fromList) return fromList;
+
+    const infinite = queryClient.getQueryData<InfiniteData<CursorPage<Vehicle>>>(
+        vehicleKeys.infinite
+    );
+    return infinite?.pages.flatMap((page) => page.items).find((vehicle) => vehicle.id === id);
+}
+
 function invalidateVehicleLists(queryClient: ReturnType<typeof useQueryClient>) {
     queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
 }
@@ -31,7 +46,7 @@ function removeVehicleScopedQueries(
     // Literal prefixes — avoid circular imports with feature hook modules
     queryClient.removeQueries({ queryKey: ["fuel-logs-infinite", id] });
     queryClient.removeQueries({ queryKey: ["service-logs-infinite", id] });
-    queryClient.removeQueries({ queryKey: ["documents", id] });
+    queryClient.removeQueries({ queryKey: ["documents-infinite", id] });
 }
 
 /** Paginated vehicles with Load more support for the garage */
@@ -67,10 +82,13 @@ export const useVehicleCompare = () => {
 
 /** Fetch a single vehicle by ID */
 export const useVehicle = (id: string) => {
+    const queryClient = useQueryClient();
+
     return useQuery({
         queryKey: vehicleKeys.details(id),
         queryFn: () => vehiclesApi.getById(id),
         enabled: !!id,
+        placeholderData: () => findCachedVehicle(queryClient, id),
     });
 };
 

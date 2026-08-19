@@ -12,6 +12,18 @@ async def test_get_profile(client: AsyncClient, auth_headers: dict, registered_u
     assert "id" in data
 
 
+async def test_get_profile_cached(
+    client: AsyncClient, auth_headers: dict, registered_user: dict
+):
+    """Second GET /users/me reuses the identity cache."""
+    first = await client.get("/users/me", headers=auth_headers)
+    second = await client.get("/users/me", headers=auth_headers)
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    assert second.json()["email"] == registered_user["email"]
+
+
 async def test_get_profile_without_token(client: AsyncClient):
     """Test the get profile endpoint without a token"""
     response = await client.get("/users/me")
@@ -27,6 +39,21 @@ async def test_update_full_name(client: AsyncClient, auth_headers: dict):
     )
     assert response.status_code == 200
     assert response.json()["full_name"] == "Veerendra Bannuru"
+
+
+async def test_profile_update_visible_on_next_get(
+    client: AsyncClient, auth_headers: dict
+):
+    """Identity cache is replaced so the next GET shows the new name."""
+    await client.get("/users/me", headers=auth_headers)
+    await client.patch(
+        "/users/me",
+        json={"full_name": "Cached Name"},
+        headers=auth_headers,
+    )
+    response = await client.get("/users/me", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["full_name"] == "Cached Name"
 
 
 async def test_update_email(client: AsyncClient, auth_headers: dict):

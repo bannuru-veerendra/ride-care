@@ -1,16 +1,22 @@
 import axios from "axios";
 
+import useAuthStore from "@/store/auth.store";
+
 /**
  * Axios instance for the RideCare API.
  * Auth uses httpOnly cookies (`withCredentials`); no tokens in localStorage.
  *
- * Production always uses same-origin `/api` (Vercel rewrite → Render) so
- * cookies are first-party. A dashboard VITE_API_URL pointing at onrender.com
- * would break cookie auth — ignore it in production builds.
+ * Same-origin `/api` in prod (Vercel rewrite → Render) and in local Vite
+ * (proxy → 127.0.0.1:8000). Absolute VITE_API_URL is still allowed in
+ * dev for pointing at a remote API; it is ignored in production builds
+ * because a dashboard URL at onrender.com would break cookie auth.
  */
-const API_BASE = import.meta.env.DEV
-    ? import.meta.env.VITE_API_URL
-    : "/api";
+const API_BASE =
+    import.meta.env.DEV &&
+    typeof import.meta.env.VITE_API_URL === "string" &&
+    import.meta.env.VITE_API_URL.startsWith("http")
+        ? import.meta.env.VITE_API_URL
+        : "/api";
 
 const apiClient = axios.create({
     baseURL: API_BASE,
@@ -79,15 +85,8 @@ function processQueue(error: unknown) {
     failedQueue = [];
 }
 
-function clearAuthStorage() {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("ridecare-auth");
-    localStorage.removeItem("ridecare_session");
-}
-
 function redirectToLogin() {
-    clearAuthStorage();
+    useAuthStore.getState().clearSession();
     window.location.href = "/login";
 }
 

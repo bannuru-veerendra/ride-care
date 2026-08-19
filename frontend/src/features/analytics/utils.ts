@@ -6,7 +6,6 @@
 export interface MileageTrendPoint {
     date: string;
     mileage: number;
-    odometer: number;
 }
 
 export interface MonthlySpendPoint {

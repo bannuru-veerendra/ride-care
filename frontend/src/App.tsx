@@ -26,7 +26,7 @@ const MaintenanceGuidelinesPage = lazy(
  */
 export default function App() {
     return (
-        <ErrorBoundary fallback={<NotFoundPage />}>
+        <ErrorBoundary>
             <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
 

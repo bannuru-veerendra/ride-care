@@ -5,6 +5,7 @@ import { ChevronDown, LogOut, Settings, Wrench, type LucideIcon } from "lucide-r
 import { useLogout } from "@/features/auth/hooks/useLogout";
 import { useCurrentUser } from "@/features/users/hooks/useUsers";
 import { useDismissible } from "@/lib/use-dismissible";
+import useAuthStore from "@/store/auth.store";
 import { cn } from "@/lib/utils";
 
 export interface AccountNavItem {
@@ -34,14 +35,15 @@ function getInitials(fullName: string): string {
 export default function AccountMenu() {
     const navigate = useNavigate();
     const logout = useLogout();
+    const profile = useAuthStore((state) => state.profile);
     const [open, setOpen] = useState(false);
-    const { data: user } = useCurrentUser({ enabled: open });
+    const { data: user } = useCurrentUser({ enabled: !profile });
     const rootRef = useRef<HTMLDivElement>(null);
     const close = useCallback(() => setOpen(false), []);
     useDismissible(open, rootRef, close);
 
-    const displayName = user?.full_name ?? "Account";
-    const email = user?.email;
+    const displayName = user?.full_name ?? profile?.full_name ?? "Account";
+    const email = user?.email ?? profile?.email;
     const initials = getInitials(displayName);
 
     return (

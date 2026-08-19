@@ -317,17 +317,17 @@ export default function VehicleDetailPage() {
         }
     };
 
-    if (vehicleLoading) {
-        return (
-            <div className="space-y-4">
-                <Skeleton className="h-8 w-48" />
-                <Skeleton className="h-24 w-full rounded-xl" />
-                <Skeleton className="h-64 w-full rounded-xl" />
-            </div>
-        );
-    }
-
     if (!vehicle) {
+        if (vehicleLoading) {
+            return (
+                <div className="space-y-4">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-24 w-full rounded-xl" />
+                    <Skeleton className="h-64 w-full rounded-xl" />
+                </div>
+            );
+        }
+
         return (
             <div className="py-16 text-center">
                 <p className="text-muted-foreground">Vehicle not found.</p>
@@ -637,16 +637,12 @@ export default function VehicleDetailPage() {
                                 />
                             ))}
                             {documentsHasNextPage && (
-                                <Button
-                                    variant="outline"
-                                    className="w-full"
-                                    disabled={documentsFetchingNextPage}
-                                    onClick={() => void fetchNextDocumentsPage()}
-                                >
-                                    {documentsFetchingNextPage
-                                        ? "Loading..."
-                                        : `Load more (${documents.length} of ${documentsTotal})`}
-                                </Button>
+                                <LoadMoreButton
+                                    loaded={documents.length}
+                                    total={documentsTotal}
+                                    isFetching={documentsFetchingNextPage}
+                                    onLoadMore={() => void fetchNextDocumentsPage()}
+                                />
                             )}
                         </div>
                     )}

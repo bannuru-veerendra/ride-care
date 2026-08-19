@@ -133,11 +133,6 @@
   }
 }
 
-@keyframes stripe-move {
-  from { background-position: 0 0; }
-  to { background-position: 40px 0; }
-}
-
 :root {
   /* Night asphalt + signal red — rider garage energy */
   --background: oklch(0.14 0.012 40);
@@ -227,16 +222,6 @@
 
   .surface-panel {
     @apply rounded-2xl border border-white/10 bg-card/95;
-  }
-
-  .road-stripe {
-    background-image: repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 16px,
-      oklch(0.58 0.23 25 / 0.7) 16px,
-      oklch(0.58 0.23 25 / 0.7) 28px
-    );
   }
 
   .rider-hero-mask {
