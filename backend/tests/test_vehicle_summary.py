@@ -262,6 +262,48 @@ async def test_vehicle_summary_service_reminder_overdue(
     assert reminder["days_until"] == -3
 
 
+async def test_vehicle_summary_service_reminder_cleared_after_due_visit(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Logging a service on the due date without a new next date clears the reminder."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+    due_date = str(today)
+
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today - timedelta(days=90)),
+            "odometer": 11000,
+            "total_cost": 1500,
+            "services_done": ["Oil change"],
+            "next_service_date": due_date,
+        },
+        headers=auth_headers,
+    )
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": due_date,
+            "odometer": 12000,
+            "total_cost": 1800,
+            "services_done": ["Oil change"],
+        },
+        headers=auth_headers,
+    )
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["next_service"] is None
+    assert data["service_reminder"]["status"] == "none"
+
+
 async def test_vehicle_summary_document_reminders(
     client: AsyncClient,
     auth_headers: dict,
