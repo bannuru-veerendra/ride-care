@@ -55,4 +55,24 @@ export const authApi = {
         );
         return response.data;
     },
+
+    forgotPassword: async (email: string): Promise<MessageResponse> => {
+        const response = await apiClient.post<MessageResponse>(
+            "/auth/forgot-password",
+            { email }
+        );
+        return response.data;
+    },
+
+    resetPassword: async (payload: {
+        token: string;
+        new_password: string;
+        confirm_password: string;
+    }): Promise<MessageResponse> => {
+        const response = await apiClient.post<MessageResponse>(
+            "/auth/reset-password",
+            payload
+        );
+        return response.data;
+    },
 };

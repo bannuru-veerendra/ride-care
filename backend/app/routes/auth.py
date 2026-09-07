@@ -11,34 +11,46 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     MessageResponse,
     RefreshRequest,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     SessionResponse,
     TokenResponse,
     UserCreate,
     VerifyEmailRequest,
 )
 from app.schemas.user import UserResponse
-from app.utils.access_token_service import blocklist_access_token
+from app.utils.access_token_service import (
+    blocklist_access_token,
+    revoke_all_user_access_tokens,
+)
 from app.utils.auth_cookies import (
     ACCESS_COOKIE,
     REFRESH_COOKIE,
     clear_auth_cookies,
     set_auth_cookies,
 )
-from app.utils.email import send_verification_email
+from app.utils.cache import cache_delete, user_identity_key
+from app.utils.email import send_password_reset_email, send_verification_email
 from app.utils.email_verification_service import (
     consume_verification_token,
     store_verification_token,
     verification_link,
 )
 from app.utils.jwt import create_access_token
+from app.utils.password_reset_service import (
+    consume_reset_token,
+    password_reset_link,
+    store_reset_token,
+)
 from app.utils.rate_limiter import auth_rate_limit
 from app.utils.redis_client import get_redis
 from app.utils.refresh_token_service import (
+    revoke_all_user_tokens,
     revoke_refresh_token,
     rotate_refresh_token,
     store_refresh_token,
@@ -252,6 +264,107 @@ async def resend_verification(
 
     return MessageResponse(
         message="If that email is registered and unverified, a new link has been sent.",
+    )
+
+
+async def _issue_password_reset_email(
+    redis: Redis,
+    *,
+    user_id: str,
+    email: str,
+    full_name: str,
+) -> None:
+    """Create a Redis reset token and send the password-reset email."""
+    try:
+        raw_token = await store_reset_token(redis, user_id)
+    except RedisError:
+        logger.exception("Redis unavailable while storing password reset token")
+        raise _REDIS_UNAVAILABLE
+
+    link = password_reset_link(raw_token)
+    try:
+        await send_password_reset_email(to=email, full_name=full_name, link=link)
+    except Exception:
+        logger.exception("Failed to send password reset email to=%s", email)
+        # Do not leak failures to the client (anti-enumeration).
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> MessageResponse:
+    """
+    Request a password reset email.
+    Always returns the same message to avoid email enumeration.
+    """
+    await auth_rate_limit(request, redis)
+
+    result = await db.execute(select(User).where(User.email == body.email))
+    db_user = result.scalar_one_or_none()
+    if db_user is not None and db_user.is_active:
+        await _issue_password_reset_email(
+            redis,
+            user_id=str(db_user.id),
+            email=db_user.email,
+            full_name=db_user.full_name,
+        )
+
+    return MessageResponse(
+        message="If that email is registered, a password reset link has been sent.",
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> MessageResponse:
+    """Consume a reset token, set a new password, and revoke all sessions."""
+    await auth_rate_limit(request, redis)
+
+    try:
+        user_id = await consume_reset_token(redis, body.token)
+    except RedisError:
+        logger.exception("Redis unavailable during password reset")
+        raise _REDIS_UNAVAILABLE
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset link",
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user is None or not db_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset link",
+        )
+
+    db_user.hashed_password = hash_password(body.new_password)
+
+    try:
+        await revoke_all_user_tokens(redis, str(db_user.id))
+        await revoke_all_user_access_tokens(redis, str(db_user.id))
+        await cache_delete(redis, user_identity_key(str(db_user.id)))
+    except RedisError:
+        logger.exception(
+            "Redis unavailable while revoking sessions after password reset for user %s",
+            db_user.id,
+        )
+        await db.rollback()
+        raise _REDIS_UNAVAILABLE
+
+    await db.commit()
+    logger.info("User %s reset password via email link", db_user.id)
+    return MessageResponse(
+        message="Password updated. You can sign in with your new password.",
     )
 
 

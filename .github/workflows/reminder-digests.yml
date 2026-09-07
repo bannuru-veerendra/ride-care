@@ -22,7 +22,14 @@ jobs:
             echo "Missing REMINDER_API_URL or REMINDER_CRON_SECRET repo secret"
             exit 1
           fi
-          curl -fsS -X POST "${API_URL%/}/internal/reminder-digests" \
+          # Capture body even on non-2xx so Render errors show in the Action log
+          http_code=$(curl -sS -o /tmp/digest-body.txt -w "%{http_code}" \
+            -X POST "${API_URL%/}/internal/reminder-digests" \
             -H "X-Cron-Secret: ${CRON_SECRET}" \
-            -H "Content-Type: application/json" \
-            -w "\nHTTP %{http_code}\n"
+            -H "Content-Type: application/json")
+          echo "HTTP ${http_code}"
+          cat /tmp/digest-body.txt
+          echo
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi

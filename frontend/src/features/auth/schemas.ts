@@ -25,6 +25,22 @@ export const resendVerificationSchema = z.object({
     email: z.string().email("Enter a valid email"),
 });
 
+export const forgotPasswordSchema = z.object({
+    email: z.string().email("Enter a valid email"),
+});
+
+export const resetPasswordSchema = z
+    .object({
+        new_password: z.string().min(1, "Password is required"),
+        confirm_password: z.string().min(1, "Please confirm your password"),
+    })
+    .refine((data) => data.new_password === data.confirm_password, {
+        path: ["confirm_password"],
+        message: "Passwords do not match",
+    });
+
 export type LoginSchema = z.infer<typeof loginSchema>;
 export type RegisterSchema = z.infer<typeof registerSchema>;
 export type ResendVerificationSchema = z.infer<typeof resendVerificationSchema>;
+export type ForgotPasswordSchema = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordSchema = z.infer<typeof resetPasswordSchema>;

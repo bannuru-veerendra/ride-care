@@ -216,13 +216,23 @@ async def send_reminder_digests(
             skipped += 1
             continue
 
-        await send_reminder_digest_email(
-            to=user.email,
-            full_name=user.full_name,
-            dashboard_url=dashboard_url,
-            body_text="\n\n".join(sections_text),
-            body_html="".join(sections_html),
-        )
+        try:
+            await send_reminder_digest_email(
+                to=user.email,
+                full_name=user.full_name,
+                dashboard_url=dashboard_url,
+                body_text="\n\n".join(sections_text),
+                body_html="".join(sections_html),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send reminder digest to user_id=%s", user.id
+            )
+            # Release the day claim so a later cron can retry
+            await redis.delete(_digest_key(user.id, day))
+            skipped += 1
+            continue
+
         sent += 1
         logger.info("Reminder digest sent to user_id=%s", user.id)
 

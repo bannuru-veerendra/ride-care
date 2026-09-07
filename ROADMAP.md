@@ -8,7 +8,8 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 
 ### Auth & security
 - Register / login with JWT access tokens (httpOnly cookies)
-- **Email verification** — SMTP magic link on register; login blocked until confirmed; resend endpoint
+- **Email verification** — magic link on register (Resend HTTPS on Render free; SMTP locally); login blocked until confirmed; resend endpoint
+- **Forgot / reset password** — magic link; one-shot Redis token; resets password and revokes all sessions
 - Changing email resets verification, sends a new link, and clears sessions
 - Refresh-token rotation in Redis; logout revokes sessions
 - Password strength policy; profile + password change with session revoke **and cookie clear**
@@ -69,7 +70,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 - Local Vite `/api` proxy to `127.0.0.1:8000` (same-origin cookies, no Windows `localhost` IPv6 delay)
 
 ### Frontend product surface
-- Dark rider UI: auth (login · register · **check-email** · **verify-email**), garage, compare, vehicle detail (Fuel · Service · Docs · Analytics)
+- Dark rider UI: auth (login · register · **check-email** · **verify-email** · **forgot-password** · **reset-password**), garage, compare, vehicle detail (Fuel · Service · Docs · Analytics)
 - Dashboard driven by the summary API
 - Settings: profile, password, email reminder toggles, delete account
 - Error boundary, 404 page
