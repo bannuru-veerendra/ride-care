@@ -9,6 +9,8 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import CheckEmailPage from "@/pages/CheckEmailPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
@@ -37,6 +39,8 @@ export default function App() {
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/check-email" element={<CheckEmailPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 {/* Protected routes — all share AppLayout */}
                 <Route element={<ProtectedRoute />}>

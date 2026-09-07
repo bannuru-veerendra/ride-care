@@ -425,3 +425,128 @@ async def test_resend_verification_is_generic(client: AsyncClient, monkeypatch):
     assert known.json()["message"] == unknown.json()["message"]
     assert calls == ["resend@ridecare.com"]
 
+
+async def test_forgot_password_is_generic(client: AsyncClient, monkeypatch):
+    """Forgot-password always returns the same message (no email enumeration)."""
+    calls: list[str] = []
+
+    async def fake_send(*, to: str, full_name: str, link: str) -> None:
+        calls.append(to)
+
+    monkeypatch.setattr("app.routes.auth.send_password_reset_email", fake_send)
+
+    await client.post(
+        "/auth/register",
+        json={
+            "email": "forgot@ridecare.com",
+            "full_name": "Forgot User",
+            "password": "TestPassword123!",
+        },
+    )
+    calls.clear()
+
+    known = await client.post(
+        "/auth/forgot-password",
+        json={"email": "forgot@ridecare.com"},
+    )
+    unknown = await client.post(
+        "/auth/forgot-password",
+        json={"email": "nobody-reset@ridecare.com"},
+    )
+    assert known.status_code == 200
+    assert unknown.status_code == 200
+    assert known.json()["message"] == unknown.json()["message"]
+    assert calls == ["forgot@ridecare.com"]
+
+
+async def test_reset_password_then_login(
+    client: AsyncClient, monkeypatch, test_session_maker
+):
+    """Reset link updates the password (one-shot) and unlocks login with it."""
+    captured: dict[str, str] = {}
+
+    async def fake_verify(*, to: str, full_name: str, link: str) -> None:
+        pass
+
+    async def fake_reset(*, to: str, full_name: str, link: str) -> None:
+        captured["to"] = to
+        captured["link"] = link
+        captured["token"] = link.split("token=", 1)[1]
+
+    monkeypatch.setattr("app.routes.auth.send_verification_email", fake_verify)
+    monkeypatch.setattr("app.routes.auth.send_password_reset_email", fake_reset)
+
+    payload = {
+        "email": "reset-me@ridecare.com",
+        "full_name": "Reset Me",
+        "password": "OldPassword123!",
+    }
+    register = await client.post("/auth/register", json=payload)
+    assert register.status_code == 201
+
+    from app.models.user import User
+    from sqlalchemy import select
+
+    async with test_session_maker() as session:
+        result = await session.execute(
+            select(User).where(User.email == payload["email"])
+        )
+        user = result.scalar_one()
+        user.email_verified = True
+        await session.commit()
+
+    forgot = await client.post(
+        "/auth/forgot-password",
+        json={"email": payload["email"]},
+    )
+    assert forgot.status_code == 200
+    assert "token" in captured
+
+    new_password = "NewPassword456!"
+    reset = await client.post(
+        "/auth/reset-password",
+        json={
+            "token": captured["token"],
+            "new_password": new_password,
+            "confirm_password": new_password,
+        },
+    )
+    assert reset.status_code == 200
+    assert "password updated" in reset.json()["message"].lower()
+
+    # Token is one-shot
+    reuse = await client.post(
+        "/auth/reset-password",
+        json={
+            "token": captured["token"],
+            "new_password": "AnotherPassword789!",
+            "confirm_password": "AnotherPassword789!",
+        },
+    )
+    assert reuse.status_code == 400
+
+    old_login = await client.post(
+        "/auth/login",
+        json={"email": payload["email"], "password": payload["password"]},
+    )
+    assert old_login.status_code == 401
+
+    new_login = await client.post(
+        "/auth/login",
+        json={"email": payload["email"], "password": new_password},
+    )
+    assert new_login.status_code == 200
+    assert "access_token" in new_login.cookies
+
+
+async def test_reset_password_rejects_bad_token(client: AsyncClient):
+    response = await client.post(
+        "/auth/reset-password",
+        json={
+            "token": "this-token-is-not-valid-at-all",
+            "new_password": "NewPassword456!",
+            "confirm_password": "NewPassword456!",
+        },
+    )
+    assert response.status_code == 400
+

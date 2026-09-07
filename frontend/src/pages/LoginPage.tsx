@@ -31,13 +31,19 @@ export default function LoginPage() {
     });
 
     useEffect(() => {
-        if (searchParams.get("verified") !== "true") {
+        if (searchParams.get("verified") === "true") {
+            toast.success("Email verified. You can sign in now.", {
+                id: "email-verified",
+            });
+            navigate("/login", { replace: true });
             return;
         }
-        toast.success("Email verified. You can sign in now.", {
-            id: "email-verified",
-        });
-        navigate("/login", { replace: true });
+        if (searchParams.get("reset") === "true") {
+            toast.success("Password updated. You can sign in now.", {
+                id: "password-reset",
+            });
+            navigate("/login", { replace: true });
+        }
     }, [searchParams, navigate]);
 
     const onSubmit = (data: LoginSchema) => {
@@ -76,7 +82,15 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                    <Label htmlFor="password">Password</Label>
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="password">Password</Label>
+                        <Link
+                            to="/forgot-password"
+                            className="text-xs font-medium text-brand hover:text-brand/80"
+                        >
+                            Forgot password?
+                        </Link>
+                    </div>
                     <PasswordInput
                         id="password"
                         placeholder="Password"

@@ -103,6 +103,8 @@ apiClient.interceptors.response.use(
             requestUrl.includes("/auth/login") ||
             requestUrl.includes("/auth/register") ||
             requestUrl.includes("/auth/logout") ||
+            requestUrl.includes("/auth/forgot-password") ||
+            requestUrl.includes("/auth/reset-password") ||
             // Wrong current password returns 401 — not an expired session
             requestUrl.includes("/users/me/password");
 

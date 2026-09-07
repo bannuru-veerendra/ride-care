@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.utils.security import normalize_email, validate_password_strength
 
@@ -76,7 +76,35 @@ class ResendVerificationRequest(BaseModel):
         return normalize_email(value)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request body for POST /auth/forgot-password"""
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, value: str) -> str:
+        return normalize_email(value)
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for POST /auth/reset-password"""
+    token: str = Field(min_length=16)
+    new_password: str = Field(min_length=8)
+    confirm_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def check_password_strength(cls, value: str) -> str:
+        return validate_password_strength(value)
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("Passwords do not match")
+        return self
+
+
 class MessageResponse(BaseModel):
-    """Generic success message for verification / resend."""
+    """Generic success message for verification / resend / password reset."""
     message: str
 

@@ -14,15 +14,18 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     EMAIL_VERIFY_TOKEN_EXPIRE_HOURS: int = 24
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
     FRONTEND_URL: str = "http://localhost:5173"
     EMAIL_FROM: str = "RideCare <noreply@example.com>"
-    # SMTP. Example Gmail: smtp.gmail.com:587 + app password.
+    # Prefer Resend (HTTPS) on Render free — outbound SMTP ports are blocked there.
+    RESEND_API_KEY: str = ""
+    # SMTP fallback (local / paid hosts that allow 587). Example: smtp.gmail.com
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_STARTTLS: bool = True
-    # Shared secret for POST /internal/reminder-digests (Render Cron). Empty = disabled.
+    # Shared secret for POST /internal/reminder-digests (GitHub Actions cron). Empty = disabled.
     REMINDER_CRON_SECRET: str = ""
     DATABASE_URL: str
     REDIS_URL: str
