@@ -1,6 +1,9 @@
-"""Transactional email via Resend (HTTPS) or SMTP. Without either, logs the body."""
+"""Transactional email via Brevo (HTTPS) or SMTP. Without either, logs the body."""
+
+from __future__ import annotations
 
 import logging
+import re
 from email.message import EmailMessage
 
 import aiosmtplib
@@ -10,32 +13,45 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_RESEND_URL = "https://api.resend.com/emails"
+_BREVO_URL = "https://api.brevo.com/v3/smtp/email"
+_FROM_RE = re.compile(r"^(?P<name>.*?)\s*<(?P<email>[^>]+)>\s*$")
 
 
-async def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> None:
+def _parse_from_address(value: str) -> tuple[str, str]:
+    """Split `Name <email@x.com>` or bare email into (name, email)."""
+    cleaned = value.strip()
+    match = _FROM_RE.match(cleaned)
+    if match:
+        name = match.group("name").strip().strip('"') or "RideCare"
+        return name, match.group("email").strip()
+    return "RideCare", cleaned
+
+
+async def _send_via_brevo(*, to: str, subject: str, html: str, text: str) -> None:
     """Send over HTTPS — works on Render free (SMTP ports are blocked)."""
+    sender_name, sender_email = _parse_from_address(settings.EMAIL_FROM)
     payload = {
-        "from": settings.EMAIL_FROM,
-        "to": [to],
+        "sender": {"name": sender_name, "email": sender_email},
+        "to": [{"email": to}],
         "subject": subject,
-        "html": html,
-        "text": text,
+        "htmlContent": html,
+        "textContent": text,
     }
     headers = {
-        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "api-key": settings.BREVO_API_KEY,
         "Content-Type": "application/json",
+        "accept": "application/json",
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(_RESEND_URL, json=payload, headers=headers)
+        response = await client.post(_BREVO_URL, json=payload, headers=headers)
     if response.status_code >= 400:
         logger.error(
-            "Resend failed status=%s body=%s",
+            "Brevo failed status=%s body=%s",
             response.status_code,
             response.text,
         )
         response.raise_for_status()
-    logger.info("Email sent via Resend to=%s subject=%s", to, subject)
+    logger.info("Email sent via Brevo to=%s subject=%s", to, subject)
 
 
 async def _send_via_smtp(*, to: str, subject: str, html: str, text: str) -> None:
@@ -59,16 +75,16 @@ async def _send_via_smtp(*, to: str, subject: str, html: str, text: str) -> None
 
 async def send_email(*, to: str, subject: str, html: str, text: str) -> None:
     """
-    Send email. Prefer Resend when RESEND_API_KEY is set (Render-safe).
+    Send email. Prefer Brevo when BREVO_API_KEY is set (Render-safe).
     Else SMTP when SMTP_HOST is set. Else log the body (dev/test).
     """
-    if settings.RESEND_API_KEY:
-        await _send_via_resend(to=to, subject=subject, html=html, text=text)
+    if settings.BREVO_API_KEY:
+        await _send_via_brevo(to=to, subject=subject, html=html, text=text)
         return
 
     if not settings.SMTP_HOST:
         logger.warning(
-            "Email NOT sent — set RESEND_API_KEY (recommended on Render) "
+            "Email NOT sent — set BREVO_API_KEY (recommended on Render) "
             "or SMTP_HOST in .env. to=%s subject=%s\n%s",
             to,
             subject,

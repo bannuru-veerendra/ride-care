@@ -47,7 +47,7 @@ Most garage apps are thin CRUD. RideCare keeps **domain rules on the server** �
 | Compare | `GET /vehicles/compare` — spend, mileage, ₹/km across owned vehicles only |
 | Lists | Cursor pagination on `(date\|created_at, id)` so same-day rows do not skip under **Load more** |
 | Hot path | Redis write-through cache for list/detail/summary/analytics/compare; auth pipeline batches rate limit + blocklist + revoke-epoch + identity (warm requests skip user `SELECT`) |
-| Auth | httpOnly JWT + refresh rotation; Resend/SMTP email verification + password reset; access `jti` blocklist; revoke-epoch on password change; IP- and user-based rate limits |
+| Auth | httpOnly JWT + refresh rotation; Brevo/SMTP email verification + password reset; access `jti` blocklist; revoke-epoch on password change; IP- and user-based rate limits |
 | Files | Typed uploads to Supabase Storage with signed URLs; vehicle/account delete cleans storage objects |
 | Guide | 24-task JSON catalog, in-memory load, filter API — no guidelines table |
 
@@ -170,7 +170,7 @@ Every fuel / service / document row is scoped by `vehicle_id`; vehicles by `owne
 | API | FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic |
 | Data | PostgreSQL (Supabase), Redis (Upstash) |
 | Files | Supabase Storage + signed URLs |
-| Auth | bcrypt, JWT access + refresh rotation (httpOnly cookies), Resend (HTTPS) or SMTP for verification + password-reset email |
+| Auth | bcrypt, JWT access + refresh rotation (httpOnly cookies), Brevo (HTTPS) or SMTP for verification + password-reset email |
 | UI | React 19, TypeScript, Vite 8, Tailwind CSS v4, shadcn/ui, Recharts |
 | Client | TanStack Query, Zustand, Axios, Zod + React Hook Form |
 | Hosting | Frontend on **Vercel** (`/api` proxy) · API on **Render** |
@@ -184,7 +184,7 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 
 | Module | Surface | Highlights |
 |--------|---------|------------|
-| **Auth** | `register` · `verify-email` · `resend-verification` · `forgot-password` · `reset-password` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; magic-link verification before login (Resend on Render free — SMTP ports blocked); password reset via one-shot Redis token; access JWT blocklist on logout/refresh; one Redis pipeline for rate limit + blocklist + identity; Swagger OAuth2 form still returns bearer body |
+| **Auth** | `register` · `verify-email` · `resend-verification` · `forgot-password` · `reset-password` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; magic-link verification before login (Brevo on Render free — SMTP ports blocked); password reset via one-shot Redis token; access JWT blocklist on logout/refresh; one Redis pipeline for rate limit + blocklist + identity; Swagger OAuth2 form still returns bearer body |
 | **Users** | `GET/PATCH /users/me` · password change | Session revoke + access revoke-epoch + identity-cache refresh + cookie clear; email change re-triggers verification |
 | **Vehicles** | CRUD · `…/summary` · `…/analytics` · `GET /vehicles/compare` | Live odometer; cost-per-km (fuel + service); garage compare |
 | **Fuel** | CRUD `/fuel_logs/?vehicle_id=` · `GET …/export` | Liters + km/L; cascade recalc; CSV of full history |
@@ -217,7 +217,7 @@ List responses use a shared cursor page (stable across same-day rows):
 | [`backend/app/utils/cache.py`](backend/app/utils/cache.py) | Cache helpers, `CACHE_MISS` sentinel, vehicle + user-identity keys |
 | [`backend/app/utils/auth_context.py`](backend/app/utils/auth_context.py) | Shared auth hot-path state (rate-limit pipeline → `get_current_user`) |
 | [`backend/app/utils/pagination.py`](backend/app/utils/pagination.py) | Composite cursor paginator |
-| [`backend/app/utils/email.py`](backend/app/utils/email.py) | Transactional mail via Resend (HTTPS) or SMTP (verification, password-reset, digests) |
+| [`backend/app/utils/email.py`](backend/app/utils/email.py) | Transactional mail via Brevo (HTTPS) or SMTP (verification, password-reset, digests) |
 | [`backend/app/utils/email_verification_service.py`](backend/app/utils/email_verification_service.py) | Redis one-time verification tokens |
 | [`backend/app/utils/reminders.py`](backend/app/utils/reminders.py) | Service soon/overdue + document expiry rules |
 | [`backend/data/maintenance_guidelines.json`](backend/data/maintenance_guidelines.json) | Guideline catalog |
@@ -250,7 +250,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
-cp .env.example .env   # DATABASE_URL, JWT, Supabase, Redis, RESEND_API_KEY (or SMTP), FRONTEND_URL, ALLOWED_ORIGINS
+cp .env.example .env   # DATABASE_URL, JWT, Supabase, Redis, BREVO_API_KEY (or SMTP), FRONTEND_URL, ALLOWED_ORIGINS
 alembic upgrade head
 uvicorn main:app --reload
 ```
@@ -286,7 +286,7 @@ cd backend
 
 | File | Role | Commit? |
 |------|------|---------|
-| `backend/.env` | Dev DB, JWT, Supabase, Redis, Resend/SMTP | No |
+| `backend/.env` | Dev DB, JWT, Supabase, Redis, Brevo/SMTP | No |
 | `backend/.env.test` | Pytest isolation | No |
 | `backend/.env.example` | Required keys template | Yes |
 | `frontend/.env` | Local `VITE_API_URL` | No |
@@ -296,7 +296,7 @@ cd backend
 
 ## What’s included
 
-Auth (email verification + forgot/reset password via Resend/SMTP) · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · query-shaped composite indexes · Redis caching with write-through invalidation · pipelined auth (rate limit + identity cache) · access-token blocklisting · CI + production deploy
+Auth (email verification + forgot/reset password via Brevo/SMTP) · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · query-shaped composite indexes · Redis caching with write-through invalidation · pipelined auth (rate limit + identity cache) · access-token blocklisting · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 
