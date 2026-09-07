@@ -8,7 +8,7 @@ What has shipped on `main`, and what comes next. Product overview: [README.md](R
 
 ### Auth & security
 - Register / login with JWT access tokens (httpOnly cookies)
-- **Email verification** — magic link on register (Resend HTTPS on Render free; SMTP locally); login blocked until confirmed; resend endpoint
+- **Email verification** — magic link on register (Brevo HTTPS on Render free; SMTP locally); login blocked until confirmed; resend endpoint
 - **Forgot / reset password** — magic link; one-shot Redis token; resets password and revokes all sessions
 - Changing email resets verification, sends a new link, and clears sessions
 - Refresh-token rotation in Redis; logout revokes sessions

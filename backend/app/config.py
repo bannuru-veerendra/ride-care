@@ -17,8 +17,9 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
     FRONTEND_URL: str = "http://localhost:5173"
     EMAIL_FROM: str = "RideCare <noreply@example.com>"
-    # Prefer Resend (HTTPS) on Render free — outbound SMTP ports are blocked there.
-    RESEND_API_KEY: str = ""
+    # Prefer Brevo (HTTPS) on Render free — outbound SMTP ports are blocked there.
+    # Free plan: verify a sender email (e.g. your Gmail) in Brevo; no domain required.
+    BREVO_API_KEY: str = ""
     # SMTP fallback (local / paid hosts that allow 587). Example: smtp.gmail.com
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
