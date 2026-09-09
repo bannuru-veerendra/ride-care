@@ -42,5 +42,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Dependency audit
+        # Advisory visibility only — does not fail the build on known CVEs.
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
       - name: Run tests
         run: pytest tests/ -v --tb=short

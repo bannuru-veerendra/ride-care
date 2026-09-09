@@ -17,11 +17,6 @@
 </p>
 
 <p align="center">
-  A backend-first vehicle companion — FastAPI owns the mileage math,<br/>
-  PostgreSQL holds the truth, and a dark React UI makes every kilometer count.
-</p>
-
-<p align="center">
   <a href="https://ride-care-jade.vercel.app"><img alt="Live" src="https://img.shields.io/badge/Live-App-black?style=flat-square&logo=vercel&logoColor=white" /></a>
   <a href="https://ride-care.onrender.com/docs"><img alt="API" src="https://img.shields.io/badge/API-OpenAPI-009688?style=flat-square&logo=fastapi&logoColor=white" /></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" />
@@ -34,41 +29,15 @@
 
 ---
 
-## Why RideCare
+## The problem
 
-Most garage apps are thin CRUD. RideCare keeps **domain rules on the server** — the UI renders API results, it does not re-derive mileage or reminder thresholds.
+Bike ownership data usually lives in a notebook, a chat thread, or five different apps. Fill-ups don’t turn into mileage. Service due dates get missed. Insurance PDFs disappear into Downloads. Nothing ties **cost, kilometers, and reminders** together for the machines you actually ride.
 
-| Concern | What you can verify in the code / API |
-|---------|--------------------------------------|
-| Mileage | Liters + km/L from cost, price/L, and odometer deltas; full timeline recalc on create / update / delete / baseline change (`fuel_mileage.py`) |
-| Live odometer | `max(baseline, fuel max, service max)` in one map query path used by garage + summary |
-| Dashboard | `GET /vehicles/{id}/summary` aggregates logs server-side and returns `service_reminder` + `document_reminders` |
-| Charts | `GET /vehicles/{id}/analytics` — cost-per-km (fuel + service), last-10 mileage trend, last-6 months fuel spend |
-| Compare | `GET /vehicles/compare` — spend, mileage, ₹/km across owned vehicles only |
-| Lists | Cursor pagination on `(date\|created_at, id)` so same-day rows do not skip under **Load more** |
-| Hot path | Redis write-through cache for list/detail/summary/analytics/compare; auth pipeline batches rate limit + blocklist + revoke-epoch + identity (warm requests skip user `SELECT`) |
-| Auth | httpOnly JWT + refresh rotation; Brevo/SMTP email verification + password reset; access `jti` blocklist; revoke-epoch on password change; IP- and user-based rate limits |
-| Files | Typed uploads to Supabase Storage with signed URLs; vehicle/account delete cleans storage objects |
-| Guide | 24-task JSON catalog, in-memory load, filter API — no guidelines table |
+## The solution
 
----
+RideCare is a personal garage: log fuel and service, keep documents, pull maintenance guides, and see spend / mileage / ₹/km in one place. Domain rules stay on the **server** — the UI renders API results; it does not re-derive mileage or reminder thresholds.
 
-## Engineering evidence (not slogans)
-
-Concrete choices and checks — swap these in for “scalable / production-ready” claims on a resume or in interviews:
-
-| Evidence | Detail |
-|----------|--------|
-| Automated tests | **~200** pytest cases on GitHub Actions (auth, ownership 404s, mileage recalc, pagination, cache invalidation, reminders, rate limits, exports) |
-| Query shape | Composite indexes on list/pagination columns (`vehicle_id`/`owner_id` + sort keys), not single-column-only indexes |
-| Failure / security paths | Wrong owner → **404** (not 403); logout/refresh blocklists access `jti`; password change revokes refresh + access epoch and clears cookies |
-| Cache correctness | Writes invalidate the related Redis keys (fuel/service/vehicle/document); identity cache refreshed or cleared on profile/password change |
-| Deployed slice | Live app (Vercel) + API (Render) with same-origin `/api` proxy so auth cookies stay first-party |
-| Auth hardening | Unverified email cannot log in; email change re-triggers verification and clears sessions |
-
-What this repo does **not** claim yet: published load-test numbers, APM dashboards, or multi-region HA. Those belong in Later if measured.
-
-The frontend stays thin: sheets, charts, and **Load more** lists over a clear REST API.
+**Try it:** [live app](https://ride-care-jade.vercel.app) · [API docs](https://ride-care.onrender.com/docs)
 
 ---
 
@@ -133,6 +102,46 @@ Oil, chain, brakes, tyres, CVT… filterable by component and severity from a st
 Update name/email or change password (revokes all sessions and clears auth cookies). Changing email resets verification and sends a new confirmation link.
 
 ![Settings](docs/screenshots/12-settings.png)
+
+---
+
+## Why RideCare (architecture choices)
+
+Most garage apps are thin CRUD. RideCare keeps **domain rules on the server**.
+
+| Concern | What you can verify in the code / API |
+|---------|--------------------------------------|
+| Mileage | Liters + km/L from cost, price/L, and odometer deltas; full timeline recalc on create / update / delete / baseline change (`fuel_mileage.py`) |
+| Live odometer | `max(baseline, fuel max, service max)` in one map query path used by garage + summary |
+| Dashboard | `GET /vehicles/{id}/summary` aggregates logs server-side and returns `service_reminder` + `document_reminders` |
+| Charts | `GET /vehicles/{id}/analytics` — cost-per-km (fuel + service), last-10 mileage trend, last-6 months fuel spend |
+| Compare | `GET /vehicles/compare` — spend, mileage, ₹/km across owned vehicles only |
+| Lists | Cursor pagination on `(date\|created_at, id)` so same-day rows do not skip under **Load more** |
+| Hot path | Redis write-through cache for list/detail/summary/analytics/compare; auth pipeline batches rate limit + blocklist + revoke-epoch + identity (warm requests skip user `SELECT`) |
+| Auth | httpOnly JWT + refresh rotation; Brevo/SMTP email verification + password reset; access `jti` blocklist; revoke-epoch on password change; IP- and user-based rate limits |
+| Files | Typed uploads to Supabase Storage with signed URLs; vehicle/account delete cleans storage objects |
+| Guide | 24-task JSON catalog, in-memory load, filter API — no guidelines table |
+| Observability | `X-Request-ID` on responses; structured access logs with `duration_ms` |
+
+---
+
+## Engineering evidence (not slogans)
+
+Concrete choices and checks — swap these in for “scalable / production-ready” claims on a resume or in interviews:
+
+| Evidence | Detail |
+|----------|--------|
+| Automated tests | **~200** pytest cases on GitHub Actions (auth, ownership 404s, mileage recalc, pagination, cache invalidation, reminders, rate limits, exports, concurrency) |
+| Query shape | Composite indexes on list/pagination columns (`vehicle_id`/`owner_id` + sort keys), not single-column-only indexes |
+| Failure / security paths | Wrong owner → **404** (not 403); logout/refresh blocklists access `jti`; password change revokes refresh + access epoch and clears cookies |
+| Cache correctness | Writes invalidate the related Redis keys (fuel/service/vehicle/document); identity cache refreshed or cleared on profile/password change |
+| Deployed slice | Live app (Vercel) + API (Render) with same-origin `/api` proxy so auth cookies stay first-party |
+| Auth hardening | Unverified email cannot log in; email change re-triggers verification and clears sessions |
+| Ops hygiene | Dependabot + CI `pip-audit`; request IDs + latency logs |
+
+What this repo does **not** claim yet: published load-test numbers, full APM dashboards, or multi-region HA. Those belong in Later if measured.
+
+The frontend stays thin: sheets, charts, and **Load more** lists over a clear REST API.
 
 ---
 
