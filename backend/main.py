@@ -17,6 +17,10 @@ from app.routes import (
     users,
     vehicles,
 )
+from app.utils.observability import (
+    RequestContextMiddleware,
+    RequestIdLogFilter,
+)
 from app.utils.rate_limiter import user_rate_limit
 from app.utils.redis_client import close_redis, get_redis
 
@@ -24,10 +28,27 @@ logger = logging.getLogger(__name__)
 
 
 def _configure_logging() -> None:
-    """Production: warnings+ only. Dev keeps INFO for local debugging."""
-    if settings.APP_ENV == "development":
-        return
-    logging.basicConfig(level=logging.WARNING, force=True)
+    """
+    Dev: default INFO. Production: WARNING for noisy libs, but keep
+    ridecare.access at INFO so request-id structured logs stay visible.
+    """
+    root_level = logging.INFO if settings.APP_ENV == "development" else logging.WARNING
+    logging.basicConfig(level=root_level, force=True)
+    request_id_filter = RequestIdLogFilter()
+    root = logging.getLogger()
+    root.addFilter(request_id_filter)
+    for handler in root.handlers:
+        handler.addFilter(request_id_filter)
+        handler.setFormatter(
+            logging.Formatter(
+                "%(levelname)s %(name)s [request_id=%(request_id)s] %(message)s"
+            )
+        )
+
+    access = logging.getLogger("ridecare.access")
+    access.setLevel(logging.INFO)
+    access.propagate = True
+
     for name in ("sqlalchemy.engine", "uvicorn.access", "uvicorn.error"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
@@ -61,13 +82,17 @@ _allowed_origins = [
     if origin.strip()
 ]
 
+# Last added = outermost. Request context wraps CORS so every response
+# (including preflight) can carry X-Request-ID when it reaches the app stack.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+app.add_middleware(RequestContextMiddleware)
 
 
 @app.middleware("http")

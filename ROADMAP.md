@@ -119,13 +119,13 @@ Harden the existing system before adding more product surface. Order matters.
 
 ### Phase 2 — Production hardening
 
-- Error tracking (e.g. Sentry)
-- Structured logs + request IDs
-- API / DB latency and error-rate visibility
-- Dependabot / secret scanning / dependency audit (SAST when practical)
+- Error tracking (e.g. Sentry) — deferred (not shipping a third-party error SaaS for now)
+- Structured logs + request IDs — `X-Request-ID` middleware + `ridecare.access` lines (`method/path/status/duration_ms/request_id`)
+- API / DB latency and error-rate visibility — per-request `duration_ms`; WARN on slow (≥1s) or 4xx; ERROR on 5xx / unhandled
+- Dependabot / secret scanning / dependency audit — `.github/dependabot.yml` + non-blocking `pip-audit` in CI; enable GitHub **Secret scanning** + **Push protection** in repo settings
 - Soften README toward problem → solution → demo → architecture → trade-offs (engineering evidence below the fold)
 
-**Done when:** request IDs + structured logs + error tracking ship; basic API/DB latency visibility exists; dependency/secret scanning is enabled.
+**Done when:** request IDs + structured logs ship; basic API latency visibility exists; dependency/secret scanning is enabled. (External error SaaS optional later.)
 
 ### Phase 3 — Performance & data-access cleanup
 
