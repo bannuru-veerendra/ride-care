@@ -69,3 +69,13 @@ export const useDeleteFuelLog = (vehicleId: string) => {
         onSuccess: () => invalidateFuelDerivedQueries(queryClient, vehicleId),
     });
 };
+
+/** Import fuel history from an export-compatible CSV */
+export const useImportFuelLogsCsv = (vehicleId: string) => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (file: File) => fuelLogsApi.importCsv(vehicleId, file),
+        onSuccess: () => invalidateFuelDerivedQueries(queryClient, vehicleId),
+    });
+};

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.service_log import ServiceLog
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.schemas.csv_import import CsvImportResponse
 from app.schemas.pagination import CursorPage
 from app.schemas.service_log import (
     ServiceLogCreate,
@@ -27,7 +28,17 @@ from app.utils.cache import (
     vehicle_detail_key,
     vehicle_summary_key,
 )
-from app.utils.export_csv import service_log_csv_rows
+from app.utils.export_csv import (
+    content_disposition_attachment,
+    csv_download_filename,
+    service_log_csv_rows,
+)
+from app.utils.import_csv import (
+    CsvRowError,
+    parse_service_csv,
+    raise_csv_import_errors,
+    require_csv_text,
+)
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
 from app.utils.reminders import find_active_next_service
@@ -105,18 +116,29 @@ def _validate_next_service_odometer(
         )
 
 
+def _service_odometer_below_baseline_message(
+    odometer: int,
+    baseline_odometer: int,
+) -> str | None:
+    """Return an error message when a service odometer is below vehicle baseline."""
+    if odometer < baseline_odometer:
+        return (
+            f"Odometer reading ({odometer}) must be greater than or equal to "
+            f"the vehicle's baseline odometer ({baseline_odometer})"
+        )
+    return None
+
+
 def _validate_service_odometer_against_baseline(
     odometer: int,
     baseline_odometer: int,
 ) -> None:
     """Service readings feed live odometer — reject values below the vehicle baseline."""
-    if odometer < baseline_odometer:
+    message = _service_odometer_below_baseline_message(odometer, baseline_odometer)
+    if message:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Odometer reading ({odometer}) must be greater than or equal to "
-                f"the vehicle's baseline odometer ({baseline_odometer})"
-            ),
+            detail=message,
         )
 
 
@@ -182,7 +204,7 @@ async def export_service_logs_csv(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download all service logs for a vehicle as CSV (newest first)."""
-    await verify_vehicle_ownership(vehicle_id, current_user, db)
+    vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
     result = await db.execute(
         select(ServiceLog)
         .where(ServiceLog.vehicle_id == vehicle_id)
@@ -190,14 +212,63 @@ async def export_service_logs_csv(
     )
     logs = list(result.scalars().all())
     csv_body = service_log_csv_rows(logs)
-    filename = f"ridecare-service-{vehicle_id}.csv"
+    filename = csv_download_filename(
+        "service", vehicle.vehicle_name, str(vehicle_id)
+    )
     return Response(
         content=csv_body,
         media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": content_disposition_attachment(filename),
         },
     )
+
+
+@router.post("/import", response_model=CsvImportResponse)
+async def import_service_logs_csv(
+    vehicle_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> CsvImportResponse:
+    """
+    Bulk-import service visits from an export-compatible CSV.
+    All-or-nothing: any row or baseline failure imports nothing.
+    Does not dedupe against existing logs — conflicting rows fail the import.
+    """
+    db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
+    text = await require_csv_text(file)
+
+    parsed = parse_service_csv(text)
+    raise_csv_import_errors(parsed.errors)
+
+    baseline_errors: list[CsvRowError] = []
+    baseline = db_vehicle.current_odometer
+    for parsed_row in parsed.rows:
+        message = _service_odometer_below_baseline_message(
+            parsed_row.payload.odometer,
+            baseline,
+        )
+        if message:
+            baseline_errors.append(
+                CsvRowError(row=parsed_row.row, message=message)
+            )
+    raise_csv_import_errors(baseline_errors)
+
+    for parsed_row in parsed.rows:
+        db.add(
+            ServiceLog(**parsed_row.payload.model_dump(), vehicle_id=vehicle_id)
+        )
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    await _invalidate_service_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
+    return CsvImportResponse(imported=len(parsed.rows), errors=[])
 
 
 @router.get("/next", response_model=ServiceLogResponse | None)

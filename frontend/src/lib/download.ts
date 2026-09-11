@@ -1,6 +1,23 @@
 import { toast } from "sonner";
 
 /**
+ * Build a safe CSV download name like ridecare-fuel-shine-100.csv.
+ */
+export function csvExportFilename(
+    kind: "fuel" | "service",
+    vehicleName: string | undefined,
+    fallbackId: string
+): string {
+    const slug =
+        (vehicleName ?? "")
+            .trim()
+            .replace(/[^\w\-]+/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "") || fallbackId;
+    return `ridecare-${kind}-${slug}.csv`;
+}
+
+/**
  * Trigger a browser download for a Blob (CSV exports, etc.).
  */
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -27,4 +44,15 @@ export async function exportCsvWithToast(
     } catch {
         toast.error(labels.error);
     }
+}
+
+/** Success toast for bulk CSV import counts. */
+export function importedCountMessage(
+    count: number,
+    singular: string,
+    plural: string
+): string {
+    return count === 1
+        ? `Imported 1 ${singular}`
+        : `Imported ${count} ${plural}`;
 }

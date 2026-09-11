@@ -57,7 +57,7 @@ Add, edit, and open bikes. Registration, year, and live kilometers on each card.
 
 ### Fuel — mileage as the headline
 
-Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side. **Load more** via cursor pages. **Export CSV** of the full history.
+Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated server-side. **Load more** via cursor pages. **Export / Import CSV** of the full history.
 
 ![Fuel logs](docs/screenshots/03-fuel-logs.png)
 
@@ -65,7 +65,7 @@ Chronological fill-ups with date, odometer, liters, and cost. km/L is calculated
 
 ### Service — history + next due
 
-Cost, odometer, tagged jobs, and next service date / km reminders. Cursor-paginated list with **Load more**. **Export CSV** of the full history.
+Cost, odometer, tagged jobs, and next service date / km reminders. Cursor-paginated list with **Load more**. **Export / Import CSV** of the full history.
 
 ![Service logs](docs/screenshots/05-service-logs.png)
 
@@ -196,8 +196,8 @@ Live docs: **[https://ride-care.onrender.com/docs](https://ride-care.onrender.co
 | **Auth** | `register` · `verify-email` · `resend-verification` · `forgot-password` · `reset-password` · `login` · `token` · `refresh` · `logout` | httpOnly cookies; magic-link verification before login (Brevo on Render free — SMTP ports blocked); password reset via one-shot Redis token; access JWT blocklist on logout/refresh; one Redis pipeline for rate limit + blocklist + identity; Swagger OAuth2 form still returns bearer body |
 | **Users** | `GET/PATCH /users/me` · password change | Session revoke + access revoke-epoch + identity-cache refresh + cookie clear; email change re-triggers verification |
 | **Vehicles** | CRUD · `…/summary` · `…/analytics` · `GET /vehicles/compare` | Live odometer; cost-per-km (fuel + service); garage compare |
-| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` · `GET …/export` | Liters + km/L; cascade recalc; CSV of full history |
-| **Service** | CRUD · `suggest-next-due` · `GET …/next` · `GET …/export` | Catalog-based next-due suggestions; CSV of full history |
+| **Fuel** | CRUD `/fuel_logs/?vehicle_id=` · `GET …/export` · `POST …/import` | Liters + km/L; cascade recalc; CSV export/import |
+| **Service** | CRUD · `suggest-next-due` · `GET …/next` · `GET …/export` · `POST …/import` | Catalog-based next-due suggestions; CSV export/import |
 | **Documents** | Multipart CRUD · cursor list | Type enum, 10 MB, signed URLs; clear expiry/notes; expiry status from API |
 | **Guidelines** | `/maintenance-guidelines/` + filters | JSON file + in-memory cache |
 | **Internal** | `POST /internal/reminder-digests` | Cron-secured daily email digests (service + document reminders) |
@@ -305,7 +305,7 @@ cd backend
 
 ## What’s included
 
-Auth (email verification + forgot/reset password via Brevo/SMTP) · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · query-shaped composite indexes · Redis caching with write-through invalidation · pipelined auth (rate limit + identity cache) · access-token blocklisting · CI + production deploy
+Auth (email verification + forgot/reset password via Brevo/SMTP) · multi-vehicle garage with **Load more** · server-side mileage (including baseline recalc) · service history with **Load more** · **CSV export / import** of fuel and service history · document vault with **Load more** · summary dashboard with **in-app reminders** · **cost-per-km (fuel + service)** · **garage compare** · analytics charts · maintenance guide · stable cursor pagination · query-shaped composite indexes · Redis caching with write-through invalidation · pipelined auth (rate limit + identity cache) · access-token blocklisting · CI + production deploy
 
 What’s next → [ROADMAP.md](ROADMAP.md)
 

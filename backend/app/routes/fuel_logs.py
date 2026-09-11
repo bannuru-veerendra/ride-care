@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.fuel_log import FuelLog
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.schemas.csv_import import CsvImportResponse
 from app.schemas.fuel_log import (
     FuelLogCreate,
     FuelLogResponse,
@@ -25,8 +26,18 @@ from app.utils.cache import (
     vehicle_detail_key,
     vehicle_summary_key,
 )
-from app.utils.export_csv import fuel_log_csv_rows
+from app.utils.export_csv import (
+    content_disposition_attachment,
+    csv_download_filename,
+    fuel_log_csv_rows,
+)
 from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
+from app.utils.import_csv import (
+    mileage_failure_detail,
+    parse_fuel_csv,
+    raise_csv_import_errors,
+    require_csv_text,
+)
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
 
@@ -135,7 +146,7 @@ async def export_fuel_logs_csv(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download all fuel logs for a vehicle as CSV (newest first)."""
-    await verify_vehicle_ownership(vehicle_id, current_user, db)
+    vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
     result = await db.execute(
         select(FuelLog)
         .where(FuelLog.vehicle_id == vehicle_id)
@@ -143,14 +154,74 @@ async def export_fuel_logs_csv(
     )
     logs = list(result.scalars().all())
     csv_body = fuel_log_csv_rows(logs)
-    filename = f"ridecare-fuel-{vehicle_id}.csv"
+    filename = csv_download_filename(
+        "fuel", vehicle.vehicle_name, str(vehicle_id)
+    )
     return Response(
         content=csv_body,
         media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": content_disposition_attachment(filename),
         },
     )
+
+
+@router.post("/import", response_model=CsvImportResponse)
+async def import_fuel_logs_csv(
+    vehicle_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> CsvImportResponse:
+    """
+    Bulk-import fuel fill-ups from an export-compatible CSV.
+    All-or-nothing: validation or mileage failures import nothing.
+    liters / mileage columns are ignored and recalculated server-side.
+    Does not dedupe against existing logs — conflicting odometers fail the import.
+    """
+    db_vehicle = await verify_vehicle_ownership(vehicle_id, current_user, db)
+    text = await require_csv_text(file)
+
+    parsed = parse_fuel_csv(text)
+    raise_csv_import_errors(parsed.errors)
+
+    # Oldest first so timeline validation matches mileage order
+    ordered = sorted(
+        parsed.rows,
+        key=lambda parsed_row: (
+            parsed_row.payload.date,
+            parsed_row.payload.odometer,
+        ),
+    )
+    for parsed_row in ordered:
+        fuel_log = parsed_row.payload
+        db.add(
+            FuelLog(
+                **fuel_log.model_dump(),
+                vehicle_id=vehicle_id,
+                liters=round(fuel_log.total_cost / fuel_log.price_per_liter, 2),
+            )
+        )
+
+    try:
+        await db.flush()
+        await recalculate_vehicle_fuel_mileage(db, vehicle_id, db_vehicle)
+        await db.commit()
+    except HTTPException as exc:
+        await db.rollback()
+        if isinstance(exc.detail, str):
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=mileage_failure_detail(exc.detail, ordered),
+            ) from exc
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+
+    await _invalidate_fuel_derived_caches(redis, vehicle_id, db_vehicle.owner_id)
+    return CsvImportResponse(imported=len(ordered), errors=[])
 
 
 @router.get("/{fuel_log_id}", response_model=FuelLogResponse)

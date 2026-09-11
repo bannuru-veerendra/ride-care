@@ -72,3 +72,13 @@ export const useDeleteServiceLog = (vehicleId: string) => {
         onSuccess: () => invalidateServiceDerivedQueries(queryClient, vehicleId),
     });
 };
+
+/** Import service history from an export-compatible CSV */
+export const useImportServiceLogsCsv = (vehicleId: string) => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (file: File) => serviceLogsApi.importCsv(vehicleId, file),
+        onSuccess: () => invalidateServiceDerivedQueries(queryClient, vehicleId),
+    });
+};
