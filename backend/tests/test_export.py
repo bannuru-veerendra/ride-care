@@ -31,7 +31,14 @@ async def test_export_fuel_logs_csv(
     )
     assert response.status_code == 200
     assert "text/csv" in response.headers["content-type"]
-    assert "attachment" in response.headers["content-disposition"]
+    from app.utils.export_csv import csv_download_filename
+
+    expected = csv_download_filename(
+        "fuel", created_vehicle["vehicle_name"], vehicle_id
+    )
+    disposition = response.headers["content-disposition"]
+    assert expected in disposition
+    assert "filename*=UTF-8''" in disposition
     body = response.text.lstrip("\ufeff")
     lines = [line for line in body.strip().splitlines() if line]
     assert lines[0].startswith("date,odometer_km,liters")

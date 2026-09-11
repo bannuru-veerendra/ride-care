@@ -4,8 +4,36 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from collections.abc import Iterable, Sequence
 from typing import Any
+from urllib.parse import quote
+
+_UNSAFE_FILENAME = re.compile(r"[^\w\-]+", re.UNICODE)
+_MULTI_DASH = re.compile(r"-{2,}")
+_ASCII_FILENAME = re.compile(r"[^A-Za-z0-9._\-]+")
+
+
+def csv_download_filename(kind: str, vehicle_name: str, fallback_id: str) -> str:
+    """Build a safe download name like ridecare-fuel-shine-100.csv."""
+    slug = _MULTI_DASH.sub(
+        "-",
+        _UNSAFE_FILENAME.sub("-", (vehicle_name or "").strip()),
+    ).strip("-")
+    if not slug:
+        slug = str(fallback_id)
+    return f"ridecare-{kind}-{slug}.csv"
+
+
+def content_disposition_attachment(filename: str) -> str:
+    """
+    Build Content-Disposition with ASCII fallback + RFC 5987 UTF-8 filename*.
+    """
+    ascii_name = _ASCII_FILENAME.sub("-", filename).strip("-._") or "export.csv"
+    return (
+        f'attachment; filename="{ascii_name}"; '
+        f"filename*=UTF-8''{quote(filename)}"
+    )
 
 
 def rows_to_csv(headers: Sequence[str], rows: Iterable[Sequence[Any]]) -> str:

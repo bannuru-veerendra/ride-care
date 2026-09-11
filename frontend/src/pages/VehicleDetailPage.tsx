@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, type ReactNode, lazy, Suspense } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
     ArrowLeft,
@@ -9,6 +9,7 @@ import {
     FileText,
     BarChart2,
     Download,
+    Upload,
     Plus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ import {
     useCreateFuelLog,
     useUpdateFuelLog,
     useDeleteFuelLog,
+    useImportFuelLogsCsv,
 } from "@/features/fuel-logs/hooks/useFuelLogs";
 import { fuelLogsApi } from "@/api/fuel-logs.api";
 import type { FuelLog } from "@/features/fuel-logs/types";
@@ -44,9 +46,11 @@ import {
     useCreateServiceLog,
     useUpdateServiceLog,
     useDeleteServiceLog,
+    useImportServiceLogsCsv,
 } from "@/features/service-logs/hooks/useServiceLogs";
 import { serviceLogsApi } from "@/api/service-logs.api";
-import { exportCsvWithToast } from "@/lib/download";
+import { csvExportFilename, exportCsvWithToast, importedCountMessage } from "@/lib/download";
+import { getApiErrorMessage } from "@/lib/api-error";
 import type { ServiceLog } from "@/features/service-logs/types";
 import type { ServiceLogSchema } from "@/features/service-logs/schemas";
 import DocumentCard from "@/features/documents/components/DocumentCard";
@@ -101,6 +105,8 @@ export default function VehicleDetailPage() {
     const [editingDocument, setEditingDocument] = useState<Document | null>(null);
     const [exportingFuel, setExportingFuel] = useState(false);
     const [exportingService, setExportingService] = useState(false);
+    const fuelCsvInputRef = useRef<HTMLInputElement>(null);
+    const serviceCsvInputRef = useRef<HTMLInputElement>(null);
 
     // Deep-link to a tab without opening a sheet (?tab=service|documents|fuel|analytics)
     useEffect(() => {
@@ -170,10 +176,12 @@ export default function VehicleDetailPage() {
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
     const deleteFuelLog = useDeleteFuelLog(id!);
+    const importFuelCsv = useImportFuelLogsCsv(id!);
 
     const createServiceLog = useCreateServiceLog(id!);
     const updateServiceLog = useUpdateServiceLog(id!, editingServiceLog?.id ?? "");
     const deleteServiceLog = useDeleteServiceLog(id!);
+    const importServiceCsv = useImportServiceLogsCsv(id!);
 
     const uploadDocument = useUploadDocument(id!);
     const updateDocument = useUpdateDocument(id!, editingDocument?.id ?? "");
@@ -185,7 +193,7 @@ export default function VehicleDetailPage() {
         setExportingFuel(true);
         await exportCsvWithToast(
             () => fuelLogsApi.exportCsv(id),
-            `ridecare-fuel-${id}.csv`,
+            csvExportFilename("fuel", vehicle?.vehicle_name, id),
             {
                 success: "Fuel history exported",
                 error: "Failed to export fuel history",
@@ -199,13 +207,49 @@ export default function VehicleDetailPage() {
         setExportingService(true);
         await exportCsvWithToast(
             () => serviceLogsApi.exportCsv(id),
-            `ridecare-service-${id}.csv`,
+            csvExportFilename("service", vehicle?.vehicle_name, id),
             {
                 success: "Service history exported",
                 error: "Failed to export service history",
             }
         );
         setExportingService(false);
+    };
+
+    const handleImportFuelCsv = (file: File | undefined) => {
+        if (!file || importFuelCsv.isPending) return;
+        importFuelCsv.mutate(file, {
+            onSuccess: (result) => {
+                toast.success(
+                    importedCountMessage(result.imported, "fuel log", "fuel logs")
+                );
+            },
+            onError: (error) => {
+                toast.error(
+                    getApiErrorMessage(error, "Failed to import fuel CSV")
+                );
+            },
+        });
+    };
+
+    const handleImportServiceCsv = (file: File | undefined) => {
+        if (!file || importServiceCsv.isPending) return;
+        importServiceCsv.mutate(file, {
+            onSuccess: (result) => {
+                toast.success(
+                    importedCountMessage(
+                        result.imported,
+                        "service log",
+                        "service logs"
+                    )
+                );
+            },
+            onError: (error) => {
+                toast.error(
+                    getApiErrorMessage(error, "Failed to import service CSV")
+                );
+            },
+        });
     };
 
     const handleFuelSubmit = (values: FuelLogSchema) => {
@@ -413,6 +457,29 @@ export default function VehicleDetailPage() {
                             {fuelTotal} entries
                         </p>
                         <div className="flex shrink-0 items-center gap-2">
+                            <input
+                                ref={fuelCsvInputRef}
+                                type="file"
+                                accept=".csv,text/csv"
+                                className="hidden"
+                                onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    handleImportFuelCsv(file);
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={importFuelCsv.isPending}
+                                onClick={() => fuelCsvInputRef.current?.click()}
+                            >
+                                <Upload className="mr-2 h-4 w-4" />
+                                {importFuelCsv.isPending
+                                    ? "Importing..."
+                                    : "Import CSV"}
+                            </Button>
                             <Button
                                 type="button"
                                 size="sm"
@@ -452,7 +519,7 @@ export default function VehicleDetailPage() {
                     {!logsLoading && fuelLogs.length === 0 && (
                         <ResourceEmptyState
                             title="No fuel logs yet"
-                            description='Tap "Log fuel" to record your first fill-up'
+                            description='Tap "Log fuel" or "Import CSV" to add fill-ups'
                         />
                     )}
                     {!logsLoading && fuelLogs.length > 0 && (
@@ -494,6 +561,31 @@ export default function VehicleDetailPage() {
                             {serviceTotal} entries
                         </p>
                         <div className="flex shrink-0 items-center gap-2">
+                            <input
+                                ref={serviceCsvInputRef}
+                                type="file"
+                                accept=".csv,text/csv"
+                                className="hidden"
+                                onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    handleImportServiceCsv(file);
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={importServiceCsv.isPending}
+                                onClick={() =>
+                                    serviceCsvInputRef.current?.click()
+                                }
+                            >
+                                <Upload className="mr-2 h-4 w-4" />
+                                {importServiceCsv.isPending
+                                    ? "Importing..."
+                                    : "Import CSV"}
+                            </Button>
                             <Button
                                 type="button"
                                 size="sm"
@@ -539,7 +631,7 @@ export default function VehicleDetailPage() {
                     {!serviceLogsLoading && serviceLogs.length === 0 && (
                         <ResourceEmptyState
                             title="No service logs yet"
-                            description='Tap "Log service" to record your first service'
+                            description='Tap "Log service" or "Import CSV" to add visits'
                         />
                     )}
                     {!serviceLogsLoading && serviceLogs.length > 0 && (

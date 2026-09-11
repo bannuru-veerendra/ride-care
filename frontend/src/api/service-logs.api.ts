@@ -79,6 +79,18 @@ export const serviceLogsApi = {
         return data;
     },
 
+    importCsv: async (
+        vehicleId: string,
+        file: File
+    ): Promise<{ imported: number; errors: { row: number; message: string }[] }> => {
+        const formData = new FormData();
+        formData.append("file", file);
+        const { data } = await apiClient.post("/service_logs/import", formData, {
+            params: { vehicle_id: vehicleId },
+        });
+        return data;
+    },
+
     suggestNextDue: async (payload: {
         date: string;
         odometer: number;

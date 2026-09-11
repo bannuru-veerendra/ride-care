@@ -2,7 +2,7 @@
 
 What has shipped on `main`, and what comes next. Product overview: [README.md](README.md).
 
-Honest scope: RideCare is a **well-engineered personal garage** (data → calculation → display), not yet an intelligent vehicle platform. Redis, cursor pagination, and indexes are real design choices; they are **not** a claim of proven 10k-user load. Next work hardens what exists, then adds one genuinely proactive product slice.
+Honest scope: RideCare is a **well-engineered personal garage** (data → calculation → display), not yet an intelligent vehicle platform. Redis, cursor pagination, and indexes are real design choices; they are **not** a claim of proven 10k-user load. The roadmap below is ordered by **what a rider needs next**, not by internal engineering phases.
 
 ---
 
@@ -35,6 +35,7 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 - Full mileage recalculation on create / update / delete / baseline change
 - Stable cursor pagination (date + id) + fuel tab **Load more**
 - **CSV export** of full fuel history (`GET /fuel_logs/export`)
+- **CSV import** of fuel history (`POST /fuel_logs/import`) — export-compatible; all-or-nothing validation + one mileage recalc
 
 ### Service history
 - Service visits with tags, cost, and next-due fields
@@ -44,6 +45,7 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 - Partial PATCH validates next-service odometer against existing reading
 - Reminder clears once a visit meets the due date or odometer
 - **CSV export** of full service history (`GET /service_logs/export`)
+- **CSV import** of service history (`POST /service_logs/import`) — export-compatible; all-or-nothing validation
 
 ### Documents
 - Insurance / licence / RC vault via Supabase Storage
@@ -82,11 +84,12 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 
 ---
 
-## Evolution
+## Evolution (rider journey)
 
 ```
-v1 (now):  record → calculate → remind → display
-v2 (next product): understand behavior → predict → recommend action
+Today:     log → see mileage / reminders / charts
+Next:      bring history in → quiet idle bikes → get told what to do
+Later:     less typing (OCR), family garage, shops, live telemetry
 ```
 
 Frontend stays intentionally thin; testing investment stays on API / domain correctness (backend pytest). No Playwright / frontend CI required for this portfolio track.
@@ -97,85 +100,61 @@ Refactor fat routes (`vehicles.py`, `auth.py`) toward services/repositories **on
 
 ## Next
 
-Harden the existing system before adding more product surface. Order matters.
+Ordered by how a real rider feels the product. Hardening Phases 1–2 already shipped on `main` (concurrency tests, request IDs, Dependabot).
 
-### Intended concurrency guarantees
+### Done — Bring my history in (CSV import)
 
-| Area | Guarantee |
-|------|-----------|
-| **Refresh rotation** | Same refresh token used twice → **exactly one** successful rotation; the other request fails |
-| **Fuel logging** | Concurrent creates on one vehicle → correct mileage, no lost updates, consistent timeline order |
-| **Account delete** | DB transaction commits first; storage cleanup is **async / enqueued** after commit |
+Fuel + service CSV import ships on this branch: same columns as export, row-level errors, all-or-nothing write, Import CSV on the Fuel / Service tabs. liters/mileage ignored and recalculated server-side.
 
-### Phase 1 — Correctness
+### 1 — Keep the bike, stop the nagging (per-vehicle mute)
 
-- Concurrent refresh-token rotation races (same token → one win / one reject) — covered in `tests/test_concurrency.py`
-- Concurrent fuel creates on the same vehicle — covered
-- Cache stampede + invalidation races — covered
-- Transaction / rollback boundaries across Postgres + Redis (failed fuel create leaves warm summary cache) — covered
-- Idempotency / duplicate side-effects for reminder digests (concurrent cron → at most one email via Redis NX) — covered
+**Rider pain:** “This Pulsar is parked / sold / seasonal. I want the records, not insurance and service emails every week.” Account-level Settings toggles kill reminders for *every* bike.
 
-**Done when:** those concurrency + rollback + stampede tests exist and CI (pytest) is green; retry-sensitive ops have an explicit duplicate-side-effect note or fix.
+- Per-vehicle mute (keep data, quiet reminders)
+- Dashboard in-app reminders skip muted bikes
+- Daily digest emails skip muted bikes
+- Obvious toggle on vehicle edit/detail (“Reminders off — history kept”)
 
-### Phase 2 — Production hardening
+**Done when:** a multi-bike rider can silence idle machines and still open them for history, export, and compare.
 
-- Error tracking (e.g. Sentry) — deferred (not shipping a third-party error SaaS for now)
-- Structured logs + request IDs — `X-Request-ID` middleware + `ridecare.access` lines (`method/path/status/duration_ms/request_id`)
-- API / DB latency and error-rate visibility — per-request `duration_ms`; WARN on slow (≥1s) or 4xx; ERROR on 5xx / unhandled
-- Dependabot / secret scanning / dependency audit — `.github/dependabot.yml` + non-blocking `pip-audit` in CI; enable GitHub **Secret scanning** + **Push protection** in repo settings
-- Soften README toward problem → solution → demo → architecture → trade-offs (engineering evidence below the fold)
+### 2 — Tell me what to do next (RideCare Health)
 
-**Done when:** request IDs + structured logs ship; basic API latency visibility exists; dependency/secret scanning is enabled. (External error SaaS optional later.)
+**Rider pain:** “I already logged the data — now what? When is service actually due? Is mileage getting worse?” Static catalog tips are not enough once history exists (especially after import).
 
-### Phase 3 — Performance & data-access cleanup
+- Usage-based **maintenance prediction** (last service + riding rate + catalog interval → due in X km / around date Y)
+- Mileage **anomaly / decline** with a plain-language recommendation
+- Analytics **confidence** (“₹/km from N fill-ups over K km”) so empty or thin data does not look authoritative
+- Optional simple **health** summary on the vehicle — signals from the API, not a chatbot
 
-- Summary / analytics: SQL aggregates (`SUM` / `AVG` / `COUNT` / `GROUP BY`) instead of loading full histories into Python
-- Mileage recalc from the **affected row onward**
-- Sync Supabase storage SDK off the event loop (thread pool or async client)
-- Document uploads: stream + size while reading; **magic-byte** checks; signed URLs **on demand** (or short cache) — no list N+1
-- Account delete: **enqueue orphan storage cleanup** after DB commit (short request path)
-- DB `CHECK` constraints (`odometer > 0`, `total_cost > 0`, `price_per_liter > 0`)
-- Pagination: optional or cached `total`; cursor + `has_more` as the hot path
-- Prefer versioned Redis namespaces over `SCAN` pattern deletes when key counts grow
+**Done when:** on one real bike with history, the rider sees a predicted next service and at least one actionable signal they did not have to calculate themselves.
 
-**Done when:** analytics/summary use SQL aggregates; storage does not block the event loop; mileage is incremental; signed URL list N+1 is gone; DB CHECKs land; account delete cleanup is async.
+---
 
-### Phase 4 — Measure (prove, don’t claim)
+## Under the hood (only as needed)
 
-Benchmark a representative dataset first (do **not** invent target numbers). Example shape: ~100k fuel / ~20k service / ~10k vehicles — size to what the test DB can hold.
+Riders do not ask for these; ship them when import/Health make them necessary — not as a blocking “phase” before product value.
 
-Record for `summary`, `analytics`, `compare`, fuel list, service list:
+- Incremental mileage recalc and SQL aggregates for summary/analytics (large imports + Health reads)
+- Sync Supabase storage off the event loop; cheap DB `CHECK`s on odometer/cost/price
+- Light before/after timings only for changes you actually ship (no fake 100k-user campaign)
 
-- p50 / p95 / p99
-- DB time
-- Redis hit / miss rate (especially summary + analytics)
-
-Publish before → after for Phase 3 changes (e.g. analytics P95 after SQL aggregates + cache).
-
-**Done when:** a short benchmark note exists with before/after timings and Redis hit rates — evidence of design, not slogans.
-
-### Phase 5 — First intelligent product slice: RideCare Health
-
-Flagship evolution — uses data already in the system (fuel, service, odometer, catalog, dates). Not a chatbot bolted on.
-
-- Usage-based **maintenance prediction** (last service + rate + catalog interval → due in X km / expected date)
-- Mileage **anomaly / decline** signals with actionable recommendations
-- Analytics **confidence / data coverage** (e.g. ₹/km based on N fuel + M service over K km)
-- Optional vehicle **health score** UI fed by structured API signals
-
-**Done when:** one vehicle can show predicted next service + at least one anomaly/recommendation from real history (not static JSON alone).
+Defer unless felt: magic-byte upload hardening, signed-URL list redesign, Redis namespace versioning, cached pagination `total`, async account-delete storage cleanup, Sentry.
 
 ---
 
 ## Later
 
-After Health / prediction is real. Platform and ecosystem — not the immediate portfolio bet.
+### Still for the rider (after mute + Health)
 
-- **OCR** for RC / insurance / service invoices → confirm → auto-fill logs
+- Stronger warnings when odometer timelines look wrong
+- Richer insurance fields (policy / insurer) on top of expiry reminders
 - Push notifications (email digests already ship)
-- Stronger data-quality / reconciliation for suspicious odometer timelines
+- **OCR** — photo of RC / insurance / invoice → confirm → auto-fill (less typing than CSV for some riders)
+
+### Platform / ecosystem (not the near-term product bet)
+
 - Multi-rider / household / fleet **RBAC**
-- Mechanic / service-center marketplace (due → nearby shop → appointment → invoice → history)
+- Mechanic / service-center marketplace
 - Real telemetry (OBD / Bluetooth / auto odometer)
-- Structured insurance fields; general job queue for email, OCR, exports, cleanup
+- Job queue for email, OCR, exports, cleanup
 - Disaster-recovery runbook; deeper vendor abstraction (Supabase / Upstash / Render / Brevo)
