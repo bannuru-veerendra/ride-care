@@ -18,7 +18,8 @@ export const vehicleSchema = z.object({
         .max(currentYear, { message: `Year cannot exceed ${currentYear}` }),
     registration_number: z.string().min(1, { message: "Registration number is required" }),
     baseline_odometer: nonNegativeDecimal2Schema,
-    reminders_muted: z.boolean().default(false),
+    // Required boolean — form defaultValues supply false (avoid .default() input/output mismatch with RHF)
+    reminders_muted: z.boolean(),
 });
 
 export type VehicleSchema = z.infer<typeof vehicleSchema>;
