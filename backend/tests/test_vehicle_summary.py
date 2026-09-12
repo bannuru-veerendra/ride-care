@@ -230,6 +230,50 @@ async def test_vehicle_summary_service_reminder_soon(
     assert reminder["next_service_date"] == next_date
 
 
+async def test_vehicle_summary_skips_reminders_when_muted(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Muted bikes keep history but return empty reminder signals."""
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+    next_date = str(today + timedelta(days=7))
+
+    service_resp = await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today),
+            "odometer": 11000.25,
+            "total_cost": 1500.55,
+            "services_done": ["Oil change"],
+            "next_service_date": next_date,
+        },
+        headers=auth_headers,
+    )
+    assert service_resp.status_code == 201
+
+    mute_resp = await client.patch(
+        f"/vehicles/{vehicle_id}",
+        json={"reminders_muted": True},
+        headers=auth_headers,
+    )
+    assert mute_resp.status_code == 200
+
+    response = await client.get(
+        f"/vehicles/{vehicle_id}/summary",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service_reminder"]["status"] == "none"
+    assert data["service_reminder"]["days_until"] is None
+    assert data["service_reminder"]["km_until"] is None
+    assert data["service_reminder"]["next_service_date"] == next_date
+    assert data["document_reminders"] == []
+    assert data["next_service"] is not None
+    assert data["next_service"]["odometer"] == 11000.25
+
+
 async def test_vehicle_summary_service_reminder_overdue(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):

@@ -1,9 +1,13 @@
-import { Gauge, Calendar, Trash2, Pencil, ChevronRight } from "lucide-react";
+import type { MouseEvent } from "react";
+import { Gauge, Calendar, Trash2, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useUpdateVehicle } from "../hooks/useVehicles";
 import type { Vehicle } from "../types";
 
 interface VehicleCardProps {
@@ -17,6 +21,26 @@ interface VehicleCardProps {
  */
 export default function VehicleCard({ vehicle, onDelete, onEdit }: VehicleCardProps) {
     const navigate = useNavigate();
+    const updateVehicle = useUpdateVehicle(vehicle.id);
+    const muted = Boolean(vehicle.reminders_muted);
+
+    const handleToggleMute = (event: MouseEvent) => {
+        event.stopPropagation();
+        if (updateVehicle.isPending) return;
+        const next = !muted;
+        updateVehicle.mutate(
+            { reminders_muted: next },
+            {
+                onSuccess: () =>
+                    toast.success(
+                        next
+                            ? "Reminders muted for this bike"
+                            : "Reminders turned back on"
+                    ),
+                onError: () => toast.error("Failed to update reminders"),
+            }
+        );
+    };
 
     return (
         <Card
@@ -45,6 +69,34 @@ export default function VehicleCard({ vehicle, onDelete, onEdit }: VehicleCardPr
                         </Badge>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                                "h-8 w-8",
+                                muted
+                                    ? "text-muted-foreground"
+                                    : "text-brand hover:text-brand"
+                            )}
+                            disabled={updateVehicle.isPending}
+                            title={
+                                muted
+                                    ? "Reminders off — click to turn on"
+                                    : "Reminders on — click to mute"
+                            }
+                            onClick={handleToggleMute}
+                        >
+                            {muted ? (
+                                <BellOff className="h-3.5 w-3.5" />
+                            ) : (
+                                <Bell className="h-3.5 w-3.5" />
+                            )}
+                            <span className="sr-only">
+                                {muted
+                                    ? "Unmute reminders for this vehicle"
+                                    : "Mute reminders for this vehicle"}
+                            </span>
+                        </Button>
                         <Button
                             variant="ghost"
                             size="icon"

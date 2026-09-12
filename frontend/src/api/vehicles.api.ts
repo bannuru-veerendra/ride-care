@@ -17,6 +17,7 @@ export interface Vehicle {
     registration_number: string;
     baseline_odometer: number;
     current_odometer: number;
+    reminders_muted: boolean;
 }
 
 export interface ServiceReminder {
@@ -68,6 +69,7 @@ export interface UpdateVehiclePayload {
     year?: number;
     registration_number?: string;
     baseline_odometer?: number;
+    reminders_muted?: boolean;
 }
 
 export interface MileageTrendPoint {

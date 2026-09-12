@@ -16,8 +16,10 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.pagination import CursorPage
 from app.schemas.vehicle import (
+    DocumentReminder,
     MileageTrendPoint,
     MonthlySpendPoint,
+    ServiceReminder,
     VehicleAnalyticsResponse,
     VehicleCompareItem,
     VehicleCompareResponse,
@@ -27,6 +29,7 @@ from app.schemas.vehicle import (
     VehicleUpdate,
 )
 from app.utils.analytics import cost_per_km, km_driven, round_money
+from app.utils.numbers import round_2
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import (
     CACHE_MISS,
@@ -72,13 +75,13 @@ def _shift_month(ref: date, months: int) -> date:
 def _round_mileage(value: float | None) -> float | None:
     if value is None:
         return None
-    return round(float(value), 1)
+    return round_2(value)
 
 
 async def get_live_odometer(
     db: AsyncSession,
     vehicle: Vehicle,
-) -> int:
+) -> float:
     """Return the highest known odometer for a vehicle"""
     live_odometers = await get_live_odometers_map(db, [vehicle])
     return live_odometers[vehicle.id]
@@ -87,14 +90,17 @@ async def get_live_odometer(
 async def get_live_odometers_map(
     db: AsyncSession,
     vehicles: list[Vehicle],
-) -> dict[uuid.UUID, int]:
+) -> dict[uuid.UUID, float]:
     """Return live odometer for each vehicle in one round-trip."""
     if not vehicles:
         return {}
 
     vehicle_ids = [vehicle.id for vehicle in vehicles]
-    baselines = {vehicle.id: vehicle.current_odometer for vehicle in vehicles}
-    log_max_by_vehicle: dict[uuid.UUID, int] = {}
+    baselines = {
+        vehicle.id: round_2(float(vehicle.current_odometer or 0))
+        for vehicle in vehicles
+    }
+    log_max_by_vehicle: dict[uuid.UUID, float] = {}
 
     fuel_max = (
         select(
@@ -119,12 +125,14 @@ async def get_live_odometers_map(
         )
     )
     for vehicle_id, odometer in result.all():
-        log_max_by_vehicle[vehicle_id] = int(odometer or 0)
+        log_max_by_vehicle[vehicle_id] = round_2(float(odometer or 0))
 
     return {
-        vehicle_id: max(
-            baselines[vehicle_id],
-            log_max_by_vehicle.get(vehicle_id) or 0,
+        vehicle_id: round_2(
+            max(
+                baselines[vehicle_id],
+                log_max_by_vehicle.get(vehicle_id) or 0.0,
+            )
         )
         for vehicle_id in vehicle_ids
     }
@@ -154,7 +162,7 @@ async def _expiring_documents(
 async def get_min_log_odometer(
     db: AsyncSession,
     vehicle_id: uuid.UUID,
-) -> int | None:
+) -> float | None:
     """Return the lowest fuel/service odometer for a vehicle, if any"""
     fuel_result = await db.execute(
         select(func.min(FuelLog.odometer)).where(
@@ -168,7 +176,11 @@ async def get_min_log_odometer(
     )
     fuel_min = fuel_result.scalar_one_or_none()
     service_min = service_result.scalar_one_or_none()
-    candidates = [value for value in (fuel_min, service_min) if value is not None]
+    candidates = [
+        round_2(float(value))
+        for value in (fuel_min, service_min)
+        if value is not None
+    ]
     if not candidates:
         return None
     return min(candidates)
@@ -176,7 +188,7 @@ async def get_min_log_odometer(
 
 def build_vehicle_response(
     vehicle: Vehicle,
-    live_odometer: int,
+    live_odometer: float,
 ) -> VehicleResponse:
     """Build a vehicle response with baseline and live odometer"""
     return VehicleResponse(
@@ -186,8 +198,9 @@ def build_vehicle_response(
         vehicle_name=vehicle.vehicle_name,
         year=vehicle.year,
         registration_number=vehicle.registration_number,
-        baseline_odometer=vehicle.current_odometer,
-        current_odometer=live_odometer,
+        baseline_odometer=round_2(float(vehicle.current_odometer)),
+        current_odometer=round_2(float(live_odometer)),
+        reminders_muted=bool(vehicle.reminders_muted),
     )
 
 
@@ -289,9 +302,11 @@ async def _build_summary_payload(
 
     documents = await _expiring_documents(db, vehicle_id)
 
-    fuel_max = max((log.odometer for log in fuel_logs), default=0)
-    service_max = max((log.odometer for log in service_logs), default=0)
-    live_odometer = max(int(db_vehicle.current_odometer), fuel_max, service_max)
+    fuel_max = max((float(log.odometer) for log in fuel_logs), default=0.0)
+    service_max = max((float(log.odometer) for log in service_logs), default=0.0)
+    live_odometer = round_2(
+        max(float(db_vehicle.current_odometer), fuel_max, service_max)
+    )
 
     this_mileages: list[float] = []
     last_mileages: list[float] = []
@@ -325,6 +340,27 @@ async def _build_summary_payload(
 
     next_service = find_active_next_service(service_logs)
 
+    if db_vehicle.reminders_muted:
+        # Quiet urgency for digests / in-app nags, but keep schedule facts for the UI.
+        built = build_service_reminder(
+            next_service,
+            today=today,
+            live_odometer=live_odometer,
+        )
+        service_reminder = ServiceReminder(
+            status="none",
+            next_service_date=built.next_service_date,
+            next_service_odometer=built.next_service_odometer,
+        )
+        document_reminders: list[DocumentReminder] = []
+    else:
+        service_reminder = build_service_reminder(
+            next_service,
+            today=today,
+            live_odometer=live_odometer,
+        )
+        document_reminders = build_document_reminders(documents, today=today)
+
     return VehicleSummaryResponse(
         vehicle_id=vehicle_id,
         fuel_log_count=len(fuel_logs),
@@ -339,12 +375,8 @@ async def _build_summary_payload(
         prior_filled_month_label=prior_filled[0] if prior_filled else None,
         recent_fuel_logs=fuel_logs[:3],
         next_service=next_service,
-        service_reminder=build_service_reminder(
-            next_service,
-            today=today,
-            live_odometer=live_odometer,
-        ),
-        document_reminders=build_document_reminders(documents, today=today),
+        service_reminder=service_reminder,
+        document_reminders=document_reminders,
     )
 
 

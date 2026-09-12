@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -18,7 +18,9 @@ class Vehicle(Base, TimestampMixin):
     vehicle_name = Column(String, nullable=False)
     year = Column(Integer, nullable=False)
     registration_number = Column(String, nullable=False)
-    current_odometer = Column(Integer, nullable=False, default=0)
+    current_odometer = Column(Float, nullable=False, default=0.0)
+    # Quiet in-app + digest reminders; history / export / compare stay available
+    reminders_muted = Column(Boolean, default=False, nullable=False)
 
     owner = relationship("User", back_populates="vehicles")
     fuel_logs = relationship("FuelLog", back_populates="vehicle", cascade="all, delete-orphan")

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { nonNegativeDecimal2Schema } from "@/lib/numbers";
+
 const currentYear = new Date().getFullYear();
 
 /**
@@ -15,9 +17,8 @@ export const vehicleSchema = z.object({
         .min(1900, { message: "Year must be after 1900" })
         .max(currentYear, { message: `Year cannot exceed ${currentYear}` }),
     registration_number: z.string().min(1, { message: "Registration number is required" }),
-    baseline_odometer: z
-        .number({ error: "Odometer must be a number" })
-        .min(0, { message: "Odometer must be greater than or equal to 0" }),
+    baseline_odometer: nonNegativeDecimal2Schema,
+    reminders_muted: z.boolean().default(false),
 });
 
 export type VehicleSchema = z.infer<typeof vehicleSchema>;

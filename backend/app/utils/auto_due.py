@@ -26,7 +26,7 @@ _TAG_TO_TASK: dict[str, str] = {
 
 class NextDueSuggestion(NamedTuple):
     next_service_date: date | None
-    next_service_odometer: int | None
+    next_service_odometer: float | None
     matched_tasks: list[str]
 
 
@@ -53,7 +53,7 @@ def suggest_next_due(
     *,
     services_done: list[str],
     visit_date: date,
-    visit_odometer: int,
+    visit_odometer: float,
 ) -> NextDueSuggestion:
     """
     Soonest next due from matched guideline intervals.
@@ -89,7 +89,9 @@ def suggest_next_due(
         if isinstance(months, int) and months > 0:
             min_months = months if min_months is None else min(min_months, months)
 
-    next_odo = visit_odometer + min_km if min_km is not None else None
+    next_odo = (
+        round(float(visit_odometer) + min_km, 2) if min_km is not None else None
+    )
     next_date = (
         _add_months(visit_date, min_months) if min_months is not None else None
     )

@@ -91,7 +91,7 @@ async def test_concurrent_fuel_creates_consistent_timeline(
     assert by_odo[1]["mileage"] is not None
     # Second fill uses the first fill's odometer as previous
     liters_second = by_odo[1]["liters"]
-    expected = round((10200 - 10100) / liters_second, 1)
+    expected = round((10200 - 10100) / liters_second, 2)
     assert by_odo[1]["mileage"] == expected
 
 

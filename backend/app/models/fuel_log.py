@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Date, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import Column, Date, Float, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -15,7 +15,7 @@ class FuelLog(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False)
     date = Column(Date, nullable=False)
-    odometer = Column(Integer, nullable=False)
+    odometer = Column(Float, nullable=False)
     liters = Column(Float, nullable=False)
     price_per_liter = Column(Float, nullable=False)
     total_cost = Column(Float, nullable=False)

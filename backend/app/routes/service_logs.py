@@ -106,8 +106,8 @@ async def get_owned_service_log(
 
 
 def _validate_next_service_odometer(
-    odometer: int,
-    next_service_odometer: int | None,
+    odometer: float,
+    next_service_odometer: float | None,
 ) -> None:
     if next_service_odometer is not None and next_service_odometer <= odometer:
         raise HTTPException(
@@ -117,8 +117,8 @@ def _validate_next_service_odometer(
 
 
 def _service_odometer_below_baseline_message(
-    odometer: int,
-    baseline_odometer: int,
+    odometer: float,
+    baseline_odometer: float,
 ) -> str | None:
     """Return an error message when a service odometer is below vehicle baseline."""
     if odometer < baseline_odometer:
@@ -130,8 +130,8 @@ def _service_odometer_below_baseline_message(
 
 
 def _validate_service_odometer_against_baseline(
-    odometer: int,
-    baseline_odometer: int,
+    odometer: float,
+    baseline_odometer: float,
 ) -> None:
     """Service readings feed live odometer — reject values below the vehicle baseline."""
     message = _service_odometer_below_baseline_message(odometer, baseline_odometer)

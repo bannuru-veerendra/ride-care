@@ -19,6 +19,7 @@ async def test_create_vehicle_success(client: AsyncClient, auth_headers: dict):
     assert data["registration_number"] == payload["registration_number"]
     assert data["baseline_odometer"] == 3000
     assert data["current_odometer"] == 3000
+    assert data["reminders_muted"] is False
     assert "id" in data
     assert "owner_id" in data
 
@@ -172,6 +173,52 @@ async def test_update_vehicle(client: AsyncClient, auth_headers: dict, created_v
     assert response.json()["current_odometer"] == 6000
 
 
+async def test_update_vehicle_reminders_muted(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Per-vehicle mute toggles via PATCH and round-trips on GET."""
+    vehicle_id = created_vehicle["id"]
+    assert created_vehicle.get("reminders_muted") is False
+
+    muted = await client.patch(
+        f"/vehicles/{vehicle_id}",
+        json={"reminders_muted": True},
+        headers=auth_headers,
+    )
+    assert muted.status_code == 200
+    assert muted.json()["reminders_muted"] is True
+
+    fetched = await client.get(f"/vehicles/{vehicle_id}", headers=auth_headers)
+    assert fetched.status_code == 200
+    assert fetched.json()["reminders_muted"] is True
+
+    unmuted = await client.patch(
+        f"/vehicles/{vehicle_id}",
+        json={"reminders_muted": False},
+        headers=auth_headers,
+    )
+    assert unmuted.status_code == 200
+    assert unmuted.json()["reminders_muted"] is False
+
+
+async def test_create_vehicle_accepts_fractional_odometer(
+    client: AsyncClient, auth_headers: dict
+):
+    """Baseline odometer accepts floats and rounds to 2 decimals."""
+    payload = {
+        "brand": "Yamaha",
+        "vehicle_name": "MT-15",
+        "year": 2023,
+        "registration_number": "TS09FLOAT01",
+        "baseline_odometer": 1234.567,
+    }
+    response = await client.post("/vehicles/", json=payload, headers=auth_headers)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["baseline_odometer"] == 1234.57
+    assert data["current_odometer"] == 1234.57
+
+
 async def test_update_vehicle_not_found(client: AsyncClient, auth_headers: dict):
     """Test the update vehicle endpoint with a non-existent id"""
     vehicle_id = "00000000-0000-0000-0000-000000000000"
@@ -263,7 +310,7 @@ async def test_update_baseline_recalculates_fuel_mileage(
     fuel_log_id = create_resp.json()["id"]
     liters = create_resp.json()["liters"]
     old_mileage = create_resp.json()["mileage"]
-    assert old_mileage == round((10500 - created_vehicle["baseline_odometer"]) / liters, 1)
+    assert old_mileage == round((10500 - created_vehicle["baseline_odometer"]) / liters, 2)
 
     patch_resp = await client.patch(
         f"/vehicles/{vehicle_id}",
@@ -278,7 +325,7 @@ async def test_update_baseline_recalculates_fuel_mileage(
         headers=auth_headers,
     )
     assert fuel_resp.status_code == 200
-    assert fuel_resp.json()["mileage"] == round((10500 - 9000) / liters, 1)
+    assert fuel_resp.json()["mileage"] == round((10500 - 9000) / liters, 2)
 
 
 async def test_delete_vehicle(client: AsyncClient, auth_headers: dict, created_vehicle: dict):

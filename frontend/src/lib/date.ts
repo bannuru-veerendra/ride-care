@@ -26,8 +26,5 @@ export function pastOrTodayDateSchema(label: string) {
         });
 }
 
-/** Positive whole-number odometer (km). */
-export const odometerSchema = z
-    .number({ error: "Odometer must be a number" })
-    .positive({ message: "Odometer must be greater than 0" })
-    .int({ message: "Odometer must be a whole number (km)" });
+/** Positive odometer (km), up to 2 decimal places. */
+export { positiveDecimal2Schema as odometerSchema } from "@/lib/numbers";

@@ -4,28 +4,29 @@ from datetime import date as dt_date
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.utils.dates import app_today
+from app.utils.numbers import round_2
 
 
-def _round_money(value: float) -> float:
-    return round(float(value), 2)
+def _normalize_2dp(value: object) -> object:
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, str)):
+        return round_2(float(value))
+    return value
 
 
 class FuelLogCreate(BaseModel):
     """Request body for POST /fuel_logs"""
     date: dt_date
-    odometer: int
+    odometer: float
     total_cost: float
     price_per_liter: float
     notes: str | None = None
 
-    @field_validator("total_cost", "price_per_liter", mode="before")
+    @field_validator("odometer", "total_cost", "price_per_liter", mode="before")
     @classmethod
-    def normalize_money(cls, value: object) -> object:
-        if value is None or isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float, str)):
-            return _round_money(float(value))
-        return value
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -43,19 +44,15 @@ class FuelLogCreate(BaseModel):
 class FuelLogUpdate(BaseModel):
     """Request body for PATCH /fuel_logs/{fuel_log_id}"""
     date: dt_date | None = None
-    odometer: int | None = None
+    odometer: float | None = None
     total_cost: float | None = None
     price_per_liter: float | None = None
     notes: str | None = None
 
-    @field_validator("total_cost", "price_per_liter", mode="before")
+    @field_validator("odometer", "total_cost", "price_per_liter", mode="before")
     @classmethod
-    def normalize_money(cls, value: object) -> object:
-        if value is None or isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float, str)):
-            return _round_money(float(value))
-        return value
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -75,11 +72,23 @@ class FuelLogResponse(BaseModel):
     id: uuid.UUID
     vehicle_id: uuid.UUID
     date: dt_date
-    odometer: int
+    odometer: float
     total_cost: float
     price_per_liter: float
     liters: float
     mileage: float | None = None
     notes: str | None = None
+
+    @field_validator(
+        "odometer",
+        "total_cost",
+        "price_per_liter",
+        "liters",
+        "mileage",
+        mode="before",
+    )
+    @classmethod
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     model_config = ConfigDict(from_attributes=True)

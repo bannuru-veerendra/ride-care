@@ -22,7 +22,7 @@ SERVICE_REQUIRED_HEADERS = ("date", "odometer_km", "total_cost", "services_done"
 MAX_IMPORT_ROWS = 500
 MAX_IMPORT_BYTES = 1_000_000
 _READ_CHUNK = 64 * 1024
-_ODOMETER_IN_DETAIL = re.compile(r"Odometer reading \((\d+)\)")
+_ODOMETER_IN_DETAIL = re.compile(r"Odometer reading \((\d+(?:\.\d+)?)\)")
 
 
 @dataclass
@@ -88,29 +88,19 @@ def _parse_optional_date(value: str, label: str) -> date | None:
     return _parse_date(value, label)
 
 
-def _parse_int(value: str, label: str) -> int:
-    if not value:
-        raise ValueError(f"{label} is required")
-    try:
-        number = int(float(value))
-    except ValueError as exc:
-        raise ValueError(f"{label} must be an integer") from exc
-    return number
-
-
-def _parse_optional_int(value: str, label: str) -> int | None:
-    if not value:
-        return None
-    return _parse_int(value, label)
-
-
 def _parse_float(value: str, label: str) -> float:
     if not value:
         raise ValueError(f"{label} is required")
     try:
-        return float(value)
+        return round(float(value), 2)
     except ValueError as exc:
         raise ValueError(f"{label} must be a number") from exc
+
+
+def _parse_optional_float(value: str, label: str) -> float | None:
+    if not value:
+        return None
+    return _parse_float(value, label)
 
 
 def _split_services_done(value: str) -> list[str]:
@@ -212,7 +202,7 @@ def parse_fuel_csv(text: str) -> FuelImportParseResult:
                     row=index,
                     payload=FuelLogCreate(
                         date=_parse_date(_cell(raw_row, "date"), "date"),
-                        odometer=_parse_int(
+                        odometer=_parse_float(
                             _cell(raw_row, "odometer_km"), "odometer_km"
                         ),
                         total_cost=_parse_float(
@@ -274,7 +264,7 @@ def parse_service_csv(text: str) -> ServiceImportParseResult:
                     row=index,
                     payload=ServiceLogCreate(
                         date=_parse_date(_cell(raw_row, "date"), "date"),
-                        odometer=_parse_int(
+                        odometer=_parse_float(
                             _cell(raw_row, "odometer_km"), "odometer_km"
                         ),
                         total_cost=_parse_float(
@@ -286,7 +276,7 @@ def parse_service_csv(text: str) -> ServiceImportParseResult:
                             _cell(raw_row, "next_service_date"),
                             "next_service_date",
                         ),
-                        next_service_odometer=_parse_optional_int(
+                        next_service_odometer=_parse_optional_float(
                             _cell(raw_row, "next_service_odometer_km"),
                             "next_service_odometer_km",
                         ),
@@ -343,9 +333,9 @@ def mileage_failure_detail(
     row = 1
     match = _ODOMETER_IN_DETAIL.search(detail)
     if match:
-        odometer = int(match.group(1))
+        odometer = round(float(match.group(1)), 2)
         for item in ordered:
-            if item.payload.odometer == odometer:
+            if round(float(item.payload.odometer), 2) == odometer:
                 row = item.row
                 break
     return errors_to_detail([CsvRowError(row=row, message=detail)])

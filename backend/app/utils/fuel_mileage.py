@@ -40,7 +40,7 @@ async def recalculate_vehicle_fuel_mileage(
 
         fuel_log.mileage = round(
             (fuel_log.odometer - previous_odometer) / fuel_log.liters,
-            1,
+            2,
         )
         previous_odometer = fuel_log.odometer
         previous_label = f"the previous fill-up ({fuel_log.odometer})"
