@@ -123,6 +123,8 @@ class DocumentReminder(BaseModel):
     """In-app document expiry signal for the dashboard."""
     id: uuid.UUID
     document_type: str
+    display_label: str
+    identifier: str | None = None
     expiry_date: date
     days_until: int
     status: DocumentReminderStatus

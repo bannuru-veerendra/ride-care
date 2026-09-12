@@ -318,6 +318,7 @@ export default function VehicleDetailPage() {
     };
 
     const handleDocumentSubmit = (values: DocumentSchema & { file?: File }) => {
+        // Form already strips RC expiry / non-Other labels and requires a file on create.
         if (editingDocument) {
             updateDocument.mutate(
                 {
@@ -325,8 +326,9 @@ export default function VehicleDetailPage() {
                         values.document_type !== editingDocument.document_type
                             ? values.document_type
                             : undefined,
-                    // Empty string clears; omit only when unchanged would need
-                    // a sentinel — always send explicit value on edit.
+                    // null clears on PATCH; form sets undefined for inapplicable fields.
+                    custom_label: values.custom_label || null,
+                    identifier: values.identifier || null,
                     expiry_date: values.expiry_date || null,
                     notes: values.notes || null,
                     file: values.file,
@@ -340,18 +342,15 @@ export default function VehicleDetailPage() {
                     onError: () => toast.error("Failed to update document"),
                 }
             );
-        } else {
-            if (!values.file) {
-                toast.error("Please select a file to upload");
-                return;
-            }
-
+        } else if (values.file) {
             uploadDocument.mutate(
                 {
                     document_type: values.document_type,
+                    custom_label: values.custom_label,
+                    identifier: values.identifier,
                     file: values.file,
-                    expiry_date: values.expiry_date || undefined,
-                    notes: values.notes || undefined,
+                    expiry_date: values.expiry_date,
+                    notes: values.notes,
                 },
                 {
                     onSuccess: () => {

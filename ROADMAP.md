@@ -116,7 +116,19 @@ Fuel + service CSV import ships on `main`: same columns as export, row-level err
 
 `reminders_muted` on each vehicle. Summary API returns empty reminder signals when muted; daily digests skip muted bikes. Toggle on vehicle edit + detail (“Reminders off — history kept”).
 
-### 1 — Tell me what to do next (RideCare Health)
+### 1 — Documents vault that fits real Indian bikes
+
+**Rider pain:** “I have more than three papers, Pollution is due soon, and the vault only shows a useless upload filename.” Today the Docs tab is a fixed Insurance / Licence / RC trio — no Pollution, no custom types, no document identity fields, and the original filename sticks around after upload.
+
+- **Many docs per vehicle** — stop treating the vault as “one slot per enum”; owner can upload multiple certificates (e.g. two insurance policies over time, Pollution + RC + DL).
+- **Type picker:** dropdown for the four common certificates — **RC, DL, Insurance, Pollution** — plus a free-text name when it is something else (Aadhaar, Form 20, hypothecation letter, …).
+- **Expiry only when it matters:** show / require expiry for **DL, Insurance, Pollution**; **RC has no expiry field** (omit from UI and reminder digests).
+- **Drop original filename** — do not store or display the upload’s file name after save; it adds noise and is not rider data.
+- **Certificate identity on the card** — store and show type-relevant details instead of the filename (e.g. DL number for driving licence, policy / insurer for insurance, PUC number for Pollution, registration number already known for RC). Custom-named docs get a short label / ID field the rider fills in.
+
+**Done when:** a multi-bike rider can keep Pollution + DL + Insurance with the right expiry behaviour, add a one-off custom paper, and open Docs to see certificate details — not `scan_final_v2.pdf`.
+
+### 2 — Tell me what to do next (RideCare Health)
 
 **Rider pain:** “I already logged the data — now what? When is service actually due? Is mileage getting worse?” Static catalog tips are not enough once history exists (especially after import).
 
@@ -130,7 +142,7 @@ Fuel + service CSV import ships on `main`: same columns as export, row-level err
 
 **Done when:** on one real bike with history, the rider sees a predicted next service and at least one actionable signal they did not have to calculate themselves.
 
-### 2 — Vehicle timeline (everything that happened)
+### 3 — Vehicle timeline (everything that happened)
 
 **Rider pain:** fuel, service, and docs live on separate tabs; the bike’s story is hard to read as one history.
 
@@ -139,9 +151,9 @@ Fuel + service CSV import ships on `main`: same columns as export, row-level err
 
 **Done when:** a rider can scroll one list and answer “what happened to this bike?” without switching tabs.
 
-### 3 — Smarter digests (same pipes, better copy)
+### 4 — Smarter digests (same pipes, better copy)
 
-Daily digests already ship. Once prediction exists, upgrade copy from countdown-only (“Service soon · 1 day · 636 km”) to usage-aware language (“likely within 1–2 weeks at your recent riding”) with the same service / document signals. Keep per-user toggles and muted vehicles as-is.
+Daily digests already ship. Once prediction exists, upgrade copy from countdown-only (“Service soon · 1 day · 636 km”) to usage-aware language (“likely within 1–2 weeks at your recent riding”) with the same service / document signals. Keep per-user toggles and muted vehicles as-is. Document digests follow the new vault rules (no RC expiry nags; Pollution / DL / Insurance still remind).
 
 **Done when:** the email states a predicted window (or an honest fallback) instead of only a static countdown.
 
@@ -195,7 +207,6 @@ Today: date, odometer, tags, total cost, next due, notes, optional service cente
 ### Still useful polish
 
 - Stronger warnings when odometer timelines look wrong
-- Richer insurance fields (policy / insurer) on top of expiry reminders
 - Push notifications (email digests already ship)
 
 ---

@@ -1,8 +1,9 @@
 import apiClient from "@/lib/axios";
 import type { CursorPage } from "@/types";
 import {
-    DOCUMENT_TYPES,
+    documentAllowsExpiry,
     type DocumentSchema,
+    type DocumentTypeValue,
 } from "@/features/documents/schemas";
 
 /**
@@ -12,13 +13,13 @@ import {
  * File upload uses multipart/form-data (Content-Type left to the browser).
  */
 
-export type DocumentType = (typeof DOCUMENT_TYPES)[number];
-
 export interface Document {
     id: string;
     vehicle_id: string;
-    document_type: DocumentType;
-    original_filename: string;
+    document_type: DocumentTypeValue;
+    custom_label: string | null;
+    identifier: string | null;
+    display_label: string;
     expiry_date: string | null;
     notes: string | null;
     signed_url: string;
@@ -31,7 +32,9 @@ export type UploadDocumentPayload = DocumentSchema & {
 };
 
 export type UpdateDocumentPayload = {
-    document_type?: DocumentType;
+    document_type?: DocumentTypeValue;
+    custom_label?: string | null;
+    identifier?: string | null;
     expiry_date?: string | null;
     notes?: string | null;
     file?: File;
@@ -55,8 +58,18 @@ export const documentsApi = {
         const formData = new FormData();
         formData.append("document_type", payload.document_type);
         formData.append("file", payload.file);
-        if (payload.expiry_date) formData.append("expiry_date", payload.expiry_date);
-        if (payload.notes) formData.append("notes", payload.notes);
+        if (payload.document_type === "other" && payload.custom_label) {
+            formData.append("custom_label", payload.custom_label.trim());
+        }
+        if (payload.identifier?.trim()) {
+            formData.append("identifier", payload.identifier.trim());
+        }
+        if (documentAllowsExpiry(payload.document_type) && payload.expiry_date) {
+            formData.append("expiry_date", payload.expiry_date);
+        }
+        if (payload.notes?.trim()) {
+            formData.append("notes", payload.notes.trim());
+        }
 
         const { data } = await apiClient.post("/documents/", formData, {
             params: { vehicle_id: vehicleId },
@@ -72,6 +85,16 @@ export const documentsApi = {
         const formData = new FormData();
         if (payload.document_type) {
             formData.append("document_type", payload.document_type);
+        }
+        if (payload.custom_label === null) {
+            formData.append("clear_custom_label", "true");
+        } else if (payload.custom_label !== undefined) {
+            formData.append("custom_label", payload.custom_label);
+        }
+        if (payload.identifier === null) {
+            formData.append("clear_identifier", "true");
+        } else if (payload.identifier !== undefined) {
+            formData.append("identifier", payload.identifier);
         }
         if (payload.expiry_date === null) {
             formData.append("clear_expiry_date", "true");
