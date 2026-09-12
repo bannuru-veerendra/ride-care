@@ -66,7 +66,7 @@ export default function CompareTable({ items }: Props) {
                                 <td className="px-4 py-4">
                                     <span className="tabular-nums">
                                         {item.avg_mileage != null
-                                            ? item.avg_mileage.toFixed(1)
+                                            ? item.avg_mileage.toFixed(2)
                                             : "—"}
                                     </span>
                                     {isBestMileage && item.avg_mileage != null && (

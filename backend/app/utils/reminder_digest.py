@@ -48,12 +48,14 @@ def _doc_type_label(document_type: str) -> str:
 async def _live_odometers_map(
     db: AsyncSession,
     vehicles: list[Vehicle],
-) -> dict[uuid.UUID, int]:
+) -> dict[uuid.UUID, float]:
     if not vehicles:
         return {}
 
     vehicle_ids = [vehicle.id for vehicle in vehicles]
-    baselines = {vehicle.id: int(vehicle.current_odometer) for vehicle in vehicles}
+    baselines = {
+        vehicle.id: float(vehicle.current_odometer or 0) for vehicle in vehicles
+    }
 
     fuel_max = (
         select(
@@ -78,10 +80,10 @@ async def _live_odometers_map(
             func.max(combined.c.odometer),
         ).group_by(combined.c.vehicle_id)
     )
-    log_max = {row[0]: int(row[1] or 0) for row in result.all()}
+    log_max = {row[0]: float(row[1] or 0) for row in result.all()}
 
     return {
-        vid: max(baselines[vid], log_max.get(vid, 0)) for vid in vehicle_ids
+        vid: max(baselines[vid], log_max.get(vid, 0.0)) for vid in vehicle_ids
     }
 
 
@@ -141,6 +143,9 @@ async def send_reminder_digests(
         sections_html: list[str] = []
 
         for vehicle in vehicles:
+            if vehicle.reminders_muted:
+                continue
+
             vehicle_id = vehicle.id
             live_odo = live_map[vehicle_id]
 

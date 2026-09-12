@@ -2,10 +2,26 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.fuel_log import FuelLogResponse
 from app.schemas.service_log import ServiceLogResponse
+from app.utils.numbers import round_2
+
+
+def _normalize_2dp(value: object) -> object:
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, str)):
+        return round_2(float(value))
+    return value
 
 
 class VehicleCreate(BaseModel):
@@ -14,12 +30,17 @@ class VehicleCreate(BaseModel):
     vehicle_name: str
     year: int
     registration_number: str
-    baseline_odometer: int = Field(
+    baseline_odometer: float = Field(
         default=0,
         validation_alias=AliasChoices("baseline_odometer", "current_odometer"),
     )
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("baseline_odometer", mode="before")
+    @classmethod
+    def normalize_odometer(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -37,12 +58,18 @@ class VehicleUpdate(BaseModel):
     vehicle_name: str | None = None
     year: int | None = None
     registration_number: str | None = None
-    baseline_odometer: int | None = Field(
+    baseline_odometer: float | None = Field(
         default=None,
         validation_alias=AliasChoices("baseline_odometer", "current_odometer"),
     )
+    reminders_muted: bool | None = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("baseline_odometer", mode="before")
+    @classmethod
+    def normalize_odometer(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -62,8 +89,14 @@ class VehicleResponse(BaseModel):
     vehicle_name: str
     year: int
     registration_number: str
-    baseline_odometer: int
-    current_odometer: int
+    baseline_odometer: float
+    current_odometer: float
+    reminders_muted: bool = False
+
+    @field_validator("baseline_odometer", "current_odometer", mode="before")
+    @classmethod
+    def normalize_odometer(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -76,9 +109,14 @@ class ServiceReminder(BaseModel):
     """In-app next-service due signal for the dashboard."""
     status: ServiceReminderStatus
     days_until: int | None = None
-    km_until: int | None = None
+    km_until: float | None = None
     next_service_date: date | None = None
-    next_service_odometer: int | None = None
+    next_service_odometer: float | None = None
+
+    @field_validator("km_until", "next_service_odometer", mode="before")
+    @classmethod
+    def normalize_km(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
 
 class DocumentReminder(BaseModel):
@@ -115,7 +153,7 @@ class MileageTrendPoint(BaseModel):
     date: date
     date_label: str
     mileage: float
-    odometer: int
+    odometer: float
 
 
 class MonthlySpendPoint(BaseModel):
@@ -140,7 +178,7 @@ class VehicleAnalyticsResponse(BaseModel):
     service_spend: float
     service_count: int
     combined_spend: float
-    km_driven: int
+    km_driven: float
     cost_per_km: float | None
     fuel_cost_per_km: float | None
     service_cost_per_km: float | None
@@ -152,8 +190,8 @@ class VehicleCompareItem(BaseModel):
     brand: str
     vehicle_name: str
     year: int
-    current_odometer: int
-    km_driven: int
+    current_odometer: float
+    km_driven: float
     avg_mileage: float | None
     fuel_spend: float
     service_spend: float

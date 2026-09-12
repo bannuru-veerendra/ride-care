@@ -100,7 +100,7 @@ export default function AnalyticsTab({ vehicleId }: Props) {
                         <p className="text-sm text-muted-foreground">
                             Your mileage varies by{" "}
                             <span className="font-semibold text-foreground">
-                                {(data.best_mileage - data.worst_mileage).toFixed(1)} km/l
+                                {(data.best_mileage - data.worst_mileage).toFixed(2)} km/l
                             </span>{" "}
                             between best and worst fill-ups. Check tyre pressure and riding
                             speed for consistent efficiency.

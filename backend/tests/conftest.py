@@ -11,18 +11,22 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException, status
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy import delete, select
+from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
 from app.database import get_db
-from app.models.fuel_log import FuelLog
 from app.models.user import User
-from app.models.vehicle import Vehicle
-from app.models.service_log import ServiceLog
-from app.models.document import Document
 from app.utils.redis_client import get_redis
 from main import app
+
+# Shared remote TEST_DATABASE_URL: wipe every dependent table so leftover rows
+# from a crashed run (or a previous job) cannot collide with fixtures.
+_TRUNCATE_SQL = text(
+    "TRUNCATE TABLE documents, fuel_logs, service_logs, vehicles, users "
+    "RESTART IDENTITY CASCADE"
+)
 
 
 class FakeRedis:
@@ -211,19 +215,11 @@ def mock_document_storage(monkeypatch):
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup_db(test_session_maker):
     async with test_session_maker() as session:
-        await session.execute(delete(Document))
-        await session.execute(delete(FuelLog))
-        await session.execute(delete(ServiceLog))
-        await session.execute(delete(Vehicle))
-        await session.execute(delete(User))
+        await session.execute(_TRUNCATE_SQL)
         await session.commit()
     yield
     async with test_session_maker() as session:
-        await session.execute(delete(Document))
-        await session.execute(delete(FuelLog))
-        await session.execute(delete(ServiceLog))
-        await session.execute(delete(Vehicle))
-        await session.execute(delete(User))
+        await session.execute(_TRUNCATE_SQL)
         await session.commit()
 
 
@@ -254,12 +250,14 @@ async def client(test_session_maker, monkeypatch):
 @pytest_asyncio.fixture
 async def registered_user(client: AsyncClient, test_session_maker):
     """Create a verified user and return their credentials"""
+    # Unique email avoids collisions when shared TEST_DATABASE_URL has leftover rows.
     payload = {
-        "email": "test@ridecare.com",
+        "email": f"test-{uuid.uuid4().hex}@ridecare.com",
         "full_name": "Test User",
         "password": "TestPassword123!",
     }
-    await client.post("/auth/register", json=payload)
+    response = await client.post("/auth/register", json=payload)
+    assert response.status_code == 201, response.text
     async with test_session_maker() as session:
         result = await session.execute(
             select(User).where(User.email == payload["email"])
@@ -280,6 +278,7 @@ async def auth_headers(client: AsyncClient, registered_user: dict):
             "password": registered_user["password"],
         },
     )
+    assert response.status_code == 200, response.text
     access = response.cookies["access_token"]
     client.cookies.clear()
     return {"Authorization": f"Bearer {access}"}
@@ -289,11 +288,12 @@ async def auth_headers(client: AsyncClient, registered_user: dict):
 async def other_user_headers(client: AsyncClient, test_session_maker):
     """Register a second verified user and return their auth headers"""
     payload = {
-        "email": "otheruser@ridecare.com",
+        "email": f"other-{uuid.uuid4().hex}@ridecare.com",
         "full_name": "Other User",
         "password": "OtherPass123!",
     }
-    await client.post("/auth/register", json=payload)
+    response = await client.post("/auth/register", json=payload)
+    assert response.status_code == 201, response.text
     async with test_session_maker() as session:
         result = await session.execute(
             select(User).where(User.email == payload["email"])
@@ -308,6 +308,7 @@ async def other_user_headers(client: AsyncClient, test_session_maker):
             "password": payload["password"],
         },
     )
+    assert login_response.status_code == 200, login_response.text
 
     access = login_response.cookies["access_token"]
     client.cookies.clear()
@@ -321,10 +322,11 @@ async def created_vehicle(client: AsyncClient, auth_headers: dict):
         "brand": "Test Brand",
         "vehicle_name": "Test Vehicle",
         "year": 2020,
-        "registration_number": "1234567890",
+        "registration_number": f"T{uuid.uuid4().hex[:9].upper()}",
         "baseline_odometer": 10000,
     }
     response = await client.post("/vehicles/", json=payload, headers=auth_headers)
+    assert response.status_code == 201, response.text
     return response.json()
 
 
@@ -346,4 +348,5 @@ async def created_document(client: AsyncClient, auth_headers: dict, created_vehi
         files={"file": ("test_document.pdf", fake_pdf, "application/pdf")},
         headers=auth_headers,
     )
+    assert response.status_code == 201, response.text
     return response.json()

@@ -213,7 +213,9 @@ export default function ServiceLogForm({
                         <Input
                             id="odometer"
                             type="number"
-                            placeholder="12500"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder="12500.50"
                             className={inputClass}
                             {...register("odometer", { valueAsNumber: true })}
                         />
@@ -246,7 +248,9 @@ export default function ServiceLogForm({
                         <Input
                             id="total_cost"
                             type="number"
-                            placeholder="1500"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder="1500.00"
                             className={inputClass}
                             {...register("total_cost", { valueAsNumber: true })}
                         />
@@ -374,7 +378,9 @@ export default function ServiceLogForm({
                         <Input
                             id="next_service_odometer"
                             type="number"
-                            placeholder="15000"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder="15000.00"
                             className={inputClass}
                             {...register("next_service_odometer", {
                                 setValueAs: optionalNumberValue,

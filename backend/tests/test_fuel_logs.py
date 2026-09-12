@@ -29,7 +29,7 @@ async def test_create_fuel_log_first_entry(
     assert response.status_code == 201
     data = response.json()
     liters = round(payload["total_cost"] / payload["price_per_liter"], 2)
-    expected_mileage = round((FIRST_LOG_ODO - VEHICLE_ODO) / liters, 1)
+    expected_mileage = round((FIRST_LOG_ODO - VEHICLE_ODO) / liters, 2)
     assert data["mileage"] == expected_mileage
     assert round(data["liters"], 2) == liters
     assert data["total_cost"] == payload["total_cost"]
@@ -71,8 +71,35 @@ async def test_create_fuel_log_second_entry_calculates_mileage(
     liters = round(
         second_payload["total_cost"] / second_payload["price_per_liter"], 2
     )
-    expected_mileage = round((SECOND_LOG_ODO - FIRST_LOG_ODO) / liters, 1)
+    expected_mileage = round((SECOND_LOG_ODO - FIRST_LOG_ODO) / liters, 2)
     assert data["mileage"] == expected_mileage
+
+
+async def test_create_fuel_log_accepts_fractional_odometer(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Fuel odometer / money round to 2 decimals and mileage uses float distance."""
+    vehicle_id = created_vehicle["id"]
+    payload = {
+        "date": str(dt_date.today()),
+        "odometer": 10500.456,
+        "total_cost": 800.129,
+        "price_per_liter": 110.999,
+    }
+    response = await client.post(
+        "/fuel_logs/",
+        params={"vehicle_id": vehicle_id},
+        json=payload,
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["odometer"] == 10500.46
+    assert data["total_cost"] == 800.13
+    assert data["price_per_liter"] == 111.0
+    liters = round(800.13 / 111.0, 2)
+    assert data["liters"] == liters
+    assert data["mileage"] == round((10500.46 - VEHICLE_ODO) / liters, 2)
 
 
 async def test_create_fuel_log_invalid_cost(
@@ -242,7 +269,7 @@ async def test_create_fuel_log_mileage_from_vehicle_baseline(
     data = response.json()
     liters = round(payload["total_cost"] / payload["price_per_liter"], 2)
     expected_mileage = round(
-        (10500 - created_vehicle["baseline_odometer"]) / liters, 1
+        (10500 - created_vehicle["baseline_odometer"]) / liters, 2
     )
     assert data["mileage"] == expected_mileage
 
@@ -425,7 +452,7 @@ async def test_update_fuel_log_recalculates_mileage(
     assert response.status_code == 200
     data = response.json()
     liters = round(800 / 110, 2)
-    expected_mileage = round((12000 - FIRST_LOG_ODO) / liters, 1)
+    expected_mileage = round((12000 - FIRST_LOG_ODO) / liters, 2)
     assert data["mileage"] == expected_mileage
 
 
@@ -477,7 +504,7 @@ async def test_update_fuel_log_recalculates_subsequent_mileage(
         headers=auth_headers,
     )
     expected_mileage = round(
-        (SECOND_LOG_ODO - updated_first_odometer) / liters, 1
+        (SECOND_LOG_ODO - updated_first_odometer) / liters, 2
     )
     assert second_log_response.json()["mileage"] == expected_mileage
 
@@ -565,7 +592,7 @@ async def test_create_backdated_fuel_log_recalculates_later_mileage(
     assert later_response.status_code == 201
     later_log_id = later_response.json()["id"]
     assert later_response.json()["mileage"] == round(
-        (SECOND_LOG_ODO - VEHICLE_ODO) / liters, 1
+        (SECOND_LOG_ODO - VEHICLE_ODO) / liters, 2
     )
 
     earlier_response = await client.post(
@@ -581,7 +608,7 @@ async def test_create_backdated_fuel_log_recalculates_later_mileage(
     )
     assert earlier_response.status_code == 201
     assert earlier_response.json()["mileage"] == round(
-        (FIRST_LOG_ODO - VEHICLE_ODO) / liters, 1
+        (FIRST_LOG_ODO - VEHICLE_ODO) / liters, 2
     )
 
     later_log_response = await client.get(
@@ -591,7 +618,7 @@ async def test_create_backdated_fuel_log_recalculates_later_mileage(
     )
     assert later_log_response.status_code == 200
     assert later_log_response.json()["mileage"] == round(
-        (SECOND_LOG_ODO - FIRST_LOG_ODO) / liters, 1
+        (SECOND_LOG_ODO - FIRST_LOG_ODO) / liters, 2
     )
 
 
@@ -698,7 +725,7 @@ async def test_delete_fuel_log_recalculates_subsequent_mileage(
     )
     assert third_log_response.status_code == 200
     assert third_log_response.json()["mileage"] == round(
-        (SECOND_LOG_ODO - FIRST_LOG_ODO) / liters, 1
+        (SECOND_LOG_ODO - FIRST_LOG_ODO) / liters, 2
     )
 
 

@@ -123,6 +123,49 @@ async def test_reminder_digests_skips_when_prefs_off(
     assert send_mock.await_count == 0
 
 
+async def test_reminder_digests_skips_muted_vehicle(
+    client: AsyncClient,
+    auth_headers: dict,
+    created_vehicle: dict,
+    cron_secret: str,
+    monkeypatch,
+):
+    send_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.utils.reminder_digest.send_reminder_digest_email",
+        send_mock,
+    )
+
+    vehicle_id = created_vehicle["id"]
+    today = app_today()
+    await client.post(
+        "/service_logs/",
+        params={"vehicle_id": vehicle_id},
+        json={
+            "date": str(today),
+            "odometer": 12000.5,
+            "total_cost": 1500.25,
+            "services_done": ["Engine oil"],
+            "next_service_date": str(today + timedelta(days=5)),
+        },
+        headers=auth_headers,
+    )
+    mute = await client.patch(
+        f"/vehicles/{vehicle_id}",
+        json={"reminders_muted": True},
+        headers=auth_headers,
+    )
+    assert mute.status_code == 200
+
+    response = await client.post(
+        "/internal/reminder-digests",
+        headers={"X-Cron-Secret": cron_secret},
+    )
+    assert response.status_code == 200
+    assert response.json()["emails_sent"] == 0
+    assert send_mock.await_count == 0
+
+
 async def test_suggest_next_due_endpoint(
     client: AsyncClient, auth_headers: dict
 ):

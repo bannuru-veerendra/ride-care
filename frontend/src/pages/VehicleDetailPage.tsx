@@ -26,7 +26,9 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { useVehicle } from "@/features/vehicles/hooks/useVehicles";
+import { useVehicle, useUpdateVehicle } from "@/features/vehicles/hooks/useVehicles";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import FuelLogCard from "@/features/fuel-logs/components/FuelLogCard";
 import FuelLogForm from "@/features/fuel-logs/components/FuelLogForm";
 import {
@@ -144,6 +146,7 @@ export default function VehicleDetailPage() {
     }, [searchParams, setSearchParams]);
 
     const { data: vehicle, isLoading: vehicleLoading } = useVehicle(id!);
+    const updateVehicle = useUpdateVehicle(id!);
     const {
         data: fuelLogsData,
         isLoading: logsLoading,
@@ -410,6 +413,14 @@ export default function VehicleDetailPage() {
                     <Badge className="rounded-md border-0 bg-brand/15 font-semibold tracking-wide text-brand">
                         {vehicle.registration_number}
                     </Badge>
+                    {vehicle.reminders_muted && (
+                        <Badge
+                            variant="outline"
+                            className="rounded-md border-white/15 font-medium text-muted-foreground"
+                        >
+                            Reminders off
+                        </Badge>
+                    )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -423,6 +434,57 @@ export default function VehicleDetailPage() {
                             {vehicle.current_odometer.toLocaleString("en-IN")} km
                         </span>
                     </div>
+                </div>
+
+                <div className="mt-5 flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="min-w-0">
+                        <Label
+                            htmlFor="detail-reminders-muted"
+                            className="cursor-pointer text-sm font-medium text-foreground"
+                        >
+                            Reminders off — history kept
+                        </Label>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                            Quiet dashboard and email reminders for this bike.
+                        </p>
+                    </div>
+                    <button
+                        id="detail-reminders-muted"
+                        type="button"
+                        role="switch"
+                        aria-checked={vehicle.reminders_muted}
+                        disabled={updateVehicle.isPending}
+                        onClick={() => {
+                            const next = !vehicle.reminders_muted;
+                            updateVehicle.mutate(
+                                { reminders_muted: next },
+                                {
+                                    onSuccess: () =>
+                                        toast.success(
+                                            next
+                                                ? "Reminders muted for this bike"
+                                                : "Reminders turned back on"
+                                        ),
+                                    onError: () =>
+                                        toast.error("Failed to update reminders"),
+                                }
+                            );
+                        }}
+                        className={cn(
+                            "relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60",
+                            "disabled:cursor-not-allowed disabled:opacity-50",
+                            vehicle.reminders_muted ? "bg-brand" : "bg-white/15"
+                        )}
+                    >
+                        <span
+                            aria-hidden
+                            className={cn(
+                                "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform",
+                                vehicle.reminders_muted && "translate-x-5"
+                            )}
+                        />
+                    </button>
                 </div>
             </div>
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { odometerSchema, pastOrTodayDateSchema } from "@/lib/date";
+import { positiveDecimal2Schema } from "@/lib/numbers";
 
 /**
  * Common service items users can pick from.
@@ -27,14 +28,12 @@ export const serviceLogSchema = z.object({
     date: pastOrTodayDateSchema("Service log"),
     odometer: odometerSchema,
     service_center: z.string().optional(),
-    total_cost: z
-        .number({ error: "Cost must be a number" })
-        .min(1, { message: "Cost must be greater than 0" }),
+    total_cost: positiveDecimal2Schema,
     services_done: z
         .array(z.string())
         .min(1, { message: "Select at least one service" }),
     next_service_date: z.string().optional(),
-    next_service_odometer: z.number().optional(),
+    next_service_odometer: positiveDecimal2Schema.optional(),
     notes: z.string().optional(),
 });
 

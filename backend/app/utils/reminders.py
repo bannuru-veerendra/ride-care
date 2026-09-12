@@ -80,7 +80,7 @@ def build_service_reminder(
     next_service: ServiceLog | None,
     *,
     today: date,
-    live_odometer: int,
+    live_odometer: float,
 ) -> ServiceReminder:
     """Compute next-service urgency from date and/or odometer targets."""
     if next_service is None:
@@ -92,8 +92,11 @@ def build_service_reminder(
         return ServiceReminder(status="none")
 
     days_until = (next_date - today).days if next_date is not None else None
-    km_until = (next_odo - live_odometer) if next_odo is not None else None
-
+    km_until = (
+        round(float(next_odo) - float(live_odometer), 2)
+        if next_odo is not None
+        else None
+    )
     overdue = (days_until is not None and days_until < 0) or (
         km_until is not None and km_until < 0
     )

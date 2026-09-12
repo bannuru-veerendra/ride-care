@@ -1,21 +1,35 @@
 import uuid
 from datetime import date as dt_date
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.utils.dates import app_today
+from app.utils.numbers import round_2
+
+
+def _normalize_2dp(value: object) -> object:
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, str)):
+        return round_2(float(value))
+    return value
 
 
 class ServiceLogCreate(BaseModel):
     """Request body for POST /service_logs"""
     date: dt_date
-    odometer: int
+    odometer: float
     service_center: str | None = None
     total_cost: float
     services_done: list[str]
     next_service_date: dt_date | None = None
-    next_service_odometer: int | None = None
+    next_service_odometer: float | None = None
     notes: str | None = None
+
+    @field_validator("odometer", "total_cost", "next_service_odometer", mode="before")
+    @classmethod
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -35,13 +49,18 @@ class ServiceLogCreate(BaseModel):
 class ServiceLogUpdate(BaseModel):
     """Request body for PATCH /service_logs/{service_log_id}"""
     date: dt_date | None = None
-    odometer: int | None = None
+    odometer: float | None = None
     service_center: str | None = None
     total_cost: float | None = None
     services_done: list[str] | None = None
     next_service_date: dt_date | None = None
-    next_service_odometer: int | None = None
+    next_service_odometer: float | None = None
     notes: str | None = None
+
+    @field_validator("odometer", "total_cost", "next_service_odometer", mode="before")
+    @classmethod
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -67,13 +86,18 @@ class ServiceLogResponse(BaseModel):
     id: uuid.UUID
     vehicle_id: uuid.UUID
     date: dt_date
-    odometer: int
+    odometer: float
     service_center: str | None = None
     total_cost: float
     services_done: list[str]
     next_service_date: dt_date | None = None
-    next_service_odometer: int | None = None
+    next_service_odometer: float | None = None
     notes: str | None = None
+
+    @field_validator("odometer", "total_cost", "next_service_odometer", mode="before")
+    @classmethod
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,8 +105,13 @@ class ServiceLogResponse(BaseModel):
 class SuggestNextDueRequest(BaseModel):
     """Body for POST /service_logs/suggest-next-due"""
     date: dt_date
-    odometer: int
+    odometer: float
     services_done: list[str]
+
+    @field_validator("odometer", mode="before")
+    @classmethod
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -95,6 +124,10 @@ class SuggestNextDueRequest(BaseModel):
 
 class SuggestNextDueResponse(BaseModel):
     next_service_date: dt_date | None = None
-    next_service_odometer: int | None = None
+    next_service_odometer: float | None = None
     matched_tasks: list[str] = []
 
+    @field_validator("next_service_odometer", mode="before")
+    @classmethod
+    def normalize_decimals(cls, value: object) -> object:
+        return _normalize_2dp(value)

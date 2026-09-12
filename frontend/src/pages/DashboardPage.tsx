@@ -91,24 +91,36 @@ export default function DashboardPage() {
     const recentFilledLabel = summary?.recent_filled_month_label ?? null;
     const priorFilledLabel = summary?.prior_filled_month_label ?? null;
     // Urgency comes from the API — do not re-derive thresholds on the client.
+    // Mute quiets nags only; scheduled next service still comes from next_service / reminder facts.
     const serviceReminder = summary?.service_reminder;
+    const nextServiceLog = summary?.next_service ?? null;
     const documentReminders = summary?.document_reminders ?? [];
+    const remindersMuted = Boolean(selectedVehicle?.reminders_muted);
     const mileageDelta =
         recentFilledMileage !== null && priorFilledMileage !== null
             ? Math.round((recentFilledMileage - priorFilledMileage) * 10) / 10
             : null;
 
-    const hasNextService =
-        serviceReminder != null &&
-        serviceReminder.status !== "none" &&
-        (serviceReminder.next_service_date != null ||
-            serviceReminder.next_service_odometer != null);
+    const nextServiceDate =
+        serviceReminder?.next_service_date ??
+        nextServiceLog?.next_service_date ??
+        null;
+    const nextServiceOdometer =
+        serviceReminder?.next_service_odometer ??
+        nextServiceLog?.next_service_odometer ??
+        null;
+    const hasScheduledNextService =
+        nextServiceDate != null || nextServiceOdometer != null;
 
-    const daysUntilNextService = serviceReminder?.days_until ?? null;
-    const kmUntilNextService = serviceReminder?.km_until ?? null;
-    const nextServiceDate = serviceReminder?.next_service_date ?? null;
-    const serviceOverdue = serviceReminder?.status === "overdue";
-    const serviceSoon = serviceReminder?.status === "soon";
+    const daysUntilNextService = remindersMuted
+        ? null
+        : (serviceReminder?.days_until ?? null);
+    const kmUntilNextService = remindersMuted
+        ? null
+        : (serviceReminder?.km_until ?? null);
+    const serviceOverdue =
+        !remindersMuted && serviceReminder?.status === "overdue";
+    const serviceSoon = !remindersMuted && serviceReminder?.status === "soon";
 
     const showReminders =
         !!selectedVehicleId &&
@@ -132,7 +144,9 @@ export default function DashboardPage() {
 
     let statusLine = "Ready when you are.";
     if (selectedVehicleId) {
-        if (serviceOverdue) {
+        if (remindersMuted && hasScheduledNextService) {
+            statusLine = "Reminders muted for this bike.";
+        } else if (serviceOverdue) {
             statusLine = "Service overdue — book it soon.";
         } else if (serviceSoon && daysUntilNextService !== null && daysUntilNextService >= 0) {
             statusLine = `Service in ${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"}.`;
@@ -424,6 +438,7 @@ export default function DashboardPage() {
                                         )}
                                     >
                                         {vehicle.brand} {vehicle.vehicle_name}
+                                        {vehicle.reminders_muted ? " · muted" : ""}
                                     </button>
                                 ))}
                             </div>
@@ -483,53 +498,69 @@ export default function DashboardPage() {
                                 </div>
                                 {summaryLoading ? (
                                     <Skeleton className="mt-2 h-9 w-32" />
-                                ) : hasNextService ? (
+                                ) : hasScheduledNextService ? (
                                     <>
                                         <p
                                             className={cn(
                                                 "font-heading mt-2 font-extrabold tracking-wide",
-                                                daysUntilNextService !== null &&
+                                                !remindersMuted &&
+                                                    daysUntilNextService !== null &&
                                                     daysUntilNextService > 30
                                                     ? "text-xl leading-snug"
                                                     : "text-3xl"
                                             )}
                                         >
-                                            {serviceOverdue
-                                                ? "Overdue"
-                                                : daysUntilNextService !== null &&
-                                                    daysUntilNextService >= 0
-                                                    ? formatServiceCountdown(
-                                                        daysUntilNextService
-                                                    )
-                                                    : kmUntilNextService !== null
-                                                        ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
-                                                        : "—"}
+                                            {remindersMuted
+                                                ? nextServiceDate
+                                                    ? formatAppDate(nextServiceDate)
+                                                    : nextServiceOdometer != null
+                                                        ? `${nextServiceOdometer.toLocaleString("en-IN")} km`
+                                                        : "—"
+                                                : serviceOverdue
+                                                    ? "Overdue"
+                                                    : daysUntilNextService !== null &&
+                                                        daysUntilNextService >= 0
+                                                        ? formatServiceCountdown(
+                                                            daysUntilNextService
+                                                        )
+                                                        : kmUntilNextService !== null
+                                                            ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                                            : "—"}
                                         </p>
                                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                             <p className="text-xs text-muted-foreground">
-                                                {[
-                                                    nextServiceDate
-                                                        ? formatAppDate(nextServiceDate)
-                                                        : null,
-                                                    // Show remaining km in the subtitle when the
-                                                    // headline is already the date countdown.
-                                                    kmUntilNextService != null &&
-                                                    !serviceOverdue &&
-                                                    daysUntilNextService !== null &&
-                                                    daysUntilNextService >= 0
-                                                        ? kmUntilNextService > 0
-                                                            ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
-                                                            : "due now"
-                                                        : serviceOverdue &&
-                                                            kmUntilNextService != null &&
-                                                            kmUntilNextService < 0
-                                                            ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past`
-                                                            : null,
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join(" · ")}
+                                                {remindersMuted
+                                                    ? [
+                                                          nextServiceDate &&
+                                                          nextServiceOdometer != null
+                                                              ? `${nextServiceOdometer.toLocaleString("en-IN")} km`
+                                                              : null,
+                                                          "Reminders muted",
+                                                      ]
+                                                          .filter(Boolean)
+                                                          .join(" · ")
+                                                    : [
+                                                          nextServiceDate
+                                                              ? formatAppDate(nextServiceDate)
+                                                              : null,
+                                                          kmUntilNextService != null &&
+                                                          !serviceOverdue &&
+                                                          daysUntilNextService !== null &&
+                                                          daysUntilNextService >= 0
+                                                              ? kmUntilNextService > 0
+                                                                  ? `${kmUntilNextService.toLocaleString("en-IN")} km left`
+                                                                  : "due now"
+                                                              : serviceOverdue &&
+                                                                  kmUntilNextService != null &&
+                                                                  kmUntilNextService < 0
+                                                                  ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past`
+                                                                  : null,
+                                                      ]
+                                                          .filter(Boolean)
+                                                          .join(" · ")}
                                             </p>
-                                            {(serviceSoon || serviceOverdue) && (
+                                            {!remindersMuted &&
+                                                (serviceSoon || serviceOverdue) && (
                                                 <Badge
                                                     variant={
                                                         serviceOverdue
@@ -672,7 +703,7 @@ export default function DashboardPage() {
             {/* Empty service state */}
             {selectedVehicleId &&
                 !summaryLoading &&
-                !hasNextService && (
+                !hasScheduledNextService && (
                     <section
                         className="animate-fade-up surface-panel flex flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8"
                         style={{ animationDelay: "240ms" }}
@@ -745,7 +776,7 @@ export default function DashboardPage() {
                                 </div>
                                 {log.mileage !== null && (
                                     <Badge className="shrink-0 border-0 bg-brand/15 text-xs font-semibold text-brand">
-                                        {log.mileage.toFixed(1)} km/l
+                                        {log.mileage.toFixed(2)} km/l
                                     </Badge>
                                 )}
                             </Link>

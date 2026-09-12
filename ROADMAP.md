@@ -2,7 +2,9 @@
 
 What has shipped on `main`, and what comes next. Product overview: [README.md](README.md).
 
-Honest scope: RideCare is a **well-engineered personal garage** (data → calculation → display), not yet an intelligent vehicle platform. Redis, cursor pagination, and indexes are real design choices; they are **not** a claim of proven 10k-user load. The roadmap below is ordered by **what a rider needs next**, not by internal engineering phases.
+Honest scope: RideCare is a **well-engineered personal garage** (data → calculation → display), not yet an intelligent vehicle platform. The long-term product bet is **digital vehicle health and ownership history** — not “another expense tracker.” Redis, cursor pagination, and indexes are real design choices; they are **not** a claim of proven 10k-user load. The roadmap below is ordered by **what a rider needs next**, not by pitch-deck phases.
+
+**Constraint that stays true for every Health / prediction feature:** only ship signals the current data can support (fuel, service tags + due fields, documents, odometer). Thin history must show confidence or a fallback — never a fake score or authoritative-looking guess.
 
 ---
 
@@ -25,6 +27,7 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 - Live odometer = `max(baseline, fuel max, service max)`
 - Cursor-paginated vehicle list + garage **Load more**
 - Baseline change recalculates stored fuel mileage
+- **Per-vehicle mute** — quiet dashboard + digest reminders; history / export / compare stay available
 - `GET /vehicles/{id}/summary` — spend, mileage, recent fill-ups, next service, **service_reminder**, **document_reminders**
 - `GET /vehicles/{id}/analytics` — totals, **cost-per-km (fuel + service)**, last-10 mileage trend, last-6 months fuel spend
 - `GET /vehicles/compare` — side-by-side spend, mileage, and ₹/km across the garage
@@ -87,10 +90,13 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 ## Evolution (rider journey)
 
 ```
-Today:     log → see mileage / reminders / charts
-Next:      bring history in → quiet idle bikes → get told what to do
-Later:     less typing (OCR), family garage, shops, live telemetry
+Today:     personal garage — log → mileage / reminders / charts
+Next:      vehicle health layer — predict → recommend → one clear next action
+Then:      less typing (OCR) → denser history → annual report / cost forecast
+Later:     shops write history → verified records → resale passport → commerce
 ```
+
+Positioning over time: **personal garage → health layer → ownership history → service connections.** Marketplace and bookings only after riders keep a persistent history.
 
 Frontend stays intentionally thin; testing investment stays on API / domain correctness (backend pytest). No Playwright / frontend CI required for this portfolio track.
 
@@ -104,29 +110,52 @@ Ordered by how a real rider feels the product. Hardening Phases 1–2 already sh
 
 ### Done — Bring my history in (CSV import)
 
-Fuel + service CSV import ships on this branch: same columns as export, row-level errors, all-or-nothing write, Import CSV on the Fuel / Service tabs. liters/mileage ignored and recalculated server-side.
+Fuel + service CSV import ships on `main`: same columns as export, row-level errors, all-or-nothing write, Import CSV on the Fuel / Service tabs. liters/mileage ignored and recalculated server-side.
 
-### 1 — Keep the bike, stop the nagging (per-vehicle mute)
+### Done — Keep the bike, stop the nagging (per-vehicle mute)
 
-**Rider pain:** “This Pulsar is parked / sold / seasonal. I want the records, not insurance and service emails every week.” Account-level Settings toggles kill reminders for *every* bike.
+`reminders_muted` on each vehicle. Summary API returns empty reminder signals when muted; daily digests skip muted bikes. Toggle on vehicle edit + detail (“Reminders off — history kept”).
 
-- Per-vehicle mute (keep data, quiet reminders)
-- Dashboard in-app reminders skip muted bikes
-- Daily digest emails skip muted bikes
-- Obvious toggle on vehicle edit/detail (“Reminders off — history kept”)
-
-**Done when:** a multi-bike rider can silence idle machines and still open them for history, export, and compare.
-
-### 2 — Tell me what to do next (RideCare Health)
+### 1 — Tell me what to do next (RideCare Health)
 
 **Rider pain:** “I already logged the data — now what? When is service actually due? Is mileage getting worse?” Static catalog tips are not enough once history exists (especially after import).
 
-- Usage-based **maintenance prediction** (last service + riding rate + catalog interval → due in X km / around date Y)
-- Mileage **anomaly / decline** with a plain-language recommendation
+**Ship as ranked, evidence-backed signals + one recommended action** — not a cosmetic “Health Score: 82/100” and not component rows the data cannot justify (pad wear, chain slack, tyre age). Start from what already exists: document expiry, next-service date/km, catalog interval vs last matching service tag, riding rate from odometer history, mileage trend when sample size is enough.
+
+- Usage-based **maintenance prediction** (last service + riding rate + catalog / rider interval → due in X km / around date Y). Show the inputs. Thin history falls back honestly (“not enough riding data — using the date you set”).
+- Dashboard / home framed as **“what should I do today?”** — one next action above quick stats, not another chart wall.
+- Mileage **anomaly / decline** with a plain-language recommendation when N fill-ups is enough
 - Analytics **confidence** (“₹/km from N fill-ups over K km”) so empty or thin data does not look authoritative
-- Optional simple **health** summary on the vehicle — signals from the API, not a chatbot
+- Optional **health summary** on the vehicle — signals from the API, not a chatbot
 
 **Done when:** on one real bike with history, the rider sees a predicted next service and at least one actionable signal they did not have to calculate themselves.
+
+### 2 — Vehicle timeline (everything that happened)
+
+**Rider pain:** fuel, service, and docs live on separate tabs; the bike’s story is hard to read as one history.
+
+- Single chronological feed on the vehicle: fuel, service, and document events (date, cost / liters / tags, odometer where relevant)
+- Reuse existing log APIs — no new domain model required for v1
+
+**Done when:** a rider can scroll one list and answer “what happened to this bike?” without switching tabs.
+
+### 3 — Smarter digests (same pipes, better copy)
+
+Daily digests already ship. Once prediction exists, upgrade copy from countdown-only (“Service soon · 1 day · 636 km”) to usage-aware language (“likely within 1–2 weeks at your recent riding”) with the same service / document signals. Keep per-user toggles and muted vehicles as-is.
+
+**Done when:** the email states a predicted window (or an honest fallback) instead of only a static countdown.
+
+---
+
+## Validate before the big bets
+
+Engineering is ahead of demand proof. Before OCR, shop products, or paid “passport” features, put real riders on the live app and watch:
+
+- register → add vehicle → import or log fuel/service → return at 7 / 30 days
+- open reminder emails → act on a reminder
+- “Would you be disappointed if RideCare disappeared tomorrow?”
+
+Optional early monetization signal (not a build blocker for Health): a small Pro price for predictions, reports, OCR, advanced reminders — even a handful of paying riders beats another unshipped chart. Do **not** wait for 10k users to learn whether anyone will pay.
 
 ---
 
@@ -142,19 +171,50 @@ Defer unless felt: magic-byte upload hardening, signed-URL list redesign, Redis 
 
 ---
 
-## Later
+## After Health (still for the rider)
 
-### Still for the rider (after mute + Health)
+Ship these only when Health is live and riders feel the friction — not as a parallel rewrite.
+
+### Less typing
+
+- **OCR** — photo of RC / insurance / invoice → structured draft → **user confirms** → backend validates → save (never AI write-through)
+- Optional invoice / receipt attach on service even before OCR
+- WhatsApp / email receipt forwarding only if riders ask for it
+
+### Richer service record (optional fields, not a heavier form)
+
+Today: date, odometer, tags, total cost, next due, notes, optional service center. Next generation may add **optional** labour / parts line items, invoice attachment, photos — without making line items required to log a visit. Default path stays fast; structured history grows when riders choose it.
+
+### Vehicle intelligence (needs dense history)
+
+- Running-cost **forecast** (ranges + sample size; never a single false-precision number)
+- Cost / fuel-efficiency anomaly when the bike’s own history supports it
+- Annual / on-demand **vehicle health report** (ownership span, km, spend, ₹/km, service + document status) — valuable for resale later; embarrassing with two fill-ups, so gate on data density
+- “Is this bike getting expensive?” vs **that bike’s** prior year first; cross-user “typical model ₹/km” only with a real fleet
+
+### Still useful polish
 
 - Stronger warnings when odometer timelines look wrong
 - Richer insurance fields (policy / insurer) on top of expiry reminders
 - Push notifications (email digests already ship)
-- **OCR** — photo of RC / insurance / invoice → confirm → auto-fill (less typing than CSV for some riders)
 
-### Platform / ecosystem (not the near-term product bet)
+---
 
+## Later (platform / ecosystem — not the near-term bet)
+
+Correct sequence: riders keep history → shops want to write into that history → transactions. Do **not** build a mechanic marketplace first.
+
+- Service-center pilot: shop accounts, customer invite, job complete → owner history update, customer approval
+- **Verified vs self-reported** service entries (only after a real second party writes data)
+- RideCare **Vehicle Passport** / resale report as a product someone might pay for
+- Commerce only after the data loop works: discover → book → service → record → predict
 - Multi-rider / household / fleet **RBAC**
-- Mechanic / service-center marketplace
 - Real telemetry (OBD / Bluetooth / auto odometer)
 - Job queue for email, OCR, exports, cleanup
 - Disaster-recovery runbook; deeper vendor abstraction (Supabase / Upstash / Render / Brevo)
+
+---
+
+## Explicitly not next
+
+Do not prioritize: more charts for their own sake, a generic AI chatbot, social / community, crypto, native apps before web retention, microservices / Kubernetes / event architecture theater, or marketplace before rider validation. The bottleneck is customer value, retention, and distribution — not more platform sophistication.

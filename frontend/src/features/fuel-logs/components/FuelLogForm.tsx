@@ -146,7 +146,7 @@ export default function FuelLogForm({
                         </p>
                         <p className="font-heading mt-1 text-4xl font-extrabold tracking-wide text-brand">
                             {defaultValues?.mileage != null
-                                ? defaultValues.mileage.toFixed(1)
+                                ? defaultValues.mileage.toFixed(2)
                                 : "—"}
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -181,10 +181,10 @@ export default function FuelLogForm({
                     <Input
                         id="odometer"
                         type="number"
-                        inputMode="numeric"
-                        step={1}
-                        min={1}
-                        placeholder="12500"
+                        inputMode="decimal"
+                        step="0.01"
+                        min={0.01}
+                        placeholder="12500.50"
                         className={inputClass}
                         {...register("odometer", { valueAsNumber: true })}
                     />
@@ -192,7 +192,7 @@ export default function FuelLogForm({
                         <p className="text-xs text-destructive">{errors.odometer.message}</p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                        Whole kilometers — used with your last fill to calculate km/l
+                        Up to 2 decimal places — used with your last fill to calculate km/l
                     </p>
                 </div>
 
