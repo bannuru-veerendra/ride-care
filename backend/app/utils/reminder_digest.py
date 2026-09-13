@@ -41,10 +41,6 @@ def _digest_key(user_id: uuid.UUID, day: str) -> str:
     return f"reminder:digest:{user_id}:{day}"
 
 
-def _doc_type_label(document_type: str) -> str:
-    return document_type.replace("_", " ").title()
-
-
 async def _live_odometers_map(
     db: AsyncSession,
     vehicles: list[Vehicle],
@@ -202,10 +198,10 @@ async def send_reminder_digests(
                 html_bits.append(f"<li>{detail}</li>")
 
             for doc in document_reminders:
-                detail = (
-                    f"{_doc_type_label(doc.document_type)} "
-                    f"{doc.status} ({doc.days_until} days)"
-                )
+                label = doc.display_label
+                if doc.identifier:
+                    label = f"{label} ({doc.identifier})"
+                detail = f"{label} {doc.status} ({doc.days_until} days)"
                 lines.append(f"  - {detail}")
                 html_bits.append(f"<li>{detail}</li>")
 

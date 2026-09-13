@@ -31,6 +31,8 @@ export interface ServiceReminder {
 export interface DocumentReminder {
     id: string;
     document_type: string;
+    display_label: string;
+    identifier: string | null;
     expiry_date: string;
     days_until: number;
     status: "ok" | "soon" | "expired";

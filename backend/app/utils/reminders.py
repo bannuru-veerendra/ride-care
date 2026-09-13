@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
 
 from app.models.document import Document
 from app.models.service_log import ServiceLog
+from app.schemas.document import DocumentExpiryStatus
 from app.schemas.vehicle import DocumentReminder, ServiceReminder
+from app.utils.document_types import (
+    document_allows_expiry,
+    document_display_label_from_row,
+)
 
 SERVICE_SOON_DAYS = 14
 SERVICE_SOON_KM = 500
 DOCUMENT_SOON_DAYS = 30
 DOCUMENT_REMINDER_LIMIT = 5
-
-DocumentExpiryStatus = Literal["ok", "soon", "expired"]
 
 
 def _visit_is_after(schedule: ServiceLog, visit: ServiceLog) -> bool:
@@ -126,23 +128,32 @@ def build_document_reminders(
     *,
     today: date,
 ) -> list[DocumentReminder]:
-    """Return soon/expired document expiry reminders, soonest first."""
+    """Return soon/expired document expiry reminders, soonest first.
+
+    RC never participates (no expiry). Other / custom docs remind only when
+    an expiry date is set.
+    """
     reminders: list[DocumentReminder] = []
     for document in documents:
+        if not document_allows_expiry(document.document_type):
+            continue
+        if document.expiry_date is None:
+            continue
+
         days_until, status = document_expiry_fields(
             document.expiry_date, today=today
         )
         if status not in ("soon", "expired") or days_until is None:
             continue
-        if document.expiry_date is None:
-            continue
 
-        doc_type = document.document_type
-        type_value = doc_type.value if hasattr(doc_type, "value") else str(doc_type)
+        type_value = document.document_type.value
+        identifier = (document.identifier or "").strip() or None
         reminders.append(
             DocumentReminder(
                 id=document.id,
                 document_type=type_value,
+                display_label=document_display_label_from_row(document),
+                identifier=identifier,
                 expiry_date=document.expiry_date,
                 days_until=days_until,
                 status=status,

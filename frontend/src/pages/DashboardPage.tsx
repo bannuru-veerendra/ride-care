@@ -18,7 +18,6 @@ import {
     useVehicles,
     useVehicleSummary,
 } from "@/features/vehicles/hooks/useVehicles";
-import { DOCUMENT_LABELS } from "@/features/documents/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -346,14 +345,13 @@ export default function DashboardPage() {
                                 />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-medium">
-                                        {(DOCUMENT_LABELS as Record<string, string>)[
-                                            doc.document_type
-                                        ] ?? doc.document_type}
+                                        {doc.display_label}
                                         {doc.status === "expired"
                                             ? " expired"
                                             : " expires soon"}
                                     </p>
                                     <p className="truncate text-xs text-muted-foreground">
+                                        {doc.identifier ? `${doc.identifier} · ` : ""}
                                         {doc.status === "expired"
                                             ? `${Math.abs(doc.days_until)} day${Math.abs(doc.days_until) === 1 ? "" : "s"} ago`
                                             : `${doc.days_until} day${doc.days_until === 1 ? "" : "s"} left`}

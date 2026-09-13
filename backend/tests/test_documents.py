@@ -24,6 +24,14 @@ def make_fake_txt():
     return ("test.txt", io.BytesIO(b"fake txt content for testing"), "text/plain")
 
 
+def _expiry_required_payload(document_type: str, **extra) -> dict:
+    """Insurance / DL / Pollution require expiry; RC must not send one."""
+    data = {"document_type": document_type, **extra}
+    if document_type != "registration_certificate":
+        data.setdefault("expiry_date", "2026-01-01")
+    return data
+
+
 async def test_upload_document_success(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict
 ):
@@ -34,6 +42,7 @@ async def test_upload_document_success(
         params={"vehicle_id": vehicle_id},
         data={
             "document_type": "insurance",
+            "identifier": "POL-123",
             "expiry_date": "2026-01-01",
             "notes": "Test document",
         },
@@ -43,7 +52,10 @@ async def test_upload_document_success(
     assert response.status_code == 201
     data = response.json()
     assert data["document_type"] == "insurance"
-    assert data["original_filename"] == "test.pdf"
+    assert data["display_label"] == "Insurance"
+    assert data["identifier"] == "POL-123"
+    assert data["custom_label"] is None
+    assert "original_filename" not in data
     assert data["expiry_date"] == "2026-01-01"
     assert data["notes"] == "Test document"
     assert "signed_url" in data
@@ -60,17 +72,85 @@ async def test_upload_driving_license(
     response = await client.post(
         "/documents/",
         params={"vehicle_id": vehicle_id},
-        data={"document_type": "driving_license"},
+        data=_expiry_required_payload("driving_license", identifier="DL-99"),
         files={"file": make_fake_pdf()},
         headers=auth_headers,
     )
     assert response.status_code == 201
-    assert response.json()["document_type"] == "driving_license"
+    data = response.json()
+    assert data["document_type"] == "driving_license"
+    assert data["display_label"] == "Driving Licence"
+    assert data["identifier"] == "DL-99"
+
+
+async def test_upload_pollution(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Pollution certificate requires expiry and uses PUC-style identity."""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data=_expiry_required_payload("pollution", identifier="PUC-1"),
+        files={"file": make_fake_pdf()},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["document_type"] == "pollution"
+    assert data["display_label"] == "Pollution"
+    assert data["identifier"] == "PUC-1"
+
+
+async def test_upload_other_requires_custom_label(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Other docs need a free-text name; display_label uses that name."""
+    vehicle_id = created_vehicle["id"]
+    missing = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data={"document_type": "other"},
+        files={"file": make_fake_pdf()},
+        headers=auth_headers,
+    )
+    assert missing.status_code == 400
+
+    response = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data={
+            "document_type": "other",
+            "custom_label": "Hypothecation letter",
+            "identifier": "REF-1",
+        },
+        files={"file": make_fake_pdf()},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["document_type"] == "other"
+    assert data["custom_label"] == "Hypothecation letter"
+    assert data["display_label"] == "Hypothecation letter"
+    assert data["expiry_date"] is None
 
 
 async def test_upload_rc(client: AsyncClient, auth_headers: dict, created_vehicle: dict):
-    """Test uploading a registration certificate document successfully"""
+    """RC has no expiry field — reject one if sent, omit urgency fields."""
     vehicle_id = created_vehicle["id"]
+
+    with_expiry = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data={
+            "document_type": "registration_certificate",
+            "expiry_date": "2026-01-01",
+        },
+        files={"file": make_fake_png()},
+        headers=auth_headers,
+    )
+    assert with_expiry.status_code == 400
+
     response = await client.post(
         "/documents/",
         params={"vehicle_id": vehicle_id},
@@ -79,7 +159,27 @@ async def test_upload_rc(client: AsyncClient, auth_headers: dict, created_vehicl
         headers=auth_headers,
     )
     assert response.status_code == 201
-    assert response.json()["document_type"] == "registration_certificate"
+    data = response.json()
+    assert data["document_type"] == "registration_certificate"
+    assert data["display_label"] == "Registration Certificate"
+    assert data["expiry_date"] is None
+    assert data["days_until"] is None
+    assert data["expiry_status"] is None
+
+
+async def test_upload_insurance_requires_expiry(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict
+):
+    """Renewing certificate types must include an expiry date."""
+    vehicle_id = created_vehicle["id"]
+    response = await client.post(
+        "/documents/",
+        params={"vehicle_id": vehicle_id},
+        data={"document_type": "insurance"},
+        files={"file": make_fake_pdf()},
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
 
 
 async def test_upload_image_document(
@@ -90,12 +190,14 @@ async def test_upload_image_document(
     response = await client.post(
         "/documents/",
         params={"vehicle_id": vehicle_id},
-        data={"document_type": "insurance"},
+        data=_expiry_required_payload("insurance"),
         files={"file": make_fake_jpeg()},
         headers=auth_headers,
     )
     assert response.status_code == 201
-    assert response.json()["original_filename"] == "test.jpeg"
+    data = response.json()
+    assert data["display_label"] == "Insurance"
+    assert "original_filename" not in data
 
 
 async def test_upload_disallowed_file_type(
@@ -106,7 +208,7 @@ async def test_upload_disallowed_file_type(
     response = await client.post(
         "/documents/",
         params={"vehicle_id": vehicle_id},
-        data={"document_type": "insurance"},
+        data=_expiry_required_payload("insurance"),
         files={"file": make_fake_txt()},
         headers=auth_headers,
     )
@@ -137,7 +239,7 @@ async def test_upload_document_nonexistent_vehicle(
     response = await client.post(
         "/documents/",
         params={"vehicle_id": vehicle_id},
-        data={"document_type": "insurance"},
+        data=_expiry_required_payload("insurance"),
         files={"file": make_fake_pdf()},
         headers=auth_headers,
     )
@@ -161,6 +263,7 @@ async def test_get_documents(
     assert data["has_more"] is False
     assert data["next_cursor"] is None
     assert data["items"][0]["id"] == created_document["id"]
+    assert data["items"][0]["display_label"] == "Insurance"
     assert data["items"][0]["signed_url"].startswith("https://")
 
 
@@ -178,6 +281,7 @@ async def test_get_document_by_id(
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == document_id
+    assert data["display_label"] == "Insurance"
     assert data["signed_url"].startswith("https://")
 
 
@@ -228,10 +332,10 @@ async def test_update_document_notes(
     assert response.json()["notes"] == "Updated notes for the document"
 
 
-async def test_update_document_clear_expiry_and_notes(
+async def test_update_document_clear_notes(
     client: AsyncClient, auth_headers: dict, created_vehicle: dict, created_document: dict
 ):
-    """Clear flags remove expiry_date and notes."""
+    """Clear flag removes notes; insurance still keeps required expiry."""
     vehicle_id = created_vehicle["id"]
     document_id = created_document["id"]
     assert created_document["expiry_date"] is not None
@@ -239,13 +343,28 @@ async def test_update_document_clear_expiry_and_notes(
     response = await client.patch(
         f"/documents/{document_id}",
         params={"vehicle_id": vehicle_id},
-        data={"clear_expiry_date": "true", "clear_notes": "true"},
+        data={"clear_notes": "true"},
         headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["expiry_date"] is None
     assert data["notes"] is None
+    assert data["expiry_date"] == created_document["expiry_date"]
+
+
+async def test_update_document_cannot_clear_required_expiry(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict, created_document: dict
+):
+    """Insurance cannot drop its expiry date."""
+    vehicle_id = created_vehicle["id"]
+    document_id = created_document["id"]
+    response = await client.patch(
+        f"/documents/{document_id}",
+        params={"vehicle_id": vehicle_id},
+        data={"clear_expiry_date": "true"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
 
 
 async def test_update_document_replace_file(
@@ -254,7 +373,6 @@ async def test_update_document_replace_file(
     """Test replacing a document file successfully"""
     vehicle_id = created_vehicle["id"]
     document_id = created_document["id"]
-    original_filename = created_document["original_filename"]
     original_signed_url = created_document["signed_url"]
     response = await client.patch(
         f"/documents/{document_id}",
@@ -271,8 +389,8 @@ async def test_update_document_replace_file(
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == document_id
-    assert data["original_filename"] == "new_insurance.pdf"
-    assert data["original_filename"] != original_filename
+    assert data["display_label"] == "Insurance"
+    assert "original_filename" not in data
     assert data["signed_url"].startswith("https://")
     assert data["signed_url"] != original_signed_url
 
@@ -286,11 +404,33 @@ async def test_update_document_type(
     response = await client.patch(
         f"/documents/{document_id}",
         params={"vehicle_id": vehicle_id},
-        data={"document_type": "driving_license"},
+        data={"document_type": "driving_license", "identifier": "DL-42"},
         headers=auth_headers,
     )
     assert response.status_code == 200
-    assert response.json()["document_type"] == "driving_license"
+    data = response.json()
+    assert data["document_type"] == "driving_license"
+    assert data["display_label"] == "Driving Licence"
+    assert data["identifier"] == "DL-42"
+
+
+async def test_update_document_to_rc_clears_expiry(
+    client: AsyncClient, auth_headers: dict, created_vehicle: dict, created_document: dict
+):
+    """Switching to RC drops expiry even if the client forgets to clear it."""
+    vehicle_id = created_vehicle["id"]
+    document_id = created_document["id"]
+    response = await client.patch(
+        f"/documents/{document_id}",
+        params={"vehicle_id": vehicle_id},
+        data={"document_type": "registration_certificate"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["document_type"] == "registration_certificate"
+    assert data["expiry_date"] is None
+    assert data["days_until"] is None
 
 
 async def test_update_document_empty_patch(
@@ -432,19 +572,23 @@ async def test_get_documents_cursor_pagination(
         "insurance",
         "driving_license",
         "registration_certificate",
-        "insurance",
-        "driving_license",
+        "pollution",
+        "other",
     ]
 
     for index, document_type in enumerate(document_types):
+        data = _expiry_required_payload(document_type)
+        if document_type == "other":
+            data["custom_label"] = f"Custom-{index}"
+            data.pop("expiry_date", None)
         response = await client.post(
             "/documents/",
             params={"vehicle_id": vehicle_id},
-            data={"document_type": document_type},
+            data=data,
             files={"file": make_fake_pdf(f"doc-{index}".encode())},
             headers=auth_headers,
         )
-        assert response.status_code == 201
+        assert response.status_code == 201, response.text
 
     page1 = await client.get(
         "/documents/",

@@ -13,7 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DOCUMENT_LABELS } from "../schemas";
+import { documentIdentifierLabel } from "../schemas";
 import type { Document } from "../types";
 import { cn } from "@/lib/utils";
 import { downloadBlob } from "@/lib/download";
@@ -24,6 +24,18 @@ interface DocumentCardProps {
     document: Document;
     onEdit: (document: Document) => void;
     onDelete: (id: string) => void;
+}
+
+function downloadFilename(document: Document): string {
+    const label = document.display_label
+        .replace(/[^\w\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "_")
+        .toLowerCase();
+    const extension =
+        document.signed_url?.split("?")[0]?.split(".").pop()?.toLowerCase() ||
+        "pdf";
+    return `${label || "document"}.${extension}`;
 }
 
 async function downloadSignedFile(url: string, filename: string) {
@@ -39,7 +51,7 @@ async function downloadSignedFile(url: string, filename: string) {
 
 /**
  * Displays a single document entry.
- * Document type is the primary signal; expiry warnings call out renewals.
+ * Certificate type + identity are primary; expiry warnings call out renewals.
  */
 export default function DocumentCard({
     document,
@@ -51,10 +63,10 @@ export default function DocumentCard({
     const closeMenu = useCallback(() => setMenuOpen(false), []);
     useDismissible(menuOpen, menuRef, closeMenu);
 
-    // Urgency fields come from the API (DOCUMENT_SOON_DAYS lives on the backend).
     const daysUntilExpiry = document.days_until;
     const isExpired = document.expiry_status === "expired";
     const isExpiringSoon = document.expiry_status === "soon";
+    const identifierLabel = documentIdentifierLabel(document.document_type);
 
     return (
         <Card className="overflow-visible border-white/10 bg-card/90 transition-colors hover:border-brand/40">
@@ -63,15 +75,19 @@ export default function DocumentCard({
                     <div className="flex items-center gap-3 border-b border-white/10 pb-3 sm:min-w-[7.5rem] sm:flex-col sm:items-start sm:justify-center sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
                         <FileText className="h-5 w-5 shrink-0 text-brand" />
                         <p className="font-heading text-lg font-extrabold leading-tight tracking-wide text-brand sm:text-xl">
-                            {DOCUMENT_LABELS[document.document_type]}
+                            {document.display_label}
                         </p>
                     </div>
 
                     <div className="min-w-0 flex-1 space-y-2.5">
                         <div className="flex items-start justify-between gap-2">
-                            <Badge className="max-w-[min(100%,12rem)] truncate rounded-md border-0 bg-brand/15 text-xs font-medium text-brand sm:max-w-full">
-                                {document.original_filename}
-                            </Badge>
+                            {document.identifier && identifierLabel ? (
+                                <Badge className="max-w-[min(100%,14rem)] truncate rounded-md border-0 bg-brand/15 text-xs font-medium text-brand sm:max-w-full">
+                                    {identifierLabel}: {document.identifier}
+                                </Badge>
+                            ) : (
+                                <span className="min-w-0" />
+                            )}
 
                             <div className="flex shrink-0 items-center gap-0.5">
                                 {document.signed_url && (
@@ -98,7 +114,7 @@ export default function DocumentCard({
                                             onClick={() =>
                                                 void downloadSignedFile(
                                                     document.signed_url!,
-                                                    document.original_filename
+                                                    downloadFilename(document)
                                                 )
                                             }
                                         >

@@ -16,6 +16,12 @@ from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
 from app.utils.cache import cache_delete, vehicle_summary_key
 from app.utils.dates import app_today
+from app.utils.document_types import (
+    MAX_DOCUMENT_TEXT_LENGTH,
+    document_allows_expiry,
+    document_display_label,
+    document_requires_expiry,
+)
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
 from app.utils.reminders import document_expiry_fields
@@ -32,6 +38,60 @@ from app.utils.vehicle_access import verify_vehicle_ownership
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def _clean_optional_str(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def validate_document_fields(
+    *,
+    document_type: DocumentType,
+    custom_label: str | None,
+    identifier: str | None,
+    expiry_date: dt_date | None,
+) -> tuple[str | None, str | None, dt_date | None]:
+    """Normalize and validate type / label / identifier / expiry rules."""
+    custom_label = _clean_optional_str(custom_label)
+    identifier = _clean_optional_str(identifier)
+
+    if custom_label and len(custom_label) > MAX_DOCUMENT_TEXT_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Custom document name must be at most {MAX_DOCUMENT_TEXT_LENGTH} characters",
+        )
+    if identifier and len(identifier) > MAX_DOCUMENT_TEXT_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Identifier must be at most {MAX_DOCUMENT_TEXT_LENGTH} characters",
+        )
+
+    if document_type == DocumentType.OTHER:
+        if not custom_label:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Custom document name is required for Other",
+            )
+    else:
+        custom_label = None
+
+    if not document_allows_expiry(document_type):
+        if expiry_date is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration Certificate does not have an expiry date",
+            )
+    elif document_requires_expiry(document_type):
+        if expiry_date is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Expiry date is required for this document type",
+            )
+
+    return custom_label, identifier, expiry_date
 
 
 async def get_owned_document(
@@ -66,7 +126,8 @@ def snapshot_document(db_document: Document) -> dict:
         "vehicle_id": db_document.vehicle_id,
         "document_type": db_document.document_type,
         "storage_path": db_document.storage_path,
-        "original_filename": db_document.original_filename,
+        "custom_label": db_document.custom_label,
+        "identifier": db_document.identifier,
         "expiry_date": db_document.expiry_date,
         "notes": db_document.notes,
     }
@@ -117,12 +178,23 @@ async def abort_pending_update(
 
 async def to_document_response(db_document: Document) -> DocumentResponse:
     """Build API response with a fresh signed URL and expiry urgency fields."""
-    days_until, expiry_status = document_expiry_fields(
-        db_document.expiry_date,
-        today=app_today(),
-    )
+    fields = _DocumentDbFields.model_validate(db_document).model_dump()
+    if document_allows_expiry(db_document.document_type):
+        days_until, expiry_status = document_expiry_fields(
+            db_document.expiry_date,
+            today=app_today(),
+        )
+    else:
+        # RC (and any no-expiry type): never surface leftover DB expiry to clients.
+        fields["expiry_date"] = None
+        days_until, expiry_status = None, None
+
     return DocumentResponse(
-        **_DocumentDbFields.model_validate(db_document).model_dump(),
+        **fields,
+        display_label=document_display_label(
+            db_document.document_type,
+            db_document.custom_label,
+        ),
         signed_url=await get_signed_url(db_document.storage_path),
         days_until=days_until,
         expiry_status=expiry_status,
@@ -133,6 +205,8 @@ async def to_document_response(db_document: Document) -> DocumentResponse:
 async def create_document(
     vehicle_id: uuid.UUID,
     document_type: DocumentType = Form(...),
+    custom_label: str | None = Form(None),
+    identifier: str | None = Form(None),
     expiry_date: dt_date | None = Form(None),
     notes: str | None = Form(None),
     file: UploadFile = File(...),
@@ -146,6 +220,14 @@ async def create_document(
     committed = False
 
     try:
+        custom_label, identifier, expiry_date = validate_document_fields(
+            document_type=document_type,
+            custom_label=custom_label,
+            identifier=identifier,
+            expiry_date=expiry_date,
+        )
+        notes = _clean_optional_str(notes)
+
         await verify_vehicle_ownership(vehicle_id, current_user, db)
         storage_path = await upload_document(file, vehicle_id, document_type.value)
 
@@ -153,7 +235,8 @@ async def create_document(
             vehicle_id=vehicle_id,
             document_type=document_type,
             storage_path=storage_path,
-            original_filename=file.filename or "unknown",
+            custom_label=custom_label,
+            identifier=identifier,
             expiry_date=expiry_date,
             notes=notes,
         )
@@ -236,10 +319,14 @@ async def update_document(
     document_id: uuid.UUID,
     vehicle_id: uuid.UUID,
     document_type: DocumentType | None = Form(None),
+    custom_label: str | None = Form(None),
+    identifier: str | None = Form(None),
     expiry_date: dt_date | None = Form(None),
     notes: str | None = Form(None),
     clear_expiry_date: bool = Form(False),
     clear_notes: bool = Form(False),
+    clear_identifier: bool = Form(False),
+    clear_custom_label: bool = Form(False),
     file: UploadFile | None = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -251,6 +338,8 @@ async def update_document(
     has_file = file is not None and bool(file.filename)
     has_expiry = expiry_date is not None or clear_expiry_date
     has_notes = notes is not None or clear_notes
+    has_identifier = identifier is not None or clear_identifier
+    has_custom_label = custom_label is not None or clear_custom_label
     has_type = document_type is not None and document_type != db_document.document_type
 
     if clear_expiry_date and expiry_date is not None:
@@ -263,8 +352,25 @@ async def update_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provide either notes or clear_notes, not both",
         )
+    if clear_identifier and identifier is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either identifier or clear_identifier, not both",
+        )
+    if clear_custom_label and custom_label is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either custom_label or clear_custom_label, not both",
+        )
 
-    if not has_file and not has_expiry and not has_notes and not has_type:
+    if (
+        not has_file
+        and not has_expiry
+        and not has_notes
+        and not has_type
+        and not has_identifier
+        and not has_custom_label
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provide at least one field to update",
@@ -272,6 +378,35 @@ async def update_document(
 
     target_document_type = (
         document_type if document_type is not None else db_document.document_type
+    )
+
+    next_custom_label = db_document.custom_label
+    if clear_custom_label:
+        next_custom_label = None
+    elif custom_label is not None:
+        next_custom_label = custom_label
+
+    next_identifier = db_document.identifier
+    if clear_identifier:
+        next_identifier = None
+    elif identifier is not None:
+        next_identifier = identifier
+
+    next_expiry = db_document.expiry_date
+    if clear_expiry_date:
+        next_expiry = None
+    elif expiry_date is not None:
+        next_expiry = expiry_date
+
+    # Switching to RC always drops expiry even if the client forgot to clear it.
+    if not document_allows_expiry(target_document_type):
+        next_expiry = None
+
+    next_custom_label, next_identifier, next_expiry = validate_document_fields(
+        document_type=target_document_type,
+        custom_label=next_custom_label,
+        identifier=next_identifier,
+        expiry_date=next_expiry,
     )
 
     uploaded_path: str | None = None
@@ -288,7 +423,6 @@ async def update_document(
                 target_document_type.value,
             )
             db_document.storage_path = uploaded_path
-            db_document.original_filename = file.filename or "unknown"
 
         elif has_type:
             type_change_from = db_document.storage_path
@@ -302,15 +436,14 @@ async def update_document(
         if has_type:
             db_document.document_type = target_document_type
 
-        if clear_expiry_date:
-            db_document.expiry_date = None
-        elif expiry_date is not None:
-            db_document.expiry_date = expiry_date
+        db_document.custom_label = next_custom_label
+        db_document.identifier = next_identifier
+        db_document.expiry_date = next_expiry
 
         if clear_notes:
             db_document.notes = None
         elif notes is not None:
-            db_document.notes = notes
+            db_document.notes = _clean_optional_str(notes)
 
         await db.commit()
         await db.refresh(db_document)

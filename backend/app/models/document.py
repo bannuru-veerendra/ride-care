@@ -10,21 +10,26 @@ from app.models.mixins import TimestampMixin
 
 
 class DocumentType(str, enum.Enum):
-    """Document type enum"""
+    """Known certificate types; OTHER uses custom_label for free-text names."""
     INSURANCE = "insurance"
     DRIVING_LICENSE = "driving_license"
     REGISTRATION_CERTIFICATE = "registration_certificate"
+    POLLUTION = "pollution"
+    OTHER = "other"
 
 
 class Document(Base, TimestampMixin):
-    """Document model"""
+    """Vehicle document vault entry (file in storage + certificate metadata)."""
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False)
     document_type = Column(Enum(DocumentType), nullable=False)
     storage_path = Column(String, nullable=False)
-    original_filename = Column(String, nullable=False)
+    # Free-text name when document_type is OTHER (e.g. Aadhaar, Form 20)
+    custom_label = Column(String, nullable=True)
+    # Certificate identity shown on the card (DL number, policy #, PUC #, …)
+    identifier = Column(String, nullable=True)
     expiry_date = Column(Date, nullable=True)
     notes = Column(String, nullable=True)
 

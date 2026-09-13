@@ -387,7 +387,6 @@ async def test_vehicle_summary_document_reminders(
         params={"vehicle_id": vehicle_id},
         data={
             "document_type": "registration_certificate",
-            "expiry_date": str(today + timedelta(days=120)),
         },
         files={
             "file": ("rc.pdf", b"%PDF-1.4 fake", "application/pdf"),
@@ -395,6 +394,7 @@ async def test_vehicle_summary_document_reminders(
         headers=auth_headers,
     )
     assert far_upload.status_code == 201
+    assert far_upload.json()["expiry_date"] is None
 
     response = await client.get(
         f"/vehicles/{vehicle_id}/summary",
@@ -408,6 +408,7 @@ async def test_vehicle_summary_document_reminders(
     types = {item["document_type"] for item in reminders}
     assert "insurance" in types or "driving_license" in types
     assert all(item["document_type"] != "registration_certificate" for item in reminders)
+    assert all("display_label" in item for item in reminders)
 
 
 async def test_document_write_invalidates_summary_document_reminders(

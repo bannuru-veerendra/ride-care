@@ -14,6 +14,11 @@ import {
     type DocumentSchema,
     DOCUMENT_TYPES,
     DOCUMENT_LABELS,
+    documentAllowsExpiry,
+    documentRequiresExpiry,
+    documentShowsIdentifier,
+    documentIdentifierLabel,
+    type DocumentTypeValue,
 } from "../schemas";
 import type { Document } from "../types";
 
@@ -57,12 +62,29 @@ export default function DocumentForm({
         reValidateMode: "onBlur",
         defaultValues: {
             document_type: defaultValues?.document_type,
+            custom_label: defaultValues?.custom_label ?? "",
+            identifier: defaultValues?.identifier ?? "",
             expiry_date: defaultValues?.expiry_date ?? "",
             notes: defaultValues?.notes ?? "",
         },
     });
 
-    const documentType = watch("document_type");
+    const documentType = watch("document_type") as DocumentTypeValue | undefined;
+    const customLabelValue = watch("custom_label");
+    const showExpiry = documentType ? documentAllowsExpiry(documentType) : false;
+    const showIdentifier = documentType
+        ? documentShowsIdentifier(documentType)
+        : false;
+    const expiryRequired = documentType
+        ? documentRequiresExpiry(documentType)
+        : false;
+    const identifierLabel =
+        (documentType && documentIdentifierLabel(documentType)) ||
+        "ID / reference";
+    const notesPlaceholder =
+        documentType === "insurance"
+            ? "Insurer, policy remarks…"
+            : "Remarks…";
 
     useEffect(() => {
         if (!defaultValues) return;
@@ -71,6 +93,8 @@ export default function DocumentForm({
         setTypeMenuOpen(false);
         reset({
             document_type: defaultValues.document_type,
+            custom_label: defaultValues.custom_label ?? "",
+            identifier: defaultValues.identifier ?? "",
             expiry_date: defaultValues.expiry_date ?? "",
             notes: defaultValues.notes ?? "",
         });
@@ -78,17 +102,53 @@ export default function DocumentForm({
 
     const inputClass = "border-white/15 bg-white/5";
 
+    const selectType = (type: DocumentTypeValue) => {
+        setValue("document_type", type, { shouldValidate: true });
+        if (type !== "other") {
+            setValue("custom_label", "", { shouldValidate: true });
+        }
+        if (!documentAllowsExpiry(type)) {
+            setValue("expiry_date", "", { shouldValidate: true });
+        }
+        if (!documentShowsIdentifier(type)) {
+            setValue("identifier", "", { shouldValidate: true });
+        }
+        setTypeMenuOpen(false);
+    };
+
     const handleFormSubmit = (values: DocumentSchema) => {
         if (!isEditing && !selectedFile) {
             setFileError("Please select a file to upload");
             return;
         }
         setFileError(null);
-        onSubmit({
+
+        const cleaned: DocumentSchema = {
             ...values,
+            custom_label:
+                values.document_type === "other"
+                    ? values.custom_label?.trim()
+                    : undefined,
+            identifier: documentShowsIdentifier(values.document_type)
+                ? values.identifier?.trim() || undefined
+                : undefined,
+            expiry_date: documentAllowsExpiry(values.document_type)
+                ? values.expiry_date || undefined
+                : undefined,
+            notes: values.notes?.trim() || undefined,
+        };
+
+        onSubmit({
+            ...cleaned,
             file: selectedFile ?? undefined,
         });
     };
+
+    const typeButtonLabel = documentType
+        ? documentType === "other" && customLabelValue?.trim()
+            ? `Other · ${customLabelValue.trim()}`
+            : DOCUMENT_LABELS[documentType]
+        : "Select type";
 
     return (
         <form
@@ -127,12 +187,8 @@ export default function DocumentForm({
                                 "border-input"
                             )}
                         >
-                            <span>
-                                {documentType
-                                    ? DOCUMENT_LABELS[documentType]
-                                    : "Select type"}
-                            </span>
-                            <ChevronDown className="h-4 w-4 opacity-60" />
+                            <span className="truncate">{typeButtonLabel}</span>
+                            <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
                         </button>
                         {typeMenuOpen && (
                             <div className="absolute z-50 mt-1 w-full rounded-md border border-white/10 bg-background p-1 shadow-lg">
@@ -141,12 +197,7 @@ export default function DocumentForm({
                                         key={type}
                                         type="button"
                                         className="flex w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm hover:bg-white/5"
-                                        onClick={() => {
-                                            setValue("document_type", type, {
-                                                shouldValidate: true,
-                                            });
-                                            setTypeMenuOpen(false);
-                                        }}
+                                        onClick={() => selectType(type)}
                                     >
                                         {DOCUMENT_LABELS[type]}
                                     </button>
@@ -161,20 +212,63 @@ export default function DocumentForm({
                     )}
                 </div>
 
-                <div className="space-y-1.5">
-                    <Label htmlFor="expiry_date">
-                        Expiry date{" "}
-                        <span className="text-xs text-muted-foreground">
-                            (optional)
-                        </span>
-                    </Label>
-                    <Input
-                        id="expiry_date"
-                        type="date"
-                        className={inputClass}
-                        {...register("expiry_date")}
-                    />
-                </div>
+                {documentType === "other" && (
+                    <div className="space-y-1.5">
+                        <Label htmlFor="custom_label">Document name</Label>
+                        <Input
+                            id="custom_label"
+                            className={inputClass}
+                            placeholder="Aadhaar, Form 20, hypothecation…"
+                            {...register("custom_label")}
+                        />
+                        {errors.custom_label && (
+                            <p className="text-xs text-destructive">
+                                {errors.custom_label.message}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {showIdentifier && (
+                    <div className="space-y-1.5">
+                        <Label htmlFor="identifier">
+                            {identifierLabel}{" "}
+                            <span className="text-xs text-muted-foreground">
+                                (optional)
+                            </span>
+                        </Label>
+                        <Input
+                            id="identifier"
+                            className={inputClass}
+                            placeholder={identifierLabel}
+                            {...register("identifier")}
+                        />
+                    </div>
+                )}
+
+                {showExpiry && (
+                    <div className="space-y-1.5">
+                        <Label htmlFor="expiry_date">
+                            Expiry date{" "}
+                            {!expiryRequired && (
+                                <span className="text-xs text-muted-foreground">
+                                    (optional)
+                                </span>
+                            )}
+                        </Label>
+                        <Input
+                            id="expiry_date"
+                            type="date"
+                            className={inputClass}
+                            {...register("expiry_date")}
+                        />
+                        {errors.expiry_date && (
+                            <p className="text-xs text-destructive">
+                                {errors.expiry_date.message}
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 <div className="space-y-1.5">
                     <Label htmlFor="notes">
@@ -186,7 +280,7 @@ export default function DocumentForm({
                     <Input
                         id="notes"
                         className={inputClass}
-                        placeholder="Policy number, remarks..."
+                        placeholder={notesPlaceholder}
                         {...register("notes")}
                     />
                 </div>
@@ -208,7 +302,7 @@ export default function DocumentForm({
                             <>
                                 <p className="text-sm text-muted-foreground">
                                     {isEditing
-                                        ? `Current: ${defaultValues?.original_filename}`
+                                        ? "Click to replace the stored file"
                                         : "Click to upload PDF, JPEG, or PNG"}
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
