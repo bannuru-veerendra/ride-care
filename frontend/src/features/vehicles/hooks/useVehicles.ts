@@ -16,6 +16,7 @@ export const vehicleKeys = {
     details: (id: string) => ["vehicle-detail", id] as const,
     analytics: (id: string) => ["vehicle-analytics", id] as const,
     summary: (id: string) => ["vehicle-summary", id] as const,
+    health: (id: string) => ["vehicle-health", id] as const,
 };
 
 function findCachedVehicle(
@@ -43,6 +44,7 @@ function removeVehicleScopedQueries(
     queryClient.removeQueries({ queryKey: vehicleKeys.details(id) });
     queryClient.removeQueries({ queryKey: vehicleKeys.summary(id) });
     queryClient.removeQueries({ queryKey: vehicleKeys.analytics(id) });
+    queryClient.removeQueries({ queryKey: vehicleKeys.health(id) });
     // Literal prefixes — avoid circular imports with feature hook modules
     queryClient.removeQueries({ queryKey: ["fuel-logs-infinite", id] });
     queryClient.removeQueries({ queryKey: ["service-logs-infinite", id] });
@@ -101,6 +103,15 @@ export const useVehicleSummary = (id: string) => {
     });
 };
 
+/** Fetch RideCare Health signals + recommended action */
+export const useVehicleHealth = (id: string) => {
+    return useQuery({
+        queryKey: vehicleKeys.health(id),
+        queryFn: () => vehiclesApi.getHealth(id),
+        enabled: !!id,
+    });
+};
+
 
 /** Fetch analytics aggregates for a vehicle */
 export const useVehicleAnalytics = (id: string) => {
@@ -134,6 +145,7 @@ export const useUpdateVehicle = (id: string) => {
             queryClient.invalidateQueries({ queryKey: vehicleKeys.details(id) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(id) });
             queryClient.invalidateQueries({ queryKey: vehicleKeys.analytics(id) });
+            queryClient.invalidateQueries({ queryKey: vehicleKeys.health(id) });
         },
     });
 };

@@ -23,6 +23,7 @@ function invalidateServiceDerivedQueries(
     queryClient.invalidateQueries({ queryKey: vehicleKeys.details(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.analytics(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
+    queryClient.invalidateQueries({ queryKey: vehicleKeys.health(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.all });
 }
 

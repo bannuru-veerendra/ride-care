@@ -127,6 +127,78 @@ export interface VehicleCompareResponse {
     items: VehicleCompareItem[];
 }
 
+export type HealthUrgency = "critical" | "high" | "medium" | "low" | "none";
+export type HealthConfidence = "high" | "medium" | "low" | "insufficient";
+export type HealthHrefHint =
+    | "service"
+    | "documents"
+    | "fuel"
+    | "analytics"
+    | "vehicle";
+
+export interface HealthEvidence {
+    label: string;
+    value: string;
+}
+
+export interface HealthSignal {
+    id: string;
+    kind: string;
+    urgency: HealthUrgency;
+    title: string;
+    detail: string;
+    confidence: HealthConfidence;
+    evidence: HealthEvidence[];
+    href_hint: HealthHrefHint | null;
+}
+
+export interface RecommendedAction {
+    kind: string;
+    title: string;
+    reason: string;
+    urgency: HealthUrgency;
+    href_hint: HealthHrefHint;
+    confidence: HealthConfidence;
+}
+
+export interface ServicePrediction {
+    source: "rider_schedule" | "catalog_estimate" | "insufficient";
+    predicted_date: string | null;
+    predicted_odometer: number | null;
+    days_until: number | null;
+    km_until: number | null;
+    riding_rate_km_per_day: number | null;
+    detail: string;
+    matched_task: string | null;
+}
+
+export interface MileageHealth {
+    trend: "up" | "down" | "flat" | "insufficient";
+    recent_avg: number | null;
+    earlier_avg: number | null;
+    delta: number | null;
+    sample_n: number;
+    detail: string;
+}
+
+export interface CostHealth {
+    cost_per_km: number | null;
+    km_driven: number;
+    fill_ups: number;
+    confidence: HealthConfidence;
+    detail: string;
+}
+
+export interface VehicleHealth {
+    vehicle_id: string;
+    reminders_muted: boolean;
+    recommended_action: RecommendedAction | null;
+    signals: HealthSignal[];
+    service_prediction: ServicePrediction;
+    mileage: MileageHealth;
+    cost: CostHealth;
+}
+
 export const vehiclesApi = {
     getAll: async (params?: {
         cursor?: string;
@@ -145,6 +217,10 @@ export const vehiclesApi = {
     },
     getSummary: async (id: string): Promise<VehicleSummary> => {
         const { data } = await apiClient.get(`/vehicles/${id}/summary`);
+        return data;
+    },
+    getHealth: async (id: string): Promise<VehicleHealth> => {
+        const { data } = await apiClient.get(`/vehicles/${id}/health`);
         return data;
     },
     compare: async (): Promise<VehicleCompareResponse> => {

@@ -21,6 +21,7 @@ function invalidateDocumentDerivedQueries(
 ) {
     queryClient.invalidateQueries({ queryKey: documentKeys.infinite(vehicleId) });
     queryClient.invalidateQueries({ queryKey: vehicleKeys.summary(vehicleId) });
+    queryClient.invalidateQueries({ queryKey: vehicleKeys.health(vehicleId) });
 }
 
 /** Paginated documents with Load more support for the vehicle detail Docs tab */

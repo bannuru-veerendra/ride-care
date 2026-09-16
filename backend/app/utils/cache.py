@@ -69,6 +69,11 @@ def vehicle_analytics_key(vehicle_id: str) -> str:
     return f"cache:vehicle_analytics:{vehicle_id}"
 
 
+def vehicle_health_key(vehicle_id: str) -> str:
+    """Cache key for RideCare Health signals."""
+    return f"cache:vehicle_health:{vehicle_id}"
+
+
 def vehicle_compare_key(user_id: str) -> str:
     """Cache key for garage compare. Invalidated with cache:vehicles:user:{id}*."""
     return f"cache:vehicles:user:{user_id}:compare"

@@ -24,6 +24,7 @@ from app.schemas.vehicle import (
     VehicleCompareItem,
     VehicleCompareResponse,
     VehicleCreate,
+    VehicleHealthResponse,
     VehicleResponse,
     VehicleSummaryResponse,
     VehicleUpdate,
@@ -41,11 +42,13 @@ from app.utils.cache import (
     vehicle_analytics_key,
     vehicle_compare_key,
     vehicle_detail_key,
+    vehicle_health_key,
     vehicle_list_key,
     vehicle_summary_key,
 )
 from app.utils.dates import app_today
 from app.utils.fuel_mileage import recalculate_vehicle_fuel_mileage
+from app.utils.health import build_vehicle_health
 from app.utils.pagination import paginate
 from app.utils.redis_client import get_redis
 from app.utils.reminders import (
@@ -575,6 +578,63 @@ async def get_vehicle_summary(
     return payload
 
 
+@router.get("/{vehicle_id}/health", response_model=VehicleHealthResponse)
+async def get_vehicle_health(
+    vehicle_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> VehicleHealthResponse:
+    """Ranked health signals + one recommended next action (no fake score)."""
+    db_vehicle = await _owned_vehicle(db, vehicle_id, current_user.id)
+    if db_vehicle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehicle not found",
+        )
+
+    cache_key = vehicle_health_key(str(vehicle_id))
+    cached = await cache_get(redis, cache_key)
+    if cached is not CACHE_MISS:
+        try:
+            return VehicleHealthResponse.model_validate(cached)
+        except ValidationError:
+            await cache_delete(redis, cache_key)
+
+    fuel_result = await db.execute(
+        select(FuelLog)
+        .where(FuelLog.vehicle_id == vehicle_id)
+        .order_by(FuelLog.date.desc(), FuelLog.odometer.desc())
+    )
+    fuel_logs = list(fuel_result.scalars().all())
+
+    service_result = await db.execute(
+        select(ServiceLog)
+        .where(ServiceLog.vehicle_id == vehicle_id)
+        .order_by(ServiceLog.date.desc(), ServiceLog.odometer.desc())
+    )
+    service_logs = list(service_result.scalars().all())
+
+    documents = await _expiring_documents(db, vehicle_id)
+    live_odometer = await get_live_odometer(db, db_vehicle)
+
+    payload = build_vehicle_health(
+        vehicle=db_vehicle,
+        fuel_logs=fuel_logs,
+        service_logs=service_logs,
+        documents=documents,
+        live_odometer=live_odometer,
+        today=app_today(),
+    )
+    await cache_set(
+        redis,
+        cache_key,
+        payload.model_dump(mode="json"),
+        VEHICLE_CACHE_TTL,
+    )
+    return payload
+
+
 @router.get("/{vehicle_id}/analytics", response_model=VehicleAnalyticsResponse)
 async def get_vehicle_analytics(
     vehicle_id: uuid.UUID,
@@ -821,6 +881,7 @@ async def update_vehicle(
         redis,
         vehicle_summary_key(str(vehicle_id)),
         vehicle_analytics_key(str(vehicle_id)),
+        vehicle_health_key(str(vehicle_id)),
     )
     await cache_delete_pattern(
         redis, f"cache:vehicles:user:{current_user.id}*"
@@ -866,6 +927,7 @@ async def delete_vehicle(
         redis,
         vehicle_summary_key(str(vehicle_id)),
         vehicle_analytics_key(str(vehicle_id)),
+        vehicle_health_key(str(vehicle_id)),
     )
     await cache_delete_pattern(
         redis, f"cache:vehicles:user:{current_user.id}*"

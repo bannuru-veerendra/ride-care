@@ -24,6 +24,7 @@ from app.utils.cache import (
     cache_delete_pattern,
     vehicle_analytics_key,
     vehicle_detail_key,
+    vehicle_health_key,
     vehicle_summary_key,
 )
 from app.utils.export_csv import (
@@ -56,6 +57,7 @@ async def _invalidate_fuel_derived_caches(
         vehicle_detail_key(str(vehicle_id)),
         vehicle_summary_key(str(vehicle_id)),
         vehicle_analytics_key(str(vehicle_id)),
+        vehicle_health_key(str(vehicle_id)),
     )
     await cache_delete_pattern(redis, f"cache:vehicles:user:{owner_id}*")
 
