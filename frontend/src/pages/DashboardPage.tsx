@@ -17,6 +17,7 @@ import RideCareLogo from "@/components/common/RideCareLogo";
 import {
     useVehicles,
     useVehicleSummary,
+    useVehicleHealth,
 } from "@/features/vehicles/hooks/useVehicles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,7 @@ export default function DashboardPage() {
     const { data: summary, isLoading: summaryLoading } = useVehicleSummary(
         selectedVehicleId
     );
+    const { data: health } = useVehicleHealth(selectedVehicleId);
 
     const recentFuelLogs = summary?.recent_fuel_logs ?? [];
     const hasFuelLogs = (summary?.fuel_log_count ?? 0) > 0;
@@ -95,6 +97,9 @@ export default function DashboardPage() {
     const nextServiceLog = summary?.next_service ?? null;
     const documentReminders = summary?.document_reminders ?? [];
     const remindersMuted = Boolean(selectedVehicle?.reminders_muted);
+    const recommended = health?.recommended_action ?? null;
+    const servicePrediction = health?.service_prediction ?? null;
+    const costHealth = health?.cost ?? null;
     const mileageDelta =
         recentFilledMileage !== null && priorFilledMileage !== null
             ? Math.round((recentFilledMileage - priorFilledMileage) * 10) / 10
@@ -121,18 +126,30 @@ export default function DashboardPage() {
         !remindersMuted && serviceReminder?.status === "overdue";
     const serviceSoon = !remindersMuted && serviceReminder?.status === "soon";
 
-    const showReminders =
-        !!selectedVehicleId &&
-        (serviceOverdue || serviceSoon || documentReminders.length > 0);
+    const showDocumentReminders =
+        !!selectedVehicleId && documentReminders.length > 0;
+
+    const hrefForHint = (hint: string | null | undefined) => {
+        if (!selectedVehicleId) return "/vehicles";
+        switch (hint) {
+            case "service":
+                return `/vehicles/${selectedVehicleId}?tab=service`;
+            case "documents":
+                return `/vehicles/${selectedVehicleId}?tab=documents`;
+            case "fuel":
+                return `/vehicles/${selectedVehicleId}?action=fuel`;
+            case "analytics":
+                return `/vehicles/${selectedVehicleId}?tab=analytics`;
+            default:
+                return `/vehicles/${selectedVehicleId}`;
+        }
+    };
 
     const fuelHref = selectedVehicleId
         ? `/vehicles/${selectedVehicleId}?action=fuel`
         : "/vehicles";
     const serviceHref = selectedVehicleId
         ? `/vehicles/${selectedVehicleId}?action=service`
-        : "/vehicles";
-    const serviceTabHref = selectedVehicleId
-        ? `/vehicles/${selectedVehicleId}?tab=service`
         : "/vehicles";
     const documentsTabHref = selectedVehicleId
         ? `/vehicles/${selectedVehicleId}?tab=documents`
@@ -141,24 +158,27 @@ export default function DashboardPage() {
         ? `/vehicles/${selectedVehicleId}`
         : "/vehicles";
 
+    // Health owns the hero line once loaded; mute is a quiet state, not the headline.
     let statusLine = "Ready when you are.";
     if (selectedVehicleId) {
-        if (remindersMuted && hasScheduledNextService) {
-            statusLine = "Reminders muted for this bike.";
-        } else if (serviceOverdue) {
-            statusLine = "Service overdue — book it soon.";
-        } else if (serviceSoon && daysUntilNextService !== null && daysUntilNextService >= 0) {
-            statusLine = `Service in ${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"}.`;
-        } else if (serviceSoon && kmUntilNextService !== null) {
-            statusLine = `Service in ${kmUntilNextService.toLocaleString("en-IN")} km.`;
-        } else if (documentReminders.some((doc) => doc.status === "expired")) {
-            statusLine = "A document has expired — renew it.";
-        } else if (documentReminders.some((doc) => doc.status === "soon")) {
-            statusLine = "A document expires soon.";
+        if (remindersMuted) {
+            if (
+                servicePrediction &&
+                servicePrediction.source !== "insufficient" &&
+                servicePrediction.days_until != null &&
+                servicePrediction.days_until > 0
+            ) {
+                statusLine = `Next service in about ${servicePrediction.days_until} day${servicePrediction.days_until === 1 ? "" : "s"} (reminders off).`;
+            } else {
+                statusLine = "Reminders off — history kept.";
+            }
+        } else if (recommended) {
+            statusLine =
+                recommended.kind === "all_clear"
+                    ? recommended.reason
+                    : recommended.title;
         } else if (!hasFuelLogs) {
             statusLine = "Add a fill-up to unlock mileage insights.";
-        } else {
-            statusLine = "Good to ride.";
         }
     }
 
@@ -275,55 +295,95 @@ export default function DashboardPage() {
                 </div>
             </section>
 
-            {/* In-app reminders — service due + document expiry */}
-            {showReminders && (
+            {/* One clear next action from RideCare Health (skip empty all-clear noise when muted) */}
+            {selectedVehicleId &&
+                recommended &&
+                !(remindersMuted && recommended.kind === "all_clear") && (
+                <section
+                    className="animate-fade-up"
+                    style={{ animationDelay: "30ms" }}
+                >
+                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                        Do this next
+                    </p>
+                    <Link
+                        to={hrefForHint(recommended.href_hint)}
+                        className={cn(
+                            "flex items-start gap-3 rounded-2xl border px-4 py-4 transition-colors",
+                            recommended.urgency === "critical"
+                                ? "border-destructive/40 bg-destructive/10 hover:border-destructive/60"
+                                : recommended.urgency === "high"
+                                  ? "border-brand/40 bg-brand/10 hover:border-brand/60"
+                                  : "border-white/10 bg-card/80 hover:border-brand/40"
+                        )}
+                    >
+                        {recommended.urgency !== "none" && (
+                            <AlertTriangle
+                                className={cn(
+                                    "mt-0.5 h-5 w-5 shrink-0",
+                                    recommended.urgency === "critical"
+                                        ? "text-destructive"
+                                        : "text-brand"
+                                )}
+                            />
+                        )}
+                        <div className="min-w-0 flex-1">
+                            <p className="font-heading text-xl font-extrabold tracking-wide">
+                                {recommended.title}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {recommended.reason}
+                            </p>
+                            {recommended.confidence !== "high" &&
+                                recommended.urgency !== "none" && (
+                                <p className="mt-1 text-xs text-muted-foreground/80">
+                                    Confidence: {recommended.confidence}
+                                </p>
+                            )}
+                        </div>
+                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Link>
+                </section>
+            )}
+
+            {/* Health facts — useful even when nags are muted */}
+            {selectedVehicleId &&
+                (servicePrediction?.source !== "insufficient" ||
+                    costHealth?.cost_per_km != null) && (
+                <section
+                    className="animate-fade-up space-y-1"
+                    style={{ animationDelay: "35ms" }}
+                >
+                    {servicePrediction &&
+                        servicePrediction.source !== "insufficient" && (
+                            <p className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground/80">
+                                    Next service ·{" "}
+                                </span>
+                                {servicePrediction.detail}
+                            </p>
+                        )}
+                    {costHealth?.cost_per_km != null && (
+                        <p className="text-xs text-muted-foreground">
+                            {costHealth.detail}
+                            {costHealth.confidence !== "high"
+                                ? ` (${costHealth.confidence} confidence)`
+                                : ""}
+                        </p>
+                    )}
+                </section>
+            )}
+
+            {/* Extra document nags — service urgency lives in Do this next */}
+            {showDocumentReminders && (
                 <section
                     className="animate-fade-up space-y-2"
                     style={{ animationDelay: "40ms" }}
                 >
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                        Reminders
+                        Documents
                     </p>
                     <div className="space-y-2">
-                        {(serviceOverdue || serviceSoon) && (
-                            <Link
-                                to={serviceTabHref}
-                                className={cn(
-                                    "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors",
-                                    serviceOverdue
-                                        ? "border-destructive/40 bg-destructive/10 hover:border-destructive/60"
-                                        : "border-brand/30 bg-brand/10 hover:border-brand/50"
-                                )}
-                            >
-                                <AlertTriangle
-                                    className={cn(
-                                        "h-4 w-4 shrink-0",
-                                        serviceOverdue
-                                            ? "text-destructive"
-                                            : "text-brand"
-                                    )}
-                                />
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium">
-                                        {serviceOverdue
-                                            ? "Service overdue"
-                                            : "Service due soon"}
-                                    </p>
-                                    <p className="truncate text-xs text-muted-foreground">
-                                        {daysUntilNextService !== null
-                                            ? serviceOverdue
-                                                ? `${Math.abs(daysUntilNextService)} day${Math.abs(daysUntilNextService) === 1 ? "" : "s"} past due`
-                                                : `${daysUntilNextService} day${daysUntilNextService === 1 ? "" : "s"} left`
-                                            : kmUntilNextService !== null
-                                                ? serviceOverdue
-                                                    ? `${Math.abs(kmUntilNextService).toLocaleString("en-IN")} km past due`
-                                                    : `${kmUntilNextService.toLocaleString("en-IN")} km left`
-                                                : "Check service schedule"}
-                                    </p>
-                                </div>
-                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </Link>
-                        )}
                         {documentReminders.map((doc) => (
                             <Link
                                 key={doc.id}
@@ -528,15 +588,14 @@ export default function DashboardPage() {
                                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                             <p className="text-xs text-muted-foreground">
                                                 {remindersMuted
-                                                    ? [
-                                                          nextServiceDate &&
-                                                          nextServiceOdometer != null
-                                                              ? `${nextServiceOdometer.toLocaleString("en-IN")} km`
-                                                              : null,
-                                                          "Reminders muted",
-                                                      ]
-                                                          .filter(Boolean)
-                                                          .join(" · ")
+                                                    ? nextServiceDate &&
+                                                      nextServiceOdometer != null
+                                                        ? `${nextServiceOdometer.toLocaleString("en-IN")} km`
+                                                        : nextServiceOdometer != null
+                                                          ? "Due by odometer"
+                                                          : nextServiceDate
+                                                            ? "Due by date"
+                                                            : null
                                                     : [
                                                           nextServiceDate
                                                               ? formatAppDate(nextServiceDate)

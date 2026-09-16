@@ -14,7 +14,7 @@ from app.models.vehicle import Vehicle
 from app.schemas.document import DocumentResponse, _DocumentDbFields
 from app.schemas.pagination import CursorPage
 from app.utils.auth_dependency import get_current_user
-from app.utils.cache import cache_delete, vehicle_summary_key
+from app.utils.cache import cache_delete, vehicle_health_key, vehicle_summary_key
 from app.utils.dates import app_today
 from app.utils.document_types import (
     MAX_DOCUMENT_TEXT_LENGTH,
@@ -244,7 +244,11 @@ async def create_document(
         await db.commit()
         committed = True
         await db.refresh(db_document)
-        await cache_delete(redis, vehicle_summary_key(str(vehicle_id)))
+        await cache_delete(
+            redis,
+            vehicle_summary_key(str(vehicle_id)),
+            vehicle_health_key(str(vehicle_id)),
+        )
 
         return await to_document_response(db_document)
     except Exception as exc:
@@ -447,7 +451,11 @@ async def update_document(
 
         await db.commit()
         await db.refresh(db_document)
-        await cache_delete(redis, vehicle_summary_key(str(vehicle_id)))
+        await cache_delete(
+            redis,
+            vehicle_summary_key(str(vehicle_id)),
+            vehicle_health_key(str(vehicle_id)),
+        )
 
         if replaced_storage_path:
             await cleanup_document(replaced_storage_path)
@@ -485,7 +493,11 @@ async def delete_document(
     try:
         await db.delete(db_document)
         await db.commit()
-        await cache_delete(redis, vehicle_summary_key(str(vehicle_id)))
+        await cache_delete(
+            redis,
+            vehicle_summary_key(str(vehicle_id)),
+            vehicle_health_key(str(vehicle_id)),
+        )
     except Exception as exc:
         await db.rollback()
         logger.exception("Failed to delete document record %s", document_id)

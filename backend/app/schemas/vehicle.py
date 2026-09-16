@@ -206,3 +206,97 @@ class VehicleCompareItem(BaseModel):
 class VehicleCompareResponse(BaseModel):
     """Garage-wide comparison for GET /vehicles/compare."""
     items: list[VehicleCompareItem]
+
+
+HealthUrgency = Literal["critical", "high", "medium", "low", "none"]
+HealthConfidence = Literal["high", "medium", "low", "insufficient"]
+HealthHrefHint = Literal[
+    "service", "documents", "fuel", "analytics", "vehicle"
+]
+
+
+class HealthEvidence(BaseModel):
+    """One labeled fact backing a health signal."""
+    label: str
+    value: str
+
+
+class HealthSignal(BaseModel):
+    """Evidence-backed signal — never a cosmetic score."""
+    id: str
+    kind: str
+    urgency: HealthUrgency
+    title: str
+    detail: str
+    confidence: HealthConfidence
+    evidence: list[HealthEvidence] = []
+    href_hint: HealthHrefHint | None = None
+
+
+class RecommendedAction(BaseModel):
+    """Single next action for the dashboard hero."""
+    kind: str
+    title: str
+    reason: str
+    urgency: HealthUrgency
+    href_hint: HealthHrefHint
+    confidence: HealthConfidence
+
+
+class ServicePrediction(BaseModel):
+    """Next-service estimate from rider schedule or catalog + riding rate."""
+    source: Literal["rider_schedule", "catalog_estimate", "insufficient"]
+    predicted_date: date | None = None
+    predicted_odometer: float | None = None
+    days_until: int | None = None
+    km_until: float | None = None
+    riding_rate_km_per_day: float | None = None
+    detail: str
+    matched_task: str | None = None
+
+    @field_validator(
+        "predicted_odometer", "km_until", "riding_rate_km_per_day", mode="before"
+    )
+    @classmethod
+    def normalize_km(cls, value: object) -> object:
+        return _normalize_2dp(value)
+
+
+class MileageHealth(BaseModel):
+    """Mileage trend from recent fill-ups (honest when sample is thin)."""
+    trend: Literal["up", "down", "flat", "insufficient"]
+    recent_avg: float | None = None
+    earlier_avg: float | None = None
+    delta: float | None = None
+    sample_n: int
+    detail: str
+
+    @field_validator("recent_avg", "earlier_avg", "delta", mode="before")
+    @classmethod
+    def normalize_mileage(cls, value: object) -> object:
+        return _normalize_2dp(value)
+
+
+class CostHealth(BaseModel):
+    """₹/km with confidence from sample size."""
+    cost_per_km: float | None = None
+    km_driven: float
+    fill_ups: int
+    confidence: HealthConfidence
+    detail: str
+
+    @field_validator("cost_per_km", "km_driven", mode="before")
+    @classmethod
+    def normalize_money(cls, value: object) -> object:
+        return _normalize_2dp(value)
+
+
+class VehicleHealthResponse(BaseModel):
+    """GET /vehicles/{id}/health — ranked signals + one recommended action."""
+    vehicle_id: uuid.UUID
+    reminders_muted: bool
+    recommended_action: RecommendedAction | None = None
+    signals: list[HealthSignal] = []
+    service_prediction: ServicePrediction
+    mileage: MileageHealth
+    cost: CostHealth
