@@ -60,6 +60,7 @@ async def test_upload_document_success(
     assert data["notes"] == "Test document"
     assert "signed_url" in data
     assert "id" in data
+    assert data.get("created_at")
     assert data["days_until"] is not None
     assert data["expiry_status"] in ("ok", "soon", "expired")
 

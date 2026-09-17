@@ -11,6 +11,7 @@ import {
     Download,
     Upload,
     Plus,
+    History,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,6 +66,7 @@ import {
 } from "@/features/documents/hooks/useDocuments";
 import type { Document } from "@/features/documents/types";
 import type { DocumentSchema } from "@/features/documents/schemas";
+import { buildTimelineEvents } from "@/features/timeline/buildTimelineEvents";
 import { useConfirmDialog } from "@/components/common/ConfirmDialog";
 
 const TAB_TRIGGER_CLASS =
@@ -76,8 +78,8 @@ const AnalyticsTab = lazy(
 
 /**
  * Vehicle detail page.
- * Shows vehicle info and tabbed sections for fuel logs,
- * service logs, documents, and analytics.
+ * Shows vehicle info and tabbed sections for timeline,
+ * fuel logs, service logs, documents, and analytics.
  */
 export default function VehicleDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -87,6 +89,7 @@ export default function VehicleDetailPage() {
     const actionParam = searchParams.get("action");
     const tabParam = searchParams.get("tab");
     const initialTab =
+        tabParam === "timeline" ||
         tabParam === "service" ||
         tabParam === "documents" ||
         tabParam === "fuel" ||
@@ -96,7 +99,9 @@ export default function VehicleDetailPage() {
                 ? "service"
                 : actionParam === "documents"
                     ? "documents"
-                    : "fuel";
+                    : actionParam === "fuel"
+                        ? "fuel"
+                        : "timeline";
 
     const [activeTab, setActiveTab] = useState(initialTab);
     const [fuelSheetOpen, setFuelSheetOpen] = useState(false);
@@ -110,10 +115,11 @@ export default function VehicleDetailPage() {
     const fuelCsvInputRef = useRef<HTMLInputElement>(null);
     const serviceCsvInputRef = useRef<HTMLInputElement>(null);
 
-    // Deep-link to a tab without opening a sheet (?tab=service|documents|fuel|analytics)
+    // Deep-link to a tab without opening a sheet (?tab=timeline|fuel|service|documents|analytics)
     useEffect(() => {
         const tab = searchParams.get("tab");
         if (
+            tab !== "timeline" &&
             tab !== "service" &&
             tab !== "documents" &&
             tab !== "fuel" &&
@@ -175,6 +181,24 @@ export default function VehicleDetailPage() {
     const serviceTotal = serviceLogsData?.pages[0]?.total ?? 0;
     const documents = documentsData?.pages.flatMap((page) => page.items) ?? [];
     const documentsTotal = documentsData?.pages[0]?.total ?? 0;
+    const timelineEvents = buildTimelineEvents(fuelLogs, serviceLogs, documents);
+    const timelineTotal = fuelTotal + serviceTotal + documentsTotal;
+    const timelineLoading =
+        logsLoading || serviceLogsLoading || documentsLoading;
+    const timelineHasNextPage =
+        Boolean(fuelHasNextPage) ||
+        Boolean(serviceHasNextPage) ||
+        Boolean(documentsHasNextPage);
+    const timelineFetchingNextPage =
+        fuelFetchingNextPage ||
+        serviceFetchingNextPage ||
+        documentsFetchingNextPage;
+
+    const fetchNextTimelinePage = () => {
+        if (fuelHasNextPage) void fetchNextFuelPage();
+        if (serviceHasNextPage) void fetchNextServicePage();
+        if (documentsHasNextPage) void fetchNextDocumentsPage();
+    };
 
     const createFuelLog = useCreateFuelLog(id!);
     const updateFuelLog = useUpdateFuelLog(id!, editingLog?.id ?? "");
@@ -493,6 +517,10 @@ export default function VehicleDetailPage() {
                     variant="line"
                     className="h-auto w-full justify-start gap-0 rounded-none border-b border-white/10 bg-transparent p-0"
                 >
+                    <TabsTrigger value="timeline" className={TAB_TRIGGER_CLASS}>
+                        <History className="h-4 w-4" />
+                        Timeline
+                    </TabsTrigger>
                     <TabsTrigger value="fuel" className={TAB_TRIGGER_CLASS}>
                         <Fuel className="h-4 w-4" />
                         Fuel
@@ -510,6 +538,99 @@ export default function VehicleDetailPage() {
                         Analytics
                     </TabsTrigger>
                 </TabsList>
+
+                {/* Chronological feed — fuel + service + docs */}
+                <TabsContent value="timeline" className="mt-5 space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        {timelineTotal} event{timelineTotal === 1 ? "" : "s"} · fuel,
+                        service, and docs
+                    </p>
+
+                    {timelineLoading && <ResourceListSkeleton />}
+                    {!timelineLoading && timelineEvents.length === 0 && (
+                        <ResourceEmptyState
+                            title="Nothing on the timeline yet"
+                            description="Log fuel, service, or upload a document — they show up here in one history"
+                        />
+                    )}
+                    {!timelineLoading && timelineEvents.length > 0 && (
+                        <div className="space-y-3">
+                            {timelineEvents.map((event) => (
+                                <div key={`${event.kind}-${event.id}`} className="space-y-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                        {event.kind === "fuel"
+                                            ? "Fuel"
+                                            : event.kind === "service"
+                                              ? "Service"
+                                              : "Document"}
+                                    </p>
+                                    {event.kind === "fuel" && (
+                                        <FuelLogCard
+                                            log={event.payload}
+                                            onDelete={confirmDelete(
+                                                requestConfirm,
+                                                "Delete this fuel log?",
+                                                "This fill-up will be removed from the vehicle log.",
+                                                "Fuel log deleted",
+                                                "Failed to delete fuel log",
+                                                deleteFuelLog.mutate
+                                            )}
+                                            onEdit={(log) => {
+                                                setEditingLog(log);
+                                                setFuelSheetOpen(true);
+                                                setActiveTab("fuel");
+                                            }}
+                                        />
+                                    )}
+                                    {event.kind === "service" && (
+                                        <ServiceLogCard
+                                            log={event.payload}
+                                            onDelete={confirmDelete(
+                                                requestConfirm,
+                                                "Delete this service log?",
+                                                "This service entry will be removed from the vehicle log.",
+                                                "Service log deleted",
+                                                "Failed to delete service log",
+                                                deleteServiceLog.mutate
+                                            )}
+                                            onEdit={(log) => {
+                                                setEditingServiceLog(log);
+                                                setServiceSheetOpen(true);
+                                                setActiveTab("service");
+                                            }}
+                                        />
+                                    )}
+                                    {event.kind === "document" && (
+                                        <DocumentCard
+                                            document={event.payload}
+                                            onDelete={confirmDelete(
+                                                requestConfirm,
+                                                "Delete this document?",
+                                                "This file will be permanently removed.",
+                                                "Document deleted",
+                                                "Failed to delete document",
+                                                deleteDocument.mutate
+                                            )}
+                                            onEdit={(document) => {
+                                                setEditingDocument(document);
+                                                setDocumentSheetOpen(true);
+                                                setActiveTab("documents");
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                            {timelineHasNextPage && (
+                                <LoadMoreButton
+                                    loaded={timelineEvents.length}
+                                    total={timelineTotal}
+                                    isFetching={timelineFetchingNextPage}
+                                    onLoadMore={fetchNextTimelinePage}
+                                />
+                            )}
+                        </div>
+                    )}
+                </TabsContent>
 
                 {/* Fuel logs tab */}
                 <TabsContent value="fuel" className="mt-5 space-y-4">
