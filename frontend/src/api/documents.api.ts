@@ -25,6 +25,8 @@ export interface Document {
     signed_url: string;
     days_until: number | null;
     expiry_status: "ok" | "soon" | "expired" | null;
+    /** When the file was added to the vault (timeline sort key). */
+    created_at: string;
 }
 
 export type UploadDocumentPayload = DocumentSchema & {

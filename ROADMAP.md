@@ -29,6 +29,7 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 - Baseline change recalculates stored fuel mileage
 - **Per-vehicle mute** — quiet dashboard + digest reminders; history / export / compare stay available
 - `GET /vehicles/{id}/summary` — spend, mileage, recent fill-ups, next service, **service_reminder**, **document_reminders**
+- `GET /vehicles/{id}/health` — ranked signals + **recommended_action**, service prediction, mileage trend, ₹/km confidence
 - `GET /vehicles/{id}/analytics` — totals, **cost-per-km (fuel + service)**, last-10 mileage trend, last-6 months fuel spend
 - `GET /vehicles/compare` — side-by-side spend, mileage, and ₹/km across the garage
 
@@ -56,7 +57,7 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 - Clear expiry date / notes on update
 - Vehicle delete removes linked storage objects
 - Document writes invalidate vehicle summary cache (reminder freshness)
-- Cursor-paginated list + docs tab **Load more**; API returns `days_until` / `expiry_status`
+- Cursor-paginated list + docs tab **Load more**; API returns `days_until` / `expiry_status` / `created_at`
 
 ### Reminders & email digests
 - **In-app reminders** on the dashboard — service soon/overdue + document expiry
@@ -79,8 +80,8 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 - Local Vite `/api` proxy to `127.0.0.1:8000` (same-origin cookies, no Windows `localhost` IPv6 delay)
 
 ### Frontend product surface
-- Dark rider UI: auth (login · register · **check-email** · **verify-email** · **forgot-password** · **reset-password**), garage, compare, vehicle detail (Fuel · Service · Docs · Analytics)
-- Dashboard driven by the summary API
+- Dark rider UI: auth (login · register · **check-email** · **verify-email** · **forgot-password** · **reset-password**), garage, compare, vehicle detail (**Timeline** · Fuel · Service · Docs · Analytics)
+- Dashboard driven by summary + **Health** (`recommended_action`, prediction, ₹/km confidence)
 - Settings: profile, password, email reminder toggles, delete account
 - Error boundary, 404 page
 - Recharts analytics: cost-per-km, summary cards, mileage trend, monthly fuel spend (descriptive, not predictive)
@@ -90,8 +91,8 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 ## Evolution (rider journey)
 
 ```
-Today:     personal garage — log → mileage / reminders / charts
-Next:      vehicle health layer — predict → recommend → one clear next action
+Today:     personal garage + Health + vehicle timeline — log → recommend → one history
+Next:      smarter digests
 Then:      less typing (OCR) → denser history → annual report / cost forecast
 Later:     shops write history → verified records → resale passport → commerce
 ```
@@ -120,30 +121,15 @@ Fuel + service CSV import ships on `main`: same columns as export, row-level err
 
 Pollution + Other types, certificate identity (`identifier` / `custom_label`), no upload filename on cards, RC has no expiry (skipped in reminders/digests), Insurance / DL / Pollution require expiry. Server-owned `display_label`.
 
-### 1 — Tell me what to do next (RideCare Health)
+### Done — Tell me what to do next (RideCare Health)
 
-**Rider pain:** “I already logged the data — now what? When is service actually due? Is mileage getting worse?” Static catalog tips are not enough once history exists (especially after import).
+`GET /vehicles/{id}/health` — ranked signals + one recommended action (no fake score). Service/docs urgency, rider or catalog next-due with riding-rate estimate, mileage trend, ₹/km with confidence. Dashboard “Do this next”; mute stays a quiet state. Thin history falls back honestly.
 
-**Ship as ranked, evidence-backed signals + one recommended action** — not a cosmetic “Health Score: 82/100” and not component rows the data cannot justify (pad wear, chain slack, tyre age). Start from what already exists: document expiry, next-service date/km, catalog interval vs last matching service tag, riding rate from odometer history, mileage trend when sample size is enough.
+### Done — Vehicle timeline (everything that happened)
 
-- Usage-based **maintenance prediction** (last service + riding rate + catalog / rider interval → due in X km / around date Y). Show the inputs. Thin history falls back honestly (“not enough riding data — using the date you set”).
-- Dashboard / home framed as **“what should I do today?”** — one next action above quick stats, not another chart wall.
-- Mileage **anomaly / decline** with a plain-language recommendation when N fill-ups is enough
-- Analytics **confidence** (“₹/km from N fill-ups over K km”) so empty or thin data does not look authoritative
-- Optional **health summary** on the vehicle — signals from the API, not a chatbot
+Single chronological Timeline tab on vehicle detail: fuel, service, and document events merged client-side from existing log APIs (docs sort by vault `created_at`). Load more advances any open cursor. Fuel / Service / Docs tabs stay for focused logging.
 
-**Done when:** on one real bike with history, the rider sees a predicted next service and at least one actionable signal they did not have to calculate themselves.
-
-### 2 — Vehicle timeline (everything that happened)
-
-**Rider pain:** fuel, service, and docs live on separate tabs; the bike’s story is hard to read as one history.
-
-- Single chronological feed on the vehicle: fuel, service, and document events (date, cost / liters / tags, odometer where relevant)
-- Reuse existing log APIs — no new domain model required for v1
-
-**Done when:** a rider can scroll one list and answer “what happened to this bike?” without switching tabs.
-
-### 3 — Smarter digests (same pipes, better copy)
+### 1 — Smarter digests (same pipes, better copy)
 
 Daily digests already ship. Once prediction exists, upgrade copy from countdown-only (“Service soon · 1 day · 636 km”) to usage-aware language (“likely within 1–2 weeks at your recent riding”) with the same service / document signals. Keep per-user toggles and muted vehicles as-is. Document digests follow the new vault rules (no RC expiry nags; Pollution / DL / Insurance still remind).
 

@@ -1,5 +1,6 @@
 import uuid
 from datetime import date as dt_date
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -20,6 +21,8 @@ class _DocumentDbFields(BaseModel):
     identifier: str | None = None
     expiry_date: dt_date | None = None
     notes: str | None = None
+    # Vault add time — timeline sort key (not expiry).
+    created_at: datetime
 
 
 class DocumentResponse(_DocumentDbFields):
