@@ -2,7 +2,6 @@ import uuid
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select
@@ -21,7 +20,7 @@ from app.utils.cache import (
     user_identity_payload,
 )
 from app.utils.auth_context import get_access_token_from_request, get_auth_hot_path
-from app.utils.jwt import decode_access_token
+from app.utils.jwt import JWTError, decode_access_token
 from app.utils.redis_client import get_redis
 
 # auto_error=False so we can fall back to the httpOnly access cookie

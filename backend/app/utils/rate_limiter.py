@@ -1,7 +1,6 @@
 import logging
 
 from fastapi import HTTPException, Request, status
-from jose import JWTError
 from redis.asyncio import Redis
 
 from app.utils.access_token_service import access_check_keys, parse_revoke_before
@@ -11,7 +10,7 @@ from app.utils.auth_context import (
     set_auth_hot_path,
 )
 from app.utils.cache import parse_user_identity, user_identity_key
-from app.utils.jwt import decode_access_token
+from app.utils.jwt import JWTError, decode_access_token
 
 logger = logging.getLogger(__name__)
 
