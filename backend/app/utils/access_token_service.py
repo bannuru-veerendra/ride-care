@@ -3,11 +3,10 @@
 import logging
 import time
 
-from jose import JWTError
 from redis.asyncio import Redis
 
 from app.config import settings
-from app.utils.jwt import decode_access_token
+from app.utils.jwt import JWTError, decode_access_token
 
 logger = logging.getLogger(__name__)
 

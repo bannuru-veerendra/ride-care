@@ -3,11 +3,14 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from jose import jwt
+import jwt
+from jwt import PyJWTError as JWTError
 
 from app.config import settings
 
 ALGORITHM = "HS256"
+
+__all__ = ["JWTError", "create_access_token", "decode_access_token"]
 
 
 def create_access_token(user_id: str) -> str:
