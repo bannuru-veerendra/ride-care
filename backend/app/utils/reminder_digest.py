@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.utils.dates import app_today
 from app.utils.email import send_reminder_digest_email
+from app.utils.health import riding_rate_km_per_day
 from app.utils.reminders import (
     build_document_reminders,
     build_service_reminder,
@@ -28,6 +29,97 @@ from app.utils.reminders import (
 logger = logging.getLogger(__name__)
 
 _DIGEST_TTL_SECONDS = 26 * 60 * 60
+
+
+def window_phrase(days: int) -> str:
+    """Bucket remaining days into a rider-facing window, not a countdown."""
+    if days <= 0:
+        return "now"
+    if days <= 6:
+        return "within a few days"
+    if days <= 10:
+        return "within about a week"
+    if days <= 17:
+        return "within 1–2 weeks"
+    if days <= 31:
+        return "within a few weeks"
+    weeks = max(5, round(days / 7))
+    return f"in about {weeks} weeks"
+
+
+def format_service_digest_line(
+    *,
+    status: str,
+    days_until: int | None,
+    km_until: float | None,
+    riding_rate_km_per_day: float | None,
+) -> str:
+    """Service digest line: predicted window, or an honest fallback."""
+    if status == "overdue":
+        bits: list[str] = []
+        if days_until is not None and days_until < 0:
+            n = abs(days_until)
+            bits.append(f"{n} day{'s' if n != 1 else ''} past due")
+        if km_until is not None and km_until < 0:
+            km = abs(km_until)
+            bits.append(f"{km:g} km past due")
+        if bits:
+            return "Service overdue — " + "; ".join(bits)
+        return "Service overdue"
+
+    days_by_km: int | None = None
+    if (
+        riding_rate_km_per_day is not None
+        and km_until is not None
+        and km_until > 0
+    ):
+        days_by_km = max(0, int(round(km_until / riding_rate_km_per_day)))
+
+    calendar_days = (
+        days_until if days_until is not None and days_until >= 0 else None
+    )
+
+    if days_by_km is not None and (
+        calendar_days is None or days_by_km < calendar_days
+    ):
+        return (
+            "Service soon — likely "
+            f"{window_phrase(days_by_km)} at your recent riding"
+        )
+
+    if calendar_days is not None:
+        extra = ""
+        if riding_rate_km_per_day is None:
+            extra = " (not enough riding data for a forecast)"
+        return (
+            "Service soon — due "
+            f"{window_phrase(calendar_days)} by the date you set{extra}"
+        )
+
+    if km_until is not None and km_until >= 0:
+        return (
+            f"Service soon — {km_until:g} km left "
+            "(not enough riding data to estimate when)"
+        )
+    return "Service soon"
+
+
+def format_document_digest_line(
+    *,
+    display_label: str,
+    identifier: str | None,
+    status: str,
+    days_until: int,
+) -> str:
+    """Document digest line: windowed expiry, not `soon (12 days)`."""
+    name = display_label
+    if identifier:
+        name = f"{display_label} ({identifier})"
+    if status == "expired":
+        n = abs(days_until)
+        when = "today" if n == 0 else f"{n} day{'s' if n != 1 else ''} ago"
+        return f"{name} expired {when}"
+    return f"{name} expires {window_phrase(days_until)}"
 
 
 @dataclass
@@ -147,6 +239,7 @@ async def send_reminder_digests(
 
             needs_service = False
             service_reminder = None
+            rate = None
             if include_service:
                 service_result = await db.execute(
                     select(ServiceLog)
@@ -161,6 +254,13 @@ async def send_reminder_digests(
                     live_odometer=live_odo,
                 )
                 needs_service = service_reminder.status in ("soon", "overdue")
+                if needs_service:
+                    fuel_result = await db.execute(
+                        select(FuelLog).where(FuelLog.vehicle_id == vehicle_id)
+                    )
+                    rate = riding_rate_km_per_day(
+                        list(fuel_result.scalars().all())
+                    )
 
             document_reminders = []
             if include_documents:
@@ -188,20 +288,22 @@ async def send_reminder_digests(
             html_bits: list[str] = [f"<p><strong>{label}</strong></p><ul>"]
 
             if needs_service and service_reminder is not None:
-                parts: list[str] = [f"Service {service_reminder.status}"]
-                if service_reminder.days_until is not None:
-                    parts.append(f"{service_reminder.days_until} days")
-                if service_reminder.km_until is not None:
-                    parts.append(f"{service_reminder.km_until} km")
-                detail = " · ".join(parts)
+                detail = format_service_digest_line(
+                    status=service_reminder.status,
+                    days_until=service_reminder.days_until,
+                    km_until=service_reminder.km_until,
+                    riding_rate_km_per_day=rate,
+                )
                 lines.append(f"  - {detail}")
                 html_bits.append(f"<li>{detail}</li>")
 
             for doc in document_reminders:
-                label = doc.display_label
-                if doc.identifier:
-                    label = f"{label} ({doc.identifier})"
-                detail = f"{label} {doc.status} ({doc.days_until} days)"
+                detail = format_document_digest_line(
+                    display_label=doc.display_label,
+                    identifier=doc.identifier,
+                    status=doc.status,
+                    days_until=doc.days_until,
+                )
                 lines.append(f"  - {detail}")
                 html_bits.append(f"<li>{detail}</li>")
 

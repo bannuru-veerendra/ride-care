@@ -42,7 +42,7 @@ def _avg(values: list[float]) -> float | None:
     return round_2(sum(values) / len(values))
 
 
-def _riding_rate_km_per_day(fuel_logs: list[FuelLog]) -> float | None:
+def riding_rate_km_per_day(fuel_logs: list[FuelLog]) -> float | None:
     """km/day from oldest→newest fill-up odometer over the span."""
     points = sorted(
         ((log.date, float(log.odometer)) for log in fuel_logs),
@@ -256,7 +256,7 @@ def build_vehicle_health(
         [] if muted else build_document_reminders(documents, today=today)
     )
 
-    riding_rate = _riding_rate_km_per_day(fuel_logs)
+    riding_rate = riding_rate_km_per_day(fuel_logs)
     prediction = _service_prediction(
         service_logs=service_logs,
         active_next_service=next_service,
