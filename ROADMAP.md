@@ -62,6 +62,7 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 ### Reminders & email digests
 - **In-app reminders** on the dashboard — service soon/overdue + document expiry
 - **Daily email digests** via GitHub Actions → `POST /internal/reminder-digests` (midnight IST)
+- Digest copy uses a **predicted window** from riding rate, or an honest fallback when history is thin (not `Service soon · 5 days · 636 km`)
 - Per-user toggles: service due emails / document expiry emails (Settings)
 
 ### Maintenance guide
@@ -91,8 +92,8 @@ Honest scope: RideCare is a **well-engineered personal garage** (data → calcul
 ## Evolution (rider journey)
 
 ```
-Today:     personal garage + Health + vehicle timeline — log → recommend → one history
-Next:      smarter digests
+Today:     personal garage + Health + timeline + usage-aware digest emails
+Next:      put real riders on the live app
 Then:      less typing (OCR) → denser history → annual report / cost forecast
 Later:     shops write history → verified records → resale passport → commerce
 ```
@@ -129,11 +130,9 @@ Pollution + Other types, certificate identity (`identifier` / `custom_label`), n
 
 Single chronological Timeline tab on vehicle detail: fuel, service, and document events merged client-side from existing log APIs (docs sort by vault `created_at`). Load more advances any open cursor. Fuel / Service / Docs tabs stay for focused logging.
 
-### 1 — Smarter digests (same pipes, better copy)
+### Done — Smarter digests (same pipes, better copy)
 
-Daily digests already ship. Once prediction exists, upgrade copy from countdown-only (“Service soon · 1 day · 636 km”) to usage-aware language (“likely within 1–2 weeks at your recent riding”) with the same service / document signals. Keep per-user toggles and muted vehicles as-is. Document digests follow the new vault rules (no RC expiry nags; Pollution / DL / Insurance still remind).
-
-**Done when:** the email states a predicted window (or an honest fallback) instead of only a static countdown.
+Daily emails reuse Health’s riding-rate estimate: “likely within 1–2 weeks at your recent riding” when km + fill-up history support it; otherwise an honest fallback (“due within a few days by the date you set — not enough riding data for a forecast”). Same service / document signals, per-user toggles, and muted vehicles. RC never nags; Pollution / DL / Insurance still remind.
 
 ---
 
