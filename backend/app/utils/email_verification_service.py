@@ -77,3 +77,22 @@ async def consume_verification_token(redis: Redis, raw_token: str) -> str | None
 def verification_link(raw_token: str) -> str:
     base = settings.FRONTEND_URL.rstrip("/")
     return f"{base}/verify-email?token={raw_token}"
+
+
+async def issue_verification_email(
+    redis: Redis,
+    *,
+    user_id: str,
+    email: str,
+    full_name: str,
+) -> None:
+    """Create a Redis token and send the verification email."""
+    from app.utils.email import send_verification_email
+
+    raw_token = await store_verification_token(redis, user_id)
+    link = verification_link(raw_token)
+    try:
+        await send_verification_email(to=email, full_name=full_name, link=link)
+    except Exception:
+        logger.exception("Failed to send verification email to=%s", email)
+        # User is created; they can use resend. Do not fail registration.

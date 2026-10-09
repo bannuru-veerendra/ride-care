@@ -201,15 +201,24 @@ def mock_document_storage(monkeypatch):
         extension = storage_path.rsplit(".", 1)[-1].lower()
         return f"{vehicle_id}/{new_document_type}_{uuid.uuid4()}.{extension}"
 
-    for module in ("app.utils.storage", "app.routes.documents"):
-        monkeypatch.setattr(f"{module}.upload_document", fake_upload_document)
-        monkeypatch.setattr(f"{module}.get_signed_url", fake_get_signed_url)
-        monkeypatch.setattr(f"{module}.cleanup_document", fake_cleanup_document)
-        monkeypatch.setattr(f"{module}.move_document", fake_move_document)
-        monkeypatch.setattr(f"{module}.relocate_document_type", fake_relocate_document_type)
+    for name, fake in (
+        ("upload_document", fake_upload_document),
+        ("get_signed_url", fake_get_signed_url),
+        ("cleanup_document", fake_cleanup_document),
+        ("move_document", fake_move_document),
+        ("relocate_document_type", fake_relocate_document_type),
+        ("delete_document", fake_delete_document),
+    ):
+        monkeypatch.setattr(f"app.utils.storage.{name}", fake)
 
-    monkeypatch.setattr("app.utils.storage.delete_document", fake_delete_document)
-    monkeypatch.setattr("app.routes.documents.delete_storage_document", fake_delete_document)
+    monkeypatch.setattr("app.routes.documents.upload_document", fake_upload_document)
+    monkeypatch.setattr("app.routes.documents.cleanup_document", fake_cleanup_document)
+    monkeypatch.setattr(
+        "app.routes.documents.relocate_document_type", fake_relocate_document_type
+    )
+    monkeypatch.setattr(
+        "app.routes.documents.delete_storage_document", fake_delete_document
+    )
 
 
 @pytest_asyncio.fixture(autouse=True)
