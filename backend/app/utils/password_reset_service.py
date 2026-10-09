@@ -75,3 +75,22 @@ async def consume_reset_token(redis: Redis, raw_token: str) -> str | None:
 def password_reset_link(raw_token: str) -> str:
     base = settings.FRONTEND_URL.rstrip("/")
     return f"{base}/reset-password?token={raw_token}"
+
+
+async def issue_password_reset_email(
+    redis: Redis,
+    *,
+    user_id: str,
+    email: str,
+    full_name: str,
+) -> None:
+    """Create a Redis reset token and send the password-reset email."""
+    from app.utils.email import send_password_reset_email
+
+    raw_token = await store_reset_token(redis, user_id)
+    link = password_reset_link(raw_token)
+    try:
+        await send_password_reset_email(to=email, full_name=full_name, link=link)
+    except Exception:
+        logger.exception("Failed to send password reset email to=%s", email)
+        # Do not leak failures to the client (anti-enumeration).

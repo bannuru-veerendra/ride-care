@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -29,23 +28,21 @@ from app.utils.access_token_service import (
     revoke_all_user_access_tokens,
 )
 from app.utils.auth_cookies import (
-    ACCESS_COOKIE,
-    REFRESH_COOKIE,
+    access_token_from_request,
     clear_auth_cookies,
+    refresh_token_from_request,
     set_auth_cookies,
 )
+from app.utils.auth_session import REDIS_UNAVAILABLE, authenticate_user
 from app.utils.cache import cache_delete, user_identity_key
-from app.utils.email import send_password_reset_email, send_verification_email
 from app.utils.email_verification_service import (
     consume_verification_token,
-    store_verification_token,
-    verification_link,
+    issue_verification_email,
 )
 from app.utils.jwt import create_access_token
 from app.utils.password_reset_service import (
     consume_reset_token,
-    password_reset_link,
-    store_reset_token,
+    issue_password_reset_email,
 )
 from app.utils.rate_limiter import auth_rate_limit
 from app.utils.redis_client import get_redis
@@ -53,112 +50,12 @@ from app.utils.refresh_token_service import (
     revoke_all_user_tokens,
     revoke_refresh_token,
     rotate_refresh_token,
-    store_refresh_token,
 )
-from app.utils.security import hash_password, normalize_email, verify_password
+from app.utils.security import hash_password
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-_REDIS_UNAVAILABLE = HTTPException(
-    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-    detail="Authentication service temporarily unavailable",
-)
-
-_EMAIL_NOT_VERIFIED = HTTPException(
-    status_code=status.HTTP_403_FORBIDDEN,
-    detail="Email not verified. Check your inbox or request a new verification link.",
-)
-
-
-@dataclass(frozen=True, slots=True)
-class _IssuedTokens:
-    access_token: str
-    refresh_token: str
-
-
-async def _issue_verification_email(
-    redis: Redis,
-    *,
-    user_id: str,
-    email: str,
-    full_name: str,
-) -> None:
-    """Create a Redis token and send the verification email."""
-    try:
-        raw_token = await store_verification_token(redis, user_id)
-    except RedisError:
-        logger.exception("Redis unavailable while storing verification token")
-        raise _REDIS_UNAVAILABLE
-
-    link = verification_link(raw_token)
-    try:
-        await send_verification_email(to=email, full_name=full_name, link=link)
-    except Exception:
-        logger.exception("Failed to send verification email to=%s", email)
-        # User is created; they can use resend. Do not fail registration.
-
-
-async def _authenticate_user(
-    email: str,
-    password: str,
-    db: AsyncSession,
-    redis: Redis,
-) -> _IssuedTokens:
-    """Validate credentials and issue access + refresh tokens."""
-    email = normalize_email(email)
-    result = await db.execute(select(User).where(User.email == email))
-    db_user = result.scalar_one_or_none()
-
-    if not db_user:
-        logger.warning("Login failed: no user found for email=%s", email)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    if not db_user.is_active:
-        logger.warning("Login failed: inactive account for email=%s", email)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    if not verify_password(password, db_user.hashed_password):
-        logger.warning("Login failed: wrong password for email=%s", email)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    if not db_user.email_verified:
-        logger.warning("Login failed: email not verified for email=%s", email)
-        raise _EMAIL_NOT_VERIFIED
-
-    user_id = str(db_user.id)
-    access_token = create_access_token(user_id)
-    try:
-        refresh_token = await store_refresh_token(redis, user_id)
-    except RedisError:
-        logger.exception("Redis unavailable while issuing refresh token")
-        raise _REDIS_UNAVAILABLE
-
-    return _IssuedTokens(access_token=access_token, refresh_token=refresh_token)
-
-
-def _refresh_token_from(request: Request, body: RefreshRequest | LogoutRequest) -> str | None:
-    return body.refresh_token or request.cookies.get(REFRESH_COOKIE)
-
-
-def _access_token_from(request: Request) -> str | None:
-    """Prefer Bearer header, fall back to access cookie."""
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        bearer = auth_header.removeprefix("Bearer ").strip()
-        if bearer:
-            return bearer
-    return request.cookies.get(ACCESS_COOKIE)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -189,12 +86,16 @@ async def register(
     await db.commit()
     await db.refresh(db_user)
 
-    await _issue_verification_email(
-        redis,
-        user_id=str(db_user.id),
-        email=db_user.email,
-        full_name=db_user.full_name,
-    )
+    try:
+        await issue_verification_email(
+            redis,
+            user_id=str(db_user.id),
+            email=db_user.email,
+            full_name=db_user.full_name,
+        )
+    except RedisError:
+        logger.exception("Redis unavailable while storing verification token")
+        raise REDIS_UNAVAILABLE
     return db_user
 
 
@@ -212,7 +113,7 @@ async def verify_email(
         user_id = await consume_verification_token(redis, body.token)
     except RedisError:
         logger.exception("Redis unavailable during email verification")
-        raise _REDIS_UNAVAILABLE
+        raise REDIS_UNAVAILABLE
 
     if user_id is None:
         raise HTTPException(
@@ -255,38 +156,20 @@ async def resend_verification(
         and db_user.is_active
         and not db_user.email_verified
     ):
-        await _issue_verification_email(
-            redis,
-            user_id=str(db_user.id),
-            email=db_user.email,
-            full_name=db_user.full_name,
-        )
+        try:
+            await issue_verification_email(
+                redis,
+                user_id=str(db_user.id),
+                email=db_user.email,
+                full_name=db_user.full_name,
+            )
+        except RedisError:
+            logger.exception("Redis unavailable while storing verification token")
+            raise REDIS_UNAVAILABLE
 
     return MessageResponse(
         message="If that email is registered and unverified, a new link has been sent.",
     )
-
-
-async def _issue_password_reset_email(
-    redis: Redis,
-    *,
-    user_id: str,
-    email: str,
-    full_name: str,
-) -> None:
-    """Create a Redis reset token and send the password-reset email."""
-    try:
-        raw_token = await store_reset_token(redis, user_id)
-    except RedisError:
-        logger.exception("Redis unavailable while storing password reset token")
-        raise _REDIS_UNAVAILABLE
-
-    link = password_reset_link(raw_token)
-    try:
-        await send_password_reset_email(to=email, full_name=full_name, link=link)
-    except Exception:
-        logger.exception("Failed to send password reset email to=%s", email)
-        # Do not leak failures to the client (anti-enumeration).
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
@@ -305,12 +188,16 @@ async def forgot_password(
     result = await db.execute(select(User).where(User.email == body.email))
     db_user = result.scalar_one_or_none()
     if db_user is not None and db_user.is_active:
-        await _issue_password_reset_email(
-            redis,
-            user_id=str(db_user.id),
-            email=db_user.email,
-            full_name=db_user.full_name,
-        )
+        try:
+            await issue_password_reset_email(
+                redis,
+                user_id=str(db_user.id),
+                email=db_user.email,
+                full_name=db_user.full_name,
+            )
+        except RedisError:
+            logger.exception("Redis unavailable while storing password reset token")
+            raise REDIS_UNAVAILABLE
 
     return MessageResponse(
         message="If that email is registered, a password reset link has been sent.",
@@ -331,7 +218,7 @@ async def reset_password(
         user_id = await consume_reset_token(redis, body.token)
     except RedisError:
         logger.exception("Redis unavailable during password reset")
-        raise _REDIS_UNAVAILABLE
+        raise REDIS_UNAVAILABLE
 
     if user_id is None:
         raise HTTPException(
@@ -359,7 +246,7 @@ async def reset_password(
             db_user.id,
         )
         await db.rollback()
-        raise _REDIS_UNAVAILABLE
+        raise REDIS_UNAVAILABLE
 
     await db.commit()
     logger.info("User %s reset password via email link", db_user.id)
@@ -378,7 +265,7 @@ async def login(
 ) -> SessionResponse:
     """Login with JSON body (`email` + `password`). Sets httpOnly auth cookies."""
     await auth_rate_limit(request, redis)
-    tokens = await _authenticate_user(
+    tokens = await authenticate_user(
         credentials.email, credentials.password, db, redis
     )
     set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
@@ -395,7 +282,7 @@ async def token(
 ) -> TokenResponse:
     """OAuth2 token endpoint for Swagger Authorize (`username` = email)."""
     await auth_rate_limit(request, redis)
-    tokens = await _authenticate_user(
+    tokens = await authenticate_user(
         form_data.username, form_data.password, db, redis
     )
     set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
@@ -413,7 +300,7 @@ async def refresh(
     redis: Redis = Depends(get_redis),
 ) -> SessionResponse:
     """Rotate refresh token and issue a new access token. Reads cookie if body omits token."""
-    refresh_token = _refresh_token_from(request, body)
+    refresh_token = refresh_token_from_request(request, body.refresh_token)
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -424,7 +311,7 @@ async def refresh(
         result = await rotate_refresh_token(redis, refresh_token)
     except RedisError:
         logger.exception("Redis unavailable during refresh")
-        raise _REDIS_UNAVAILABLE
+        raise REDIS_UNAVAILABLE
 
     if result is None:
         clear_auth_cookies(response)
@@ -437,7 +324,7 @@ async def refresh(
 
     # Prefer to kill the previous access JWT immediately; if Redis blips here the
     # refresh already rotated — still issue new cookies (old access dies by TTL).
-    old_access = _access_token_from(request)
+    old_access = access_token_from_request(request)
     if old_access:
         try:
             await blocklist_access_token(redis, old_access)
@@ -459,8 +346,8 @@ async def logout(
     redis: Redis = Depends(get_redis),
 ) -> Response:
     """Revoke refresh + blocklist access token, then clear auth cookies."""
-    refresh_token = _refresh_token_from(request, body)
-    access_token = _access_token_from(request)
+    refresh_token = refresh_token_from_request(request, body.refresh_token)
+    access_token = access_token_from_request(request)
     try:
         if refresh_token:
             await revoke_refresh_token(redis, refresh_token)
@@ -468,7 +355,7 @@ async def logout(
             await blocklist_access_token(redis, access_token)
     except RedisError:
         logger.exception("Redis unavailable during logout")
-        raise _REDIS_UNAVAILABLE
+        raise REDIS_UNAVAILABLE
     clear_auth_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

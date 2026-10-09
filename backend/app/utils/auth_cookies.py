@@ -1,11 +1,29 @@
 """HttpOnly cookie helpers for access + refresh tokens."""
 
-from fastapi import Response
+from fastapi import Request, Response
 
 from app.config import settings
 
 ACCESS_COOKIE = "access_token"
 REFRESH_COOKIE = "refresh_token"
+
+
+def refresh_token_from_request(
+    request: Request,
+    body_token: str | None,
+) -> str | None:
+    """Prefer body token, fall back to refresh cookie."""
+    return body_token or request.cookies.get(REFRESH_COOKIE)
+
+
+def access_token_from_request(request: Request) -> str | None:
+    """Prefer Bearer header, fall back to access cookie."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        bearer = auth_header.removeprefix("Bearer ").strip()
+        if bearer:
+            return bearer
+    return request.cookies.get(ACCESS_COOKIE)
 
 
 def _cookie_flags() -> dict:

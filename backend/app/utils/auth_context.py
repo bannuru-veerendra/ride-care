@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
-from app.utils.auth_cookies import ACCESS_COOKIE
+from app.utils.auth_cookies import access_token_from_request
 
 _AUTH_HOT_PATH = "auth_hot_path"
 
@@ -21,12 +21,7 @@ class AuthHotPath:
 
 def get_access_token_from_request(request: Request) -> str | None:
     """Bearer header first, then the httpOnly access cookie."""
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header.removeprefix("Bearer ").strip()
-        if token:
-            return token
-    return request.cookies.get(ACCESS_COOKIE)
+    return access_token_from_request(request)
 
 
 def get_auth_hot_path(request: Request) -> AuthHotPath | None:
