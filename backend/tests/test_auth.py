@@ -359,7 +359,7 @@ async def test_verify_email_then_login(client: AsyncClient, monkeypatch):
         captured["link"] = link
         captured["token"] = link.split("token=", 1)[1]
 
-    monkeypatch.setattr("app.routes.auth.send_verification_email", fake_send)
+    monkeypatch.setattr("app.utils.email.send_verification_email", fake_send)
 
     payload = {
         "email": "verify-me@ridecare.com",
@@ -400,7 +400,7 @@ async def test_resend_verification_is_generic(client: AsyncClient, monkeypatch):
     async def fake_send(*, to: str, full_name: str, link: str) -> None:
         calls.append(to)
 
-    monkeypatch.setattr("app.routes.auth.send_verification_email", fake_send)
+    monkeypatch.setattr("app.utils.email.send_verification_email", fake_send)
 
     await client.post(
         "/auth/register",
@@ -433,7 +433,7 @@ async def test_forgot_password_is_generic(client: AsyncClient, monkeypatch):
     async def fake_send(*, to: str, full_name: str, link: str) -> None:
         calls.append(to)
 
-    monkeypatch.setattr("app.routes.auth.send_password_reset_email", fake_send)
+    monkeypatch.setattr("app.utils.email.send_password_reset_email", fake_send)
 
     await client.post(
         "/auth/register",
@@ -473,8 +473,8 @@ async def test_reset_password_then_login(
         captured["link"] = link
         captured["token"] = link.split("token=", 1)[1]
 
-    monkeypatch.setattr("app.routes.auth.send_verification_email", fake_verify)
-    monkeypatch.setattr("app.routes.auth.send_password_reset_email", fake_reset)
+    monkeypatch.setattr("app.utils.email.send_verification_email", fake_verify)
+    monkeypatch.setattr("app.utils.email.send_password_reset_email", fake_reset)
 
     payload = {
         "email": "reset-me@ridecare.com",
