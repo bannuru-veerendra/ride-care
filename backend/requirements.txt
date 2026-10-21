@@ -1,5 +1,5 @@
-﻿alembic==1.18.5
-annotated-doc==0.0.4
+alembic==1.18.5
+annotated-doc==0.0.5
 annotated-types==0.7.0
 anyio==4.14.2
 asgi-lifespan==2.1.0
