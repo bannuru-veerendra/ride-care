@@ -70,7 +70,7 @@ import { buildTimelineEvents } from "@/features/timeline/buildTimelineEvents";
 import { useConfirmDialog } from "@/components/common/ConfirmDialog";
 
 const TAB_TRIGGER_CLASS =
-    "font-heading flex-1 gap-2 rounded-none px-3 py-3.5 text-base font-bold uppercase tracking-wide text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 sm:flex-none sm:px-5";
+    "font-heading min-w-0 flex-1 gap-1 rounded-none px-0.5 py-3 text-xs font-bold uppercase tracking-tight text-muted-foreground after:!bottom-0 after:h-[2px] data-active:bg-transparent data-active:text-brand data-active:after:bg-brand data-active:after:opacity-100 min-[380px]:gap-1.5 min-[380px]:px-1 min-[380px]:text-sm min-[380px]:tracking-normal sm:flex-none sm:gap-2 sm:px-5 sm:py-3.5 sm:text-base sm:tracking-wide";
 
 const AnalyticsTab = lazy(
     () => import("@/features/analytics/components/AnalyticsTab")
@@ -515,26 +515,26 @@ export default function VehicleDetailPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-0">
                 <TabsList
                     variant="line"
-                    className="h-auto w-full justify-start gap-0 rounded-none border-b border-white/10 bg-transparent p-0"
+                    className="h-auto w-full min-w-0 justify-start gap-0 overflow-x-hidden rounded-none border-b border-white/10 bg-transparent p-0"
                 >
                     <TabsTrigger value="timeline" className={TAB_TRIGGER_CLASS}>
-                        <History className="h-4 w-4" />
+                        <History className="size-3.5 min-[380px]:size-4" />
                         Timeline
                     </TabsTrigger>
                     <TabsTrigger value="fuel" className={TAB_TRIGGER_CLASS}>
-                        <Fuel className="h-4 w-4" />
+                        <Fuel className="size-3.5 min-[380px]:size-4" />
                         Fuel
                     </TabsTrigger>
                     <TabsTrigger value="service" className={TAB_TRIGGER_CLASS}>
-                        <Wrench className="h-4 w-4" />
+                        <Wrench className="size-3.5 min-[380px]:size-4" />
                         Service
                     </TabsTrigger>
                     <TabsTrigger value="documents" className={TAB_TRIGGER_CLASS}>
-                        <FileText className="h-4 w-4" />
+                        <FileText className="size-3.5 min-[380px]:size-4" />
                         Docs
                     </TabsTrigger>
                     <TabsTrigger value="analytics" className={TAB_TRIGGER_CLASS}>
-                        <BarChart2 className="h-4 w-4" />
+                        <BarChart2 className="size-3.5 min-[380px]:size-4" />
                         Analytics
                     </TabsTrigger>
                 </TabsList>
