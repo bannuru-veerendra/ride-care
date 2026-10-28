@@ -1,4 +1,4 @@
-﻿alembic==1.18.5
+alembic==1.18.5
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.14.2
@@ -34,7 +34,7 @@ multidict==6.7.1
 packaging==26.2
 pluggy==1.6.0
 postgrest==2.31.0
-propcache==0.5.2
+propcache==0.5.4
 psycopg2-binary==2.9.12
 pycparser==3.0
 pydantic==2.13.4
